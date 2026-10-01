@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JioCinema — Live Streaming IPL to 20M Concurrent Devices</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --laymen: #f4a259;
+    --laymen-bg: #fff7ed;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #0f2027 0%, #203a43 45%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+  .stat-row { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 12px; margin: 14px 0; }
+  .stat-tile { background: rgba(255,255,255,.7); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .stat-tile .n { font-size: 1.6rem; font-weight: 800; color: var(--arch); }
+  .stat-tile .l { font-size: .82rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep · Live Video</div>
+    <h1>JioCinema — Live Streaming IPL to 20M+ Concurrent Devices</h1>
+    <p>How a live-video platform absorbs a stadium-sized crowd every minute, keeps buffering under 1%, and stays up when Dhoni comes out to bat. Based on Arpit Bhayani's <em>Asli Engineering</em> conversation with Prachi Sharma.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 In laymen terms</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>Live-video-at-scale is the hardest streaming problem in the industry. Unlike Netflix or YouTube — where each viewer watches a different chunk of a different file — a live sporting event forces <strong>every viewer to be on almost the same 2-to-6-second window of the timeline at once</strong>. When 20 million phones simultaneously request the same 4-second HLS segment, you have one of two outcomes: your CDN mesh absorbs it, or your origin catches fire. There is no third option.</p>
+    <p>JioCinema (now merged into JioHotstar) is the platform behind the Indian Premier League (IPL) digital broadcast. It has repeatedly set world records for concurrent live-stream viewership: <strong>20M concurrent</strong> during IPL 2023 marquee matches, ramping to <strong>32M during the IPL 2024 final</strong> and up to <strong>55M during IPL 2025</strong>. The traffic isn't linear either — the arrival rate spikes from 5M to 30M+ inside a few minutes when a star batter walks out or the final over begins.</p>
+    <p>The same architecture pattern shows up wherever the whole world watches the same thing at the same moment: <strong>Disney+ Hotstar</strong> for earlier IPL seasons, <strong>YouTube Live</strong> for the FIFA World Cup, <strong>Twitch</strong> for esports finals, <strong>Amazon Prime Video</strong> for Thursday Night Football, <strong>Peacock</strong> for the Olympics, <strong>Twitter/X Spaces</strong> for viral live conversations, and <strong>Zoom</strong> for the largest webinars. In an interview, this problem is the canonical way to demonstrate you understand CDN economics, live packaging, DRM, hot-key handling, elastic autoscaling, and graceful degradation — all at once.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms — for a beginner</span>
+    <h2>Imagine a stadium the size of a country</h2>
+    <p>Picture an actual cricket stadium — 50,000 seats, a giant screen, cheerleaders. Now imagine you had to squeeze <strong>400 stadiums' worth of people</strong> into one room, each with their own tiny TV, and every single tiny TV has to show the ball being hit at the exact same moment. That is what "20 million concurrent viewers" means on your phone.</p>
+    <p>Here is what actually happens when you tap <em>Watch Live</em>. A camera at the stadium sends the video over a fibre cable to a big computer (a <strong>server</strong>). The server chops the match into short 4-second clips — like tearing a movie roll into little strips — and hands each strip to many, many "delivery vans" (called <strong>CDN edge servers</strong>) parked in cities near you. Your phone doesn't call the stadium; it calls the delivery van in your city and says <em>"give me the next 4-second strip"</em>. The van already has it in its glove-box, so it hands it over in a blink. Your phone stitches strip after strip together and you feel like you're watching one smooth video.</p>
+    <p>The scary bit is what happens when <strong>Dhoni comes out to bat</strong>. Millions of people who were making tea suddenly rush back to their phones in the same 30 seconds. The system was ready for 5 vans, and now needs 30. If it can't add vans fast enough, the vans get mobbed, delivery slows, and everybody sees a spinning circle. So the engineers do two clever things: (1) they <strong>guess ahead of time</strong> — using patterns from last year — that Dhoni is likely to walk out around over 15, and pre-park the extra vans hours before the match, and (2) if the surprise is truly a surprise, they switch to <strong>"panic mode"</strong> — every phone gets the same pre-recorded generic screen from a cheap cardboard box until the vans are ready.</p>
+    <p>The <strong>hard part</strong> isn't showing video — YouTube already does that. The hard part is that <em>everybody wants the exact same 4 seconds at the exact same time</em>. This is unlike Netflix (where I'm on episode 3 and you're on episode 7) or Instagram (where I'm scrolling different reels). Live sport is one giant crowd all reaching for the same doorknob together. Solving that is why this system is a marvel — the same challenge faced by <strong>Hotstar</strong>, <strong>YouTube Live</strong>, <strong>Twitch</strong>, and <strong>Amazon Prime</strong> when you watch a big match or a launch event.</p>
+    <p><strong>Tiny example:</strong> You and 19,999,999 other Indians are watching the IPL final on your phones. It is over 20, ball 5 — the Chennai Super Kings need 6 runs. The camera captures Dhoni's bat swing. That video clip is chopped into a 4-second strip and copied to ~50 delivery vans across India within 300 milliseconds. Your phone in Bengaluru asks the Bengaluru van, my phone in Mumbai asks the Mumbai van, someone else's phone in Guwahati asks the Guwahati van — all in the same second — and each of us gets the same "SIX!" moment without ever bothering the stadium's original computer. That is the magic.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Ingest a live TV feed from the stadium production truck.</li>
+      <li>Package it into adaptive-bitrate segments (multiple resolutions/bitrates).</li>
+      <li>Deliver segments to phones, TVs, and web players with &lt; 1% buffering.</li>
+      <li>Support pause / rewind / seek within a rolling DVR window (last ~1 hour).</li>
+      <li>Insert ads dynamically per user cohort and language feed (SCTE-35 signalled).</li>
+      <li>Serve 12+ language commentary feeds and multi-angle camera views.</li>
+      <li>Show a live concurrent-viewer counter, chat, and interactive polls.</li>
+      <li>Protect the stream with DRM (Widevine, PlayReady, FairPlay).</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Concurrency:</strong> 20M–55M simultaneous playback sessions.</li>
+      <li><strong>Glass-to-glass latency:</strong> 3–15 s (LL-HLS target 3–6 s, standard HLS ~10 s).</li>
+      <li><strong>Availability:</strong> 99.99% during a match window.</li>
+      <li><strong>Cost:</strong> egress bandwidth is the single biggest bill — cache hit ratio must exceed 90%.</li>
+      <li><strong>Elasticity:</strong> scale from 1M idle to 30M concurrent in &lt; 5 minutes when a marquee moment lands.</li>
+    </ul>
+
+    <h3>Back-of-the-envelope</h3>
+    <div class="stat-row">
+      <div class="stat-tile"><div class="n">20M</div><div class="l">concurrent sessions</div></div>
+      <div class="stat-tile"><div class="n">4 Mbps</div><div class="l">avg HD bitrate</div></div>
+      <div class="stat-tile"><div class="n">80 Tbps</div><div class="l">peak egress</div></div>
+      <div class="stat-tile"><div class="n">4 s</div><div class="l">segment duration</div></div>
+      <div class="stat-tile"><div class="n">5M rps</div><div class="l">segment fetches</div></div>
+      <div class="stat-tile"><div class="n">&gt; 90%</div><div class="l">CDN cache hit ratio</div></div>
+    </div>
+    <table>
+      <tr><th>Quantity</th><th>Estimate</th><th>How I got there</th></tr>
+      <tr><td>Egress bandwidth</td><td>~80 Tbps peak</td><td>20M × 4 Mbps = 80 Tbps of live playback. At 4K HDR (15 Mbps) for 10% of users this rises past 100 Tbps.</td></tr>
+      <tr><td>Segment fetch rate</td><td>~5M req/s</td><td>20M viewers × 1 segment request every 4 s = 5M/s. Add ~10% for manifest and audio track requests.</td></tr>
+      <tr><td>Origin req/s (after cache)</td><td>~1000 req/s</td><td>Only new segments (~one per profile per 4 s across ~5 bitrate rungs) hit origin. Everything else is cache hit.</td></tr>
+      <tr><td>DVR storage</td><td>~500 GB per match</td><td>1 hour × 5 rungs × 4 Mbps ≈ 9 GB per rung of raw; add audio + subtitles + language feeds = ~500 GB.</td></tr>
+      <tr><td>Ramp velocity</td><td>+5M viewers/min</td><td>Observed pattern when a star batter comes in — Prachi's "Dhoni walks out" scenario.</td></tr>
+    </table>
+    <p><strong>The single number an interviewer wants you to volunteer:</strong> <em>"At 20M × 4 Mbps we're pushing 80 Tbps — that's why the design is 90% CDN and 10% everything else."</em></p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The system splits into three planes: a <strong>video plane</strong> (contribution feed → transcoder → packager → CDN → player), a <strong>control plane</strong> (login, entitlements, playback URL signing, DRM licence, ad decisioning), and an <strong>observability + failsafe plane</strong> (real-time metrics, feature flags, panic-mode toggle). Under load, the video plane is served almost entirely by the CDN mesh, freeing the origin to run cool. The control plane is a set of Kubernetes-hosted microservices behind an API CDN. The failsafe plane exists precisely because the first two will occasionally lie about being fine.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 940 520" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/></marker>
+          <marker id="ah-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/></marker>
+          <marker id="ah-p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f7567c"/></marker>
+        </defs>
+        <style>
+          .box { fill:#182036; stroke:#2f3b58; stroke-width:1.5; rx:10; ry:10;}
+          .box-arch { fill:#1e2b52; stroke:#4361ee;}
+          .box-cdn  { fill:#0d3b3b; stroke:#00b4d8;}
+          .box-orig { fill:#2b1737; stroke:#7048e8;}
+          .box-ctrl { fill:#2b2115; stroke:#ff9900;}
+          .lbl { fill:#e7ecf3; font: 700 12px sans-serif;}
+          .sub { fill:#8fa2cc; font: 400 10px sans-serif;}
+          .arr { stroke:#c6d0e0; stroke-width:2; fill:none;}
+          .arr-g { stroke:#2dc653; stroke-width:2; fill:none;}
+          .arr-p { stroke:#f7567c; stroke-width:2; fill:none; stroke-dasharray:5 4;}
+        </style>
+
+        <!-- Contribution / Encoder -->
+        <rect class="box box-orig" x="20" y="30" width="140" height="60"/>
+        <text class="lbl" x="90" y="55" text-anchor="middle">Stadium Feed</text>
+        <text class="sub" x="90" y="72" text-anchor="middle">SDI · SRT ingest · 50 Mbps</text>
+
+        <rect class="box box-orig" x="200" y="30" width="150" height="60"/>
+        <text class="lbl" x="275" y="55" text-anchor="middle">Live Transcoder</text>
+        <text class="sub" x="275" y="72" text-anchor="middle">ABR ladder · H.264/HEVC</text>
+
+        <rect class="box box-orig" x="390" y="30" width="140" height="60"/>
+        <text class="lbl" x="460" y="55" text-anchor="middle">Packager</text>
+        <text class="sub" x="460" y="72" text-anchor="middle">HLS · DASH · CMAF · DRM</text>
+
+        <rect class="box box-orig" x="570" y="30" width="150" height="60"/>
+        <text class="lbl" x="645" y="55" text-anchor="middle">Origin + Shield</text>
+        <text class="sub" x="645" y="72" text-anchor="middle">Segments + manifest</text>
+
+        <rect class="box box-cdn"  x="760" y="30" width="160" height="60"/>
+        <text class="lbl" x="840" y="55" text-anchor="middle">CDN Mesh</text>
+        <text class="sub" x="840" y="72" text-anchor="middle">Akamai · CloudFront · Jio</text>
+
+        <line class="arr" x1="160" y1="60" x2="200" y2="60" marker-end="url(#ah)"/>
+        <line class="arr" x1="350" y1="60" x2="390" y2="60" marker-end="url(#ah)"/>
+        <line class="arr" x1="530" y1="60" x2="570" y2="60" marker-end="url(#ah)"/>
+        <line class="arr" x1="720" y1="60" x2="760" y2="60" marker-end="url(#ah)"/>
+
+        <!-- Control plane -->
+        <rect class="box box-ctrl" x="60" y="180" width="150" height="60"/>
+        <text class="lbl" x="135" y="205" text-anchor="middle">Auth / Entitlements</text>
+        <text class="sub" x="135" y="222" text-anchor="middle">JWT · playback token</text>
+
+        <rect class="box box-ctrl" x="240" y="180" width="150" height="60"/>
+        <text class="lbl" x="315" y="205" text-anchor="middle">DRM Licence Server</text>
+        <text class="sub" x="315" y="222" text-anchor="middle">Widevine · PlayReady · FPS</text>
+
+        <rect class="box box-ctrl" x="420" y="180" width="150" height="60"/>
+        <text class="lbl" x="495" y="205" text-anchor="middle">Ad Decision (SSAI)</text>
+        <text class="sub" x="495" y="222" text-anchor="middle">SCTE-35 · cohort match</text>
+
+        <rect class="box box-ctrl" x="600" y="180" width="150" height="60"/>
+        <text class="lbl" x="675" y="205" text-anchor="middle">Multi-CDN Optimizer</text>
+        <text class="sub" x="675" y="222" text-anchor="middle">Picks least-loaded CDN</text>
+
+        <rect class="box box-ctrl" x="780" y="180" width="140" height="60"/>
+        <text class="lbl" x="850" y="205" text-anchor="middle">API CDN</text>
+        <text class="sub" x="850" y="222" text-anchor="middle">Login / config</text>
+
+        <!-- Client -->
+        <rect class="box box-arch" x="360" y="330" width="220" height="70"/>
+        <text class="lbl" x="470" y="358" text-anchor="middle">Player (Phone · TV · Web)</text>
+        <text class="sub" x="470" y="378" text-anchor="middle">ExoPlayer · AVPlayer · Shaka</text>
+
+        <!-- Async plane -->
+        <rect class="box box-arch" x="60" y="440" width="180" height="60"/>
+        <text class="lbl" x="150" y="466" text-anchor="middle">Kafka Event Bus</text>
+        <text class="sub" x="150" y="482" text-anchor="middle">Heartbeats · viewer count</text>
+
+        <rect class="box box-arch" x="270" y="440" width="180" height="60"/>
+        <text class="lbl" x="360" y="466" text-anchor="middle">Real-time Metrics</text>
+        <text class="sub" x="360" y="482" text-anchor="middle">Concurrency · QoE</text>
+
+        <rect class="box box-arch" x="480" y="440" width="180" height="60"/>
+        <text class="lbl" x="570" y="466" text-anchor="middle">Feature Flag Service</text>
+        <text class="sub" x="570" y="482" text-anchor="middle">Kill switches · panic mode</text>
+
+        <rect class="box box-arch" x="690" y="440" width="180" height="60"/>
+        <text class="lbl" x="780" y="466" text-anchor="middle">Panic-Mode Blob</text>
+        <text class="sub" x="780" y="482" text-anchor="middle">Static home snapshots</text>
+
+        <!-- Data-plane arrows -->
+        <path class="arr-g" d="M840 90 C 840 200, 640 260, 480 330" marker-end="url(#ah-g)"/>
+        <path class="arr" d="M470 240 L 470 330" marker-end="url(#ah)"/>
+        <path class="arr" d="M320 240 L 400 330" marker-end="url(#ah)"/>
+        <path class="arr" d="M675 240 L 570 330" marker-end="url(#ah)"/>
+        <path class="arr" d="M135 240 L 360 330" marker-end="url(#ah)"/>
+
+        <!-- Client heartbeats -->
+        <path class="arr" d="M420 400 C 300 430, 200 435, 150 440" marker-end="url(#ah)"/>
+        <path class="arr-p" d="M780 400 C 850 415, 830 435, 780 440" marker-end="url(#ah-p)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7048e8"></span>Origin / Encoder</span>
+        <span><span class="dot" style="background:#00b4d8"></span>CDN Mesh (video)</span>
+        <span><span class="dot" style="background:#ff9900"></span>Control plane</span>
+        <span><span class="dot" style="background:#2dc653"></span>Video request path</span>
+        <span><span class="dot" style="background:#f7567c"></span>Panic-mode fallback</span>
+      </div>
+    </div>
+
+    <p><strong>Verbal walkthrough for the whiteboard:</strong> The stadium's live SDI feed is contributed over SRT to a live transcoder, which produces an ABR ladder (5–8 rungs from 240p up to 4K HDR). The packager wraps segments into HLS, MPEG-DASH, and CMAF; the DRM system encrypts them and hands keys to the licence server. Segments land on the origin (with an origin shield in front) and fan out to a mesh of external CDNs — Akamai, CloudFront, Cloudflare, plus Jio's own edge — plus embedded caches inside telco ISPs. The player boots by hitting the API CDN for config and playback token, calls the DRM licence server, then asks the multi-CDN optimizer which CDN to pull from. From that moment on, every 4-second segment request goes edge → edge, never touching the origin. Heartbeats flow back through Kafka to compute the real-time concurrency counter, and if crash rate or QoE dips, feature flags flip the client into a degraded mode and the CDN swaps to serving pre-baked "panic-mode" static blobs.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a live segment travel to 20M phones — step by step</h2>
+    <p>This animation walks through the two loops that dominate the design: (1) a segment being packaged, replicated across the CDN mesh, and pulled by millions of players; and (2) what happens when Dhoni comes out to bat and the system enters panic mode.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 940 400" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="a-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/></marker>
+        </defs>
+        <style>
+          .anim-box { fill:#182036; stroke:#2f3b58; stroke-width:1.5; rx:10; ry:10;}
+          .anim-lbl { fill:#e7ecf3; font: 700 12px sans-serif;}
+          .anim-sub { fill:#8fa2cc; font: 400 10px sans-serif;}
+          .arr { stroke:#c6d0e0; stroke-width:2; fill:none; }
+          .seg { fill:#2dc653; }
+          .cdn { fill:#0d3b3b; stroke:#00b4d8;}
+          .orig { fill:#2b1737; stroke:#7048e8;}
+          .player { fill:#1e2b52; stroke:#4361ee;}
+          .panic { fill:#5b1a1a; stroke:#f7567c;}
+        </style>
+
+        <!-- Encoder / Packager -->
+        <rect class="anim-box orig" x="30" y="40" width="140" height="60"/>
+        <text class="anim-lbl" x="100" y="65" text-anchor="middle">Encoder</text>
+        <text class="anim-sub" x="100" y="82" text-anchor="middle">produces 4-s segments</text>
+
+        <!-- Origin shield -->
+        <rect class="anim-box orig" x="220" y="40" width="140" height="60"/>
+        <text class="anim-lbl" x="290" y="65" text-anchor="middle">Origin Shield</text>
+        <text class="anim-sub" x="290" y="82" text-anchor="middle">single fetch per segment</text>
+
+        <!-- CDN Mesh -->
+        <rect id="cdn-a" data-anim class="anim-box cdn" x="420" y="20" width="130" height="50"/>
+        <text class="anim-lbl" x="485" y="40" text-anchor="middle">Akamai edge</text>
+        <text class="anim-sub" x="485" y="58" text-anchor="middle">BLR / MUM / DEL</text>
+
+        <rect id="cdn-c" data-anim class="anim-box cdn" x="420" y="80" width="130" height="50"/>
+        <text class="anim-lbl" x="485" y="100" text-anchor="middle">CloudFront edge</text>
+        <text class="anim-sub" x="485" y="118" text-anchor="middle">Regional PoPs</text>
+
+        <rect id="cdn-j" data-anim class="anim-box cdn" x="420" y="140" width="130" height="50"/>
+        <text class="anim-lbl" x="485" y="160" text-anchor="middle">Jio edge</text>
+        <text class="anim-sub" x="485" y="178" text-anchor="middle">Telco embedded</text>
+
+        <!-- Players -->
+        <rect id="p1" class="anim-box player" x="620" y="30" width="120" height="42"/>
+        <text class="anim-lbl" x="680" y="55" text-anchor="middle">📱 Player · BLR</text>
+        <rect id="p2" class="anim-box player" x="620" y="82" width="120" height="42"/>
+        <text class="anim-lbl" x="680" y="107" text-anchor="middle">📺 Player · MUM</text>
+        <rect id="p3" class="anim-box player" x="620" y="134" width="120" height="42"/>
+        <text class="anim-lbl" x="680" y="159" text-anchor="middle">💻 Player · DEL</text>
+        <text id="p-count" class="anim-lbl" x="800" y="105" text-anchor="middle">…and 20M more</text>
+
+        <!-- Multi-CDN Optimizer -->
+        <rect id="opt" data-anim class="anim-box orig" x="220" y="200" width="140" height="50"/>
+        <text class="anim-lbl" x="290" y="222" text-anchor="middle">Multi-CDN Optimizer</text>
+        <text class="anim-sub" x="290" y="240" text-anchor="middle">picks least-loaded CDN</text>
+
+        <!-- Panic mode / feature flag -->
+        <rect id="ff" data-anim class="anim-box panic a-hidden" x="420" y="260" width="150" height="60"/>
+        <text class="anim-lbl" x="495" y="285" text-anchor="middle">⚠ Feature Flag</text>
+        <text class="anim-sub" x="495" y="303" text-anchor="middle">Panic mode = ON</text>
+
+        <rect id="pmb" data-anim class="anim-box panic a-hidden" x="620" y="260" width="180" height="60"/>
+        <text class="anim-lbl" x="710" y="285" text-anchor="middle">Panic-Mode Blob (S3)</text>
+        <text class="anim-sub" x="710" y="303" text-anchor="middle">static home screen</text>
+
+        <!-- Moving Segment -->
+        <g id="seg1" class="a-hidden" data-anim>
+          <rect x="0" y="0" width="30" height="20" fill="#2dc653" rx="4"/>
+          <text x="15" y="14" text-anchor="middle" font: 700 10px sans-serif fill="#0f1420" font-size="10" font-weight="700">SEG</text>
+        </g>
+
+        <!-- static arrows -->
+        <line class="arr" x1="170" y1="70" x2="220" y2="70" marker-end="url(#a-ah)"/>
+        <line class="arr" x1="360" y1="70" x2="420" y2="45"  marker-end="url(#a-ah)"/>
+        <line class="arr" x1="360" y1="70" x2="420" y2="105" marker-end="url(#a-ah)"/>
+        <line class="arr" x1="360" y1="70" x2="420" y2="165" marker-end="url(#a-ah)"/>
+        <line class="arr" x1="550" y1="45"  x2="620" y2="45"  marker-end="url(#a-ah)"/>
+        <line class="arr" x1="550" y1="105" x2="620" y2="105" marker-end="url(#a-ah)"/>
+        <line class="arr" x1="550" y1="165" x2="620" y2="165" marker-end="url(#a-ah)"/>
+
+        <text id="count-label" class="anim-lbl" x="470" y="360" text-anchor="middle" fill="#7fa2ff">Concurrent viewers: 20,000,000</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to walk from encoder to 20M phones.</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        function moveSeg(x, y) {
+          const g = $('#seg1');
+          g.classList.remove('a-hidden');
+          g.setAttribute('transform', `translate(${x},${y})`);
+        }
+
+        const CFG = {
+          intro: 'Encoder → Origin → CDN Mesh → 20M players, then a panic-mode surge.',
+          interval: 1700,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.remove('a-glow', 'a-dim');
+              el.removeAttribute('transform');
+            });
+            $('#seg1').classList.add('a-hidden');
+            $('#seg1').removeAttribute('transform');
+            $('#ff').classList.add('a-hidden');
+            $('#pmb').classList.add('a-hidden');
+            $('#count-label').textContent = 'Concurrent viewers: 20,000,000';
+            $('#count-label').setAttribute('fill', '#7fa2ff');
+          },
+          steps: [
+            { caption: 'Encoder produces a fresh 4-second segment from the stadium feed.',
+              apply: (r) => { moveSeg(100, 105); $('#seg1').firstElementChild.setAttribute('fill', '#2dc653'); } },
+            { caption: 'Origin shield fetches the segment exactly once, caches it, and shields the origin from thundering-herd.',
+              apply: (r) => { moveSeg(290, 105); $('#opt').classList.add('a-glow'); } },
+            { caption: 'Origin fans the segment out to the CDN mesh: Akamai, CloudFront, and Jio\'s own edge — in parallel.',
+              apply: (r) => { moveSeg(485, 45); $('#cdn-a').classList.add('a-glow'); $('#cdn-c').classList.add('a-glow'); $('#cdn-j').classList.add('a-glow'); } },
+            { caption: 'The multi-CDN optimizer routes each player to the least-loaded, geographically-closest edge.',
+              apply: (r) => { moveSeg(485, 105); $('#opt').classList.add('a-glow'); } },
+            { caption: 'Players in Bengaluru, Mumbai, Delhi (and 20M more) fetch the segment from their nearest edge — origin sees zero requests.',
+              apply: (r) => { moveSeg(680, 105); $('#p1').classList.add('a-glow'); $('#p2').classList.add('a-glow'); $('#p3').classList.add('a-glow'); } },
+            { caption: 'Dhoni walks out to bat. In 90 seconds, concurrency spikes from 20M toward 32M — the load ramp begins.',
+              apply: (r) => { $('#count-label').textContent = 'Concurrent viewers: 32,000,000 ↑↑'; $('#count-label').setAttribute('fill', '#f7567c'); } },
+            { caption: 'Real-time metrics cross the panic-mode threshold. The feature-flag service flips the panic switch.',
+              apply: (r) => { $('#ff').classList.remove('a-hidden'); $('#ff').classList.add('a-glow'); } },
+            { caption: 'CDNs re-point non-video API calls at the pre-baked static blob in object storage — origin is protected.',
+              apply: (r) => { $('#pmb').classList.remove('a-hidden'); $('#pmb').classList.add('a-glow'); $('#opt').classList.add('a-dim'); } },
+            { caption: 'Video keeps playing from CDN cache, degraded features fall back gracefully, and the platform stays up.',
+              apply: (r) => { $('#p1').classList.add('a-glow'); $('#p2').classList.add('a-glow'); $('#p3').classList.add('a-glow'); $('#count-label').setAttribute('fill', '#2dc653'); } },
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. Contribution &amp; ingest</h3>
+    <p>The stadium's broadcast truck outputs an SDI signal — think of it as the "raw camera feed after the director cuts". It is contributed to JioCinema's cloud over <strong>SRT</strong> or <strong>Zixi</strong> (secure, reliable transport built for lossy internet), often via redundant paths from two ISPs so that a single fibre cut in Mumbai doesn't kill the match. This is a <em>single</em> input flow — ingest is not the scaling problem. Everything hard begins after it.</p>
+
+    <h3>2. Live transcoder &amp; ABR ladder</h3>
+    <p>A distributed encoding cluster (bare-metal <strong>x86 servers with hardware encoders</strong>, orchestrated by K8s) transcodes the master feed into an <strong>adaptive-bitrate ladder</strong>: typically 240p @ 400 kbps, 480p @ 800 kbps, 720p @ 2 Mbps, 1080p @ 4 Mbps, and 4K HDR @ 15 Mbps. Codec is H.264 by default (broadest device compatibility) with HEVC for 4K. The output is chopped into 2–4-second GOP-aligned segments so any player can start on any keyframe.</p>
+
+    <h3>3. Packager &amp; DRM</h3>
+    <p>The packager (e.g., AWS Elemental MediaPackage, or an in-house Shaka-Packager fleet) wraps segments into three protocol variants — <strong>HLS</strong> (Apple/iOS), <strong>MPEG-DASH</strong> (Android/web/smart TV), and <strong>CMAF</strong> low-latency chunks — so that each device gets its native format from the same source segments (fMP4 unifies the underlying container). It also encrypts segments and generates DRM key IDs for <strong>Widevine</strong> (Android/Chrome), <strong>PlayReady</strong> (Windows/Xbox), and <strong>FairPlay</strong> (iOS/Safari). Keys never leave the licence server; the client fetches a licence per session.</p>
+
+    <h3>4. Origin, origin shield &amp; the CDN mesh</h3>
+    <p>Segments land on a small origin fleet, which is deliberately kept small — a single-digit number of instances is enough. Directly in front sits an <strong>origin shield</strong>: a single logical cache that de-duplicates all upstream CDN fetches. Without it, 5 CDNs times 20 regions each requesting the same segment would hammer the origin. With it, each new segment is fetched once, then fanned out. The <strong>multi-CDN mesh</strong> spans Akamai, Amazon CloudFront, Cloudflare, Jio's in-house CDN, and telco-embedded caches inside Airtel, ACT, and BSNL networks. A custom <strong>multi-CDN optimizer</strong> service watches every CDN's real-time metrics (error rate, latency, throughput) and hands each player a signed playback URL pointing at the current best CDN. If a CDN degrades, the next segment request goes to a different one — the player never notices.</p>
+
+    <h3>5. The player</h3>
+    <p>ExoPlayer (Android), AVPlayer (iOS), Shaka Player (web), and Smart TV players all implement <strong>ABR selection</strong>: measure recent bandwidth (moving average of the last N segment fetches), compare to buffer occupancy, and pick the highest bitrate rung the pipe supports without draining the buffer. Segment fetches are streamed via HTTP/2 or HTTP/3 (QUIC) — QUIC in particular hides packet loss well on mobile radios.</p>
+
+    <h3>6. Panic mode &amp; graceful degradation</h3>
+    <p>The system's most talked-about trick. Before the match, engineers pre-render <strong>static JSON snapshots</strong> of the home screen, EPG, and other config endpoints — the "safe defaults". These are pushed to S3 and warmed on the CDN. Under normal load, the CDN routes API requests to the live microservices. If crash rates or latency cross a threshold, an operator (or an automated rule) flips a feature flag; the CDN configuration re-points API paths to the static blob instead. The video plane keeps working because it never depended on the origin, and the non-video experience degrades gracefully — no personalization, no recommendations, but no crashes either.</p>
+
+    <h3>7. Predictive prescaling &amp; ladder scale-down</h3>
+    <p>Auto-scaling that reacts in 30–60 seconds is <em>far</em> too slow — 20M viewers can arrive in that window. Instead, historical ML models predict peak concurrency by minute across the match window and pre-provision K8s pods hours before the ball is bowled, targeting ~60% CPU headroom. After the match, capacity is stepped down in a "ladder" — e.g., 32M → 25M → 20M — with liveness/readiness gates at each step so the system doesn't collapse under stragglers still watching the post-match presentation.</p>
+
+    <h3>8. Async pipeline (Kafka)</h3>
+    <p>Anything non-real-time — heartbeats for the live viewer counter, ad-view logs, QoE telemetry — is fired at Kafka. Consumers aggregate concurrency into a per-second global counter, feed real-time dashboards, and materialize views for post-match analytics. If a Kafka broker dies, producers buffer locally and drain later — data loss is bounded by disk on the client, not by uptime of the pipe.</p>
+
+    <h3>9. Ads (SCTE-35 + SSAI)</h3>
+    <p>The stadium director cues an ad break; a marker is embedded in the broadcast stream using <strong>SCTE-35</strong>. Segments arriving at the packager carry these markers into the manifest as EMSG events. <strong>Server-side ad insertion (SSAI)</strong> then rewrites the manifest per user cohort — different phones get different ads, but from a viewer's perspective it looks like one continuous stream with no client-side ad-blocker escape hatch.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Live streaming is unusually algorithm-rich — several classic DSA topics show up under different names.</p>
+
+    <table>
+      <tr><th>Problem</th><th>Data structure / algorithm</th><th>Why</th><th>Complexity</th></tr>
+      <tr><td>Player picks a bitrate</td><td><strong>Adaptive bitrate (ABR)</strong> — bandwidth EWMA + buffer-based control (BOLA / BBR-style)</td><td>Balance quality vs stalls with only local observations.</td><td>O(1) per segment</td></tr>
+      <tr><td>Origin dedup</td><td><strong>Consistent hashing</strong> across origin shield nodes</td><td>Same segment key always lands on same shield instance → single upstream fetch.</td><td>O(log N) lookup</td></tr>
+      <tr><td>Multi-CDN routing</td><td><strong>Weighted round-robin</strong> with <strong>EWMA-scored</strong> health metrics + <strong>Power-of-Two-Choices</strong></td><td>Cheap yet load-aware; avoids stampeding the current winner.</td><td>O(1) per request</td></tr>
+      <tr><td>Predictive scaling</td><td><strong>Time-series forecasting</strong> (Prophet / LSTM) on historical match minute-by-minute counts</td><td>Provision ahead of the surge; 30-60s autoscale is too slow.</td><td>Offline training</td></tr>
+      <tr><td>Panic-mode toggle</td><td><strong>Feature flag</strong> + <strong>circuit breaker</strong> (Hystrix pattern)</td><td>Fast, reversible fallback with hysteresis to avoid flapping.</td><td>O(1) evaluation</td></tr>
+      <tr><td>Live viewer counter</td><td><strong>HyperLogLog</strong> over Kafka heartbeats; approximate distinct-count</td><td>Exact counting at 20M cardinality is expensive; HLL is ~1% error in KBs.</td><td>O(1) add, O(1) merge</td></tr>
+      <tr><td>Rate limiting API/DRM</td><td><strong>Token bucket</strong> per user + <strong>sliding-window log</strong> per endpoint</td><td>Protect the DRM licence and playback-token services from abuse and retry storms.</td><td>O(1) per call</td></tr>
+      <tr><td>Retry after failure</td><td><strong>Exponential backoff with jitter</strong></td><td>Prevents synchronized retry storms that would DDoS the recovering service.</td><td>O(1) per retry</td></tr>
+      <tr><td>Player buffer</td><td><strong>Ring buffer</strong> of segments; timestamps drive playback</td><td>Constant-memory sliding window over time.</td><td>O(1) push / pop</td></tr>
+      <tr><td>Cache TTL bump</td><td><strong>Bloom filter</strong> for "hot" segment keys</td><td>Cheap set-membership without holding all keys in RAM.</td><td>O(k) hashes</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>JioCinema's actual production is multi-cloud with heavy Jio-owned infrastructure, but the design maps cleanly to AWS. This is the mapping to talk through in a Bedrock/AWS-flavoured interview.</p>
+
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Contribution feed</td><td>AWS Elemental MediaConnect</td><td>SRT/Zixi ingest into AWS with entitlements and redundancy.</td></tr>
+      <tr><td>Live transcoder</td><td>AWS Elemental MediaLive</td><td>Managed live encoder with ABR ladder output and SCTE-35 passthrough.</td></tr>
+      <tr><td>Packager + DRM</td><td>AWS Elemental MediaPackage + Elemental MediaTailor</td><td>Emits HLS, DASH, CMAF; SSAI for ads; integrates with Widevine/PlayReady/FairPlay.</td></tr>
+      <tr><td>Origin</td><td>S3 + MediaPackage origin</td><td>Durable object storage for segments and manifests, cheap origin storage.</td></tr>
+      <tr><td>Origin shield &amp; CDN</td><td>CloudFront with Origin Shield</td><td>Single upstream cache absorbing all edge misses — the linchpin against thundering-herd.</td></tr>
+      <tr><td>Multi-CDN mesh</td><td>Route 53 latency-based DNS + CloudFront + Akamai + Cloudflare</td><td>Any single CDN failure never becomes an outage.</td></tr>
+      <tr><td>Control-plane microservices</td><td>Amazon EKS (Kubernetes) + Fargate for spike buffer</td><td>Isolated services (auth, entitlement, playback URL, ad decision) with independent scale.</td></tr>
+      <tr><td>API CDN &amp; edge auth</td><td>CloudFront + Lambda@Edge</td><td>Cache config/login responses at the edge; sign playback URLs close to the viewer.</td></tr>
+      <tr><td>DRM licence</td><td>ECS/Fargate service backed by AWS KMS</td><td>Hardware-backed key custody; scales horizontally on session load.</td></tr>
+      <tr><td>Feature flags + panic toggle</td><td>AWS AppConfig</td><td>Second-level rollout / rollback of feature and panic-mode flags.</td></tr>
+      <tr><td>Panic-mode blob</td><td>S3 + CloudFront</td><td>Static pre-baked home screen served at edge; virtually free egress compared to dynamic APIs.</td></tr>
+      <tr><td>Async pipeline</td><td>Amazon MSK (Kafka) or Kinesis Data Streams</td><td>High-throughput heartbeats, viewer counter, ad-log fanout.</td></tr>
+      <tr><td>Real-time counter</td><td>Amazon ElastiCache for Redis + HyperLogLog</td><td>Approximate cardinality of viewers per second in constant memory.</td></tr>
+      <tr><td>Observability</td><td>CloudWatch + Managed Prometheus + Grafana</td><td>Match-day war-room dashboards; alarms drive AppConfig flag flips.</td></tr>
+      <tr><td>Predictive scaling</td><td>SageMaker + EKS Cluster Autoscaler</td><td>ML-driven predicted capacity pre-warmed hours before first ball.</td></tr>
+    </table>
+    <p><strong>Deployment shape:</strong> two active-active regions (ap-south-1 Mumbai, ap-south-2 Hyderabad), latency-based Route 53 in front, ElastiCache global datastore for cross-region session state, MediaPackage in each region, and CloudFront as the primary CDN with Akamai and Cloudflare as siblings in the mesh.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>Two of the algorithmically interesting pieces are the <strong>multi-CDN optimizer</strong> (which CDN should this player pull from right now?) and a <strong>token-bucket rate limiter</strong> guarding the DRM licence service (which must survive a retry storm when a CDN blip flips millions of players into "get me a fresh licence" mode).</p>
+
+<pre><code><span class="cmt">// ---- Multi-CDN optimizer ---------------------------------------------
+// EWMA-scored health, Power-of-Two-Choices routing.
+// Each CDN's rolling score in [0,1]: 1 = perfect, 0 = failing.
+// Called on every playback-URL sign; must be O(1) and lock-free.</span>
+<span class="kw">public</span> <span class="kw">sealed</span> <span class="kw">class</span> <span class="typ">Cdn</span>
+{
+    <span class="kw">public</span> <span class="kw">string</span> Name { <span class="kw">get</span>; <span class="kw">init</span>; } = <span class="str">""</span>;
+    <span class="kw">private</span> <span class="kw">double</span> _score = <span class="str">1.0</span>;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">object</span> _lock = <span class="kw">new</span>();
+
+    <span class="kw">public</span> <span class="kw">double</span> <span class="fn">Score</span>() { <span class="kw">lock</span> (_lock) <span class="kw">return</span> _score; }
+
+    <span class="cmt">// α controls responsiveness: 0.3 reacts in ~10 samples.</span>
+    <span class="kw">public</span> <span class="kw">void</span> <span class="fn">Record</span>(<span class="kw">bool</span> ok, <span class="kw">double</span> latencyMs)
+    {
+        <span class="kw">double</span> sample = ok &amp;&amp; latencyMs &lt; <span class="str">150</span> ? <span class="str">1.0</span>
+                     : ok ? <span class="kw">Math</span>.Max(<span class="str">0</span>, <span class="str">1</span> - (latencyMs - <span class="str">150</span>) / <span class="str">500</span>)
+                     : <span class="str">0</span>;
+        <span class="kw">lock</span> (_lock) _score = <span class="str">0.7</span> * _score + <span class="str">0.3</span> * sample;
+    }
+}
+
+<span class="kw">public</span> <span class="kw">sealed</span> <span class="kw">class</span> <span class="typ">MultiCdnOptimizer</span>
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="typ">Cdn</span>[] _cdns;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="typ">Random</span> _rng = <span class="typ">Random</span>.Shared;
+
+    <span class="kw">public</span> <span class="fn">MultiCdnOptimizer</span>(<span class="typ">Cdn</span>[] cdns) =&gt; _cdns = cdns;
+
+    <span class="cmt">// Power-of-two-choices: pick 2 at random, keep the healthier.
+    // Avoids a single "current best" from being stampeded.</span>
+    <span class="kw">public</span> <span class="typ">Cdn</span> <span class="fn">Pick</span>()
+    {
+        <span class="kw">int</span> i = _rng.Next(_cdns.Length);
+        <span class="kw">int</span> j = _rng.Next(_cdns.Length);
+        <span class="kw">return</span> _cdns[i].Score() &gt;= _cdns[j].Score() ? _cdns[i] : _cdns[j];
+    }
+}
+
+<span class="cmt">// ---- Token-bucket rate limiter for the DRM licence endpoint ----------
+// Wraps the licence-issue path; every user + client-app pair gets a bucket.
+// Refill rate = capacity/refillWindow, evaluated lazily to keep O(1).</span>
+<span class="kw">public</span> <span class="kw">sealed</span> <span class="kw">class</span> <span class="typ">TokenBucket</span>
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">double</span> _capacity;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">double</span> _tokensPerMs;
+    <span class="kw">private</span> <span class="kw">double</span> _tokens;
+    <span class="kw">private</span> <span class="kw">long</span> _lastMs;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">object</span> _lock = <span class="kw">new</span>();
+
+    <span class="kw">public</span> <span class="fn">TokenBucket</span>(<span class="kw">int</span> capacity, <span class="typ">TimeSpan</span> refillWindow)
+    {
+        _capacity = capacity;
+        _tokensPerMs = capacity / refillWindow.TotalMilliseconds;
+        _tokens = capacity;
+        _lastMs = <span class="typ">Environment</span>.TickCount64;
+    }
+
+    <span class="kw">public</span> <span class="kw">bool</span> <span class="fn">TryConsume</span>(<span class="kw">int</span> cost = <span class="str">1</span>)
+    {
+        <span class="kw">lock</span> (_lock)
+        {
+            <span class="kw">long</span> now = <span class="typ">Environment</span>.TickCount64;
+            _tokens = <span class="kw">Math</span>.Min(_capacity, _tokens + (now - _lastMs) * _tokensPerMs);
+            _lastMs = now;
+            <span class="kw">if</span> (_tokens &gt;= cost) { _tokens -= cost; <span class="kw">return</span> <span class="kw">true</span>; }
+            <span class="kw">return</span> <span class="kw">false</span>;
+        }
+    }
+}
+
+<span class="cmt">// ---- Panic-mode gate for the API tier --------------------------------
+// A single feature flag decides whether requests go to live services
+// or are redirected to the static pre-baked blob in S3/CloudFront.</span>
+<span class="kw">public</span> <span class="kw">interface</span> <span class="typ">IFeatureFlags</span> { <span class="kw">bool</span> <span class="fn">IsOn</span>(<span class="kw">string</span> name); }
+
+<span class="kw">public</span> <span class="kw">sealed</span> <span class="kw">class</span> <span class="typ">HomeApi</span>
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="typ">IFeatureFlags</span> _flags;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="typ">IHomeService</span> _live;
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="typ">IPanicStore</span> _panic;
+
+    <span class="kw">public</span> <span class="fn">HomeApi</span>(<span class="typ">IFeatureFlags</span> flags, <span class="typ">IHomeService</span> live, <span class="typ">IPanicStore</span> panic)
+    { _flags = flags; _live = live; _panic = panic; }
+
+    <span class="kw">public</span> <span class="kw">async</span> <span class="typ">Task</span>&lt;<span class="typ">HomeResponse</span>&gt; <span class="fn">GetHomeAsync</span>(<span class="kw">string</span> userId, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">if</span> (_flags.IsOn(<span class="str">"panic-mode.home"</span>))
+            <span class="kw">return</span> <span class="kw">await</span> _panic.GetStaticHomeAsync(ct);   <span class="cmt">// served from CDN</span>
+
+        <span class="kw">try</span>          { <span class="kw">return</span> <span class="kw">await</span> _live.GetPersonalizedAsync(userId, ct); }
+        <span class="kw">catch</span>        { <span class="kw">return</span> <span class="kw">await</span> _panic.GetStaticHomeAsync(ct); } <span class="cmt">// belt + braces</span>
+    }
+}
+</code></pre>
+    <p>In real production these components run in <strong>ASP.NET Core minimal APIs</strong> behind an Envoy sidecar, with the token bucket sharded per-user across a Redis cluster (so a load-balanced fleet enforces a single global limit). The multi-CDN scores are broadcast to all playback-URL signers over Redis Pub/Sub every second so every pod sees the same view.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Where the design will break first</h3>
+    <p>The single most-fragile piece is the <strong>origin during a cold cache</strong>. If a brand-new segment misses on the shield and 5 CDNs simultaneously try to fetch it, that's a thundering herd. The mitigation is the shield's request-coalescing (only one upstream at a time per key). The second-most fragile is the <strong>DRM licence service</strong> at match start — every phone in the country wants a licence in a 60-second window. This is why licence issue is rate-limited (token bucket) and licences are cached client-side across the match's DVR window.</p>
+
+    <h3>Consistency vs availability</h3>
+    <p>Live video is proudly <strong>AP</strong>: we tolerate a few seconds of drift and even a few seconds of divergence between viewers to keep the stream up. The concurrent-viewer count is eventually consistent (HLL, updated per second). The one place we demand consistency is <strong>entitlement</strong> — you don't get to keep watching a subscription-only match after you cancel — so entitlement checks hit a strongly-consistent DB and the answer is cached in a short-lived signed JWT.</p>
+
+    <h3>Latency vs cost</h3>
+    <p>Standard HLS delivers ~10-second glass-to-glass latency; LL-HLS/LL-DASH with 1-second CMAF chunks pushes it to 3–5 seconds but roughly doubles the CDN request rate (chunks are smaller and more frequent). A commercial live-sport operator typically picks 6–10 seconds as the sweet spot: viewers on Twitter learn a wicket fell a few seconds before their neighbour's TV, but bandwidth costs stay sane.</p>
+
+    <h3>Common interviewer follow-ups</h3>
+
+    <div class="qa"><div class="q">"How would you handle a single-CDN outage during a match?"</div>
+      <div class="a">The multi-CDN optimizer notices the CDN's EWMA health score dropping (raised error rate, latency spike). Within a few seconds it stops handing out playback URLs for that CDN, and Route 53 latency-based DNS routes to healthy siblings. Players re-fetch the manifest with the new signed URL on the next segment boundary — user impact is a single stall of 1 segment.</div>
+    </div>
+
+    <div class="qa"><div class="q">"You have 30 seconds before Dhoni comes to bat. What are you doing?"</div>
+      <div class="a">Nothing — because prescaling based on the match forecast already happened. If the forecast was wrong, we (a) flip on panic mode for non-video APIs, (b) tighten the ABR floor so we serve lower bitrates to marginal networks, (c) lean on ladder scale-up that's been pre-warmed at 20% headroom.</div>
+    </div>
+
+    <div class="qa"><div class="q">"Why 4-second segments instead of 1-second?"</div>
+      <div class="a">Latency vs efficiency. 4-second segments mean 4× fewer HTTP requests, higher cache hit rates, and lower CDN cost — at the price of ~10s glass-to-glass. If sub-3s latency mattered (e.g., a live auction), we'd move to CMAF LL-HLS with 200ms chunked-transfer chunks; for IPL it doesn't move the business needle.</div>
+    </div>
+
+    <div class="qa"><div class="q">"How do you protect the DRM licence server from a retry storm?"</div>
+      <div class="a">(1) Rate-limit per user via token bucket in Redis; (2) exponential backoff with jitter on the client SDK; (3) long-lived licence with periodic key rotation via key-rotation-in-manifest so most retries are cache hits; (4) a circuit breaker in front of the KMS-backed key vault so a slow KMS response doesn't take the licence server down.</div>
+    </div>
+
+    <div class="qa"><div class="q">"Why not just autoscale — why prescale?"</div>
+      <div class="a">Kubernetes cluster autoscale (adding nodes, warming pods, passing readiness probes) takes 30–90 seconds. Concurrency can double in that window. The economics favour paying for spare capacity for a 3-hour match window over risking a 30-second outage that lands on Twitter — Prachi's team explicitly names this trade-off.</div>
+    </div>
+
+    <div class="qa"><div class="q">"How do you count 20M concurrent viewers accurately?"</div>
+      <div class="a">Approximately, not exactly. Players heartbeat every ~10 s into Kafka; a consumer bucket them by a 30-second sliding window and merges HyperLogLog sketches per shard, then combines shards. Error is ~1% at 20M cardinality using ~12KB of memory per sketch. The trade-off is you can't answer "which 20M users?", only "how many". The exact set is available in the analytics warehouse post-match.</div>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch">"Live IPL streaming is a thundering-herd problem: 20 million phones want the same 4-second segment in the same 4 seconds. The trick is a CDN mesh in front of an origin shield that sees ~1 request per new segment, an ABR ladder so every device gets the right bitrate, prescaled Kubernetes capacity because 30-second autoscale is too slow, and a panic-mode static blob so the video plane keeps playing even when the API plane misbehaves."</p>
+    <ul>
+      <li><strong>Numbers to volunteer:</strong> 20M concurrent × 4 Mbps = <em>80 Tbps</em> egress; 5M segment req/s; &gt;90% CDN cache hit; ~1000 req/s hit the origin.</li>
+      <li><strong>Name the three planes:</strong> video (encoder → packager → CDN), control (auth, DRM, ad, playback URL), failsafe (feature flags, panic-mode blob).</li>
+      <li><strong>Name the CDN mesh:</strong> Akamai + CloudFront + Cloudflare + Jio's own edge + telco-embedded caches; picked live by a multi-CDN optimizer.</li>
+      <li><strong>Say "prescale, don't autoscale":</strong> ML forecasts per-minute concurrency, pods provisioned hours ahead; ladder scale-down after the match, gated by readiness probes.</li>
+      <li><strong>Explain panic mode:</strong> feature-flag flips the CDN to serve pre-baked static snapshots for non-video APIs; video keeps flowing from cache.</li>
+      <li><strong>DSA callouts:</strong> HyperLogLog for the viewer counter, token bucket for DRM, consistent hashing for the origin shield, exponential backoff with jitter to prevent retry storms.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li>Arpit Bhayani (Asli Engineering) — <em>Scaling for Dhoni: How JioCinema Streams IPL to Millions</em> — interview with Prachi Sharma, Sr. Director of Engineering, JioCinema. <a href="https://www.youtube.com/watch?v=OxJz0s-L45o">youtube.com/watch?v=OxJz0s-L45o</a></li>
+      <li>Abhinav CV — <em>Behind the Scenes: How JioCinema Seamlessly Streams IPL Matches to 20 Million Fans</em> — Medium. <a href="https://medium.com/@abhinavcv007/behind-the-scenes-how-jiocinema-seamlessly-streams-ipl-matches-to-20-million-fans-293967729734">medium.com</a></li>
+      <li>SlideShare — <em>Jio Cinema user handling system design: a technical deep dive</em>. <a href="https://www.slideshare.net/slideshow/jio-cinema-user-handling-system-design-a-technical-deep-dive-into-streaming-video-content-at-scale/272451455">slideshare.net</a></li>
+      <li>DevOps Trio — <em>How JioCinema &amp; JioHotstar Handle 30–55M Peak IPL Viewers</em>. <a href="https://devopstrio.co.uk/insights/case-studies/69cccb7d2576cb621c7ec7d8">devopstrio.co.uk</a></li>
+      <li>Haltdos KB — <em>How Multi-CDN Ensures Buffer-Free 4K IPL Streaming</em>. <a href="https://www.haltdos.com/knowledge-base/how-multi-cdn-ensures-buffer-free-4k-ipl-streaming/">haltdos.com</a></li>
+      <li>Talent500 — <em>The Technology Behind JioCinema's Massive IPL Streaming Success</em>. <a href="https://talent500.com/blog/jiocinema-ipl-streaming-technology-explained/">talent500.com</a></li>
+      <li>Akash Pawar — <em>Scaling JioCinema for IPL: A Technical Deep Dive into High Traffic Management</em>. <a href="https://blog.akashpawar.com/scaling-jiocinema-for-ipl-a-technical-deep-dive-into-high-traffic-management">blog.akashpawar.com</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

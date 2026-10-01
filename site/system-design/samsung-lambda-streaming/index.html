@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Samsung Real-Time Pricing with Lambda Response Streaming — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #ffd166;
+    --laymen-bg: #fffbe6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #1428a0 0%, #ff9900 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);  background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: #c99500; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin: 16px 0; }
+  .metric { background: #0f1420; color: #c6d0e0; border-radius: 10px; padding: 14px 16px; }
+  .metric .n { color: #2dc653; font-size: 1.6rem; font-weight: 800; display: block; }
+  .metric .l { color: #7f8aa0; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">AWS Architecture · Real-World Case Study</div>
+    <h1>Samsung Real-Time Pricing with Lambda Response Streaming</h1>
+    <p>How Samsung.com replaced hourly precomputation with a stateless, edge-cached, streaming fan-out — cutting P90 latency 90× and shrinking a 100-instance fleet to 5–10 Lambdas.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#old">🕰️ Old Design</a>
+    <a href="#arch">🏗️ New Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS Services</a>
+    <a href="#code">💻 Code</a>
+    <a href="#results">📈 Results</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>The business problem Samsung faced</h2>
+    <p><strong>Samsung.com</strong> sells thousands of products — phones, TVs, appliances — each with variants (color, storage, size), stackable offers (trade-in, student, employee), and regional pricing rules. On product listing pages such as <em>All Deals</em> and <em>Product Finder</em>, a single viewport can render <strong>30+ price combinations</strong> at once. During high-velocity moments — Black Friday flash sales, midnight drops — the price the customer sees on the listing page needs to be <em>exactly</em> the price they see in the cart, or trust collapses.</p>
+    <p>The legacy system cached prices from an authoritative <em>Pricing Engine</em> via an hourly cron job. That produced a <strong>~1-hour desync window</strong>: during a flash sale the listing might still show the old price while checkout showed the new one. Cart shock, abandoned baskets, and support tickets followed. The engineering brief was: <em>make listing pricing real-time and match checkout, without exploding compute cost during peak.</em></p>
+    <p>Samsung's answer, published on the AWS Architecture Blog, is a beautiful case study in <strong>AWS Lambda Response Streaming</strong> combined with <strong>CloudFront edge caching</strong>, <strong>VPC peering</strong>, <strong>HTTP/2 multiplexing</strong>, and a stateless "pass-through" pattern. Result: P90 fell from 4,500 ms → 50 ms (a 90× improvement), cache hit ratio hit 95%, and the compute fleet shrank from 100+ auto-scaled instances to 5–10 Lambda functions. This page walks the design so an architect can whiteboard it end-to-end.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In plain English</span>
+    <h2>The story, told without any jargon</h2>
+    <p>Imagine you own a giant electronics store with <strong>30 different price tags visible on one wall</strong> — every phone, every colour, with a matching current discount. Prices change during a Black Friday sale as the day goes on. If a customer sees $499 on the wall but the cash register rings up $449 (or worse, $549), something feels wrong and they leave.</p>
+    <p>Samsung's <strong>old approach</strong> was to have an intern (a computer job) walk the whole store every hour, write down every price on 30-inch cards, and stack them in a cupboard. When a customer arrived, the shop assistant grabbed the pre-written cards from the cupboard. Fast — but the cards could be an hour stale. In a flash sale, that's a lifetime.</p>
+    <p>The <strong>new approach</strong> is different: instead of pre-writing cards, Samsung set up a system where <em>the moment a customer walks up</em>, 30 tiny messengers sprint to the Pricing Office in parallel. As <em>each</em> messenger comes back with one price, the shop assistant immediately writes it on the wall — <strong>without waiting for the slowest one</strong>. That's what "response streaming" means: the answer starts appearing before it's fully ready.</p>
+    <p>On top of that, Samsung put a <strong>copy of the last price shown</strong> on a bulletin board just outside the shop (<em>the CloudFront edge cache</em>). The <em>next</em> customer within the next 5 minutes reads the bulletin board and never bothers the messengers at all. In practice, <strong>95 out of 100 customers</strong> get their prices from the bulletin board; only 5 trigger the messenger run. The Pricing Office barely notices.</p>
+    <p>That's it. <strong>Fast because parallel; fresh because no long cache; cheap because most reads never even touch the server; consistent because everyone looks at the same source of truth.</strong> The same pattern powers everything from stock tickers to inventory dashboards — anywhere you need to show many things that each need a quick lookup.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What the design had to hit</h2>
+    <table>
+      <thead><tr><th>Requirement</th><th>Target</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Price freshness</td><td>Real-time (max 5 min lag)</td><td>Prevent listing-vs-cart mismatch during flash sales.</td></tr>
+        <tr><td>Items per page</td><td>Up to 30 SKUs in one request</td><td>Dense listing pages (Product Finder, All Deals).</td></tr>
+        <tr><td>P90 latency (client)</td><td>&lt; 100 ms</td><td>Perceived-instant page render.</td></tr>
+        <tr><td>P99 latency</td><td>&lt; 500 ms</td><td>Tail behaviour under peak load.</td></tr>
+        <tr><td>Cache hit ratio</td><td>&gt; 90%</td><td>Keep Pricing Engine load flat under Black-Friday traffic spikes.</td></tr>
+        <tr><td>Payload size</td><td>&lt; 50 KB</td><td>Mobile networks; time-to-first-render.</td></tr>
+        <tr><td>Compute floor</td><td>Serverless, no idle capacity</td><td>Match cost to traffic; no over-provisioning.</td></tr>
+        <tr><td>Failure mode</td><td>Partial responses OK</td><td>If one SKU errors, the other 29 still render.</td></tr>
+        <tr><td>Security</td><td>VPC-private path to Pricing Engine; TLS 1.3 in transit; no PII in logs</td><td>Trade-in prices are commercially sensitive.</td></tr>
+      </tbody>
+    </table>
+    <p>The critical non-functional insight the interview candidate must name: <strong>eliminate stateful cache drift</strong>. A pre-warmed cache trades freshness for latency — but with Lambda response streaming and CloudFront edge caching, they got the latency <em>without</em> the freshness penalty.</p>
+  </section>
+
+  <section id="old" class="card">
+    <h2>🕰️ The legacy "Data Aggregation (DA)" design and why it broke</h2>
+    <p>The old architecture was a classic <strong>Backend-For-Frontend (BFF)</strong> pattern with a precomputed cache. A <em>Cron Worker</em> ran hourly, walked the whole catalog, generated <em>every</em> variant × offer × add-on permutation, and dropped them in a local cache. The BFF then served listing pages from that cache.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 900 340" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="oldarr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f7567c"/>
+          </marker>
+        </defs>
+        <rect x="40" y="120" width="120" height="80" rx="10" fill="#2a3652" stroke="#7f8aa0"/>
+        <text x="100" y="150" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">Browser</text>
+        <text x="100" y="170" text-anchor="middle" fill="#c6d0e0" font-size="10">Product Listing</text>
+
+        <rect x="220" y="120" width="150" height="80" rx="10" fill="#4361ee" stroke="#4361ee"/>
+        <text x="295" y="150" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">BFF (DA service)</text>
+        <text x="295" y="170" text-anchor="middle" fill="#fff" font-size="10">EC2 auto-scaled</text>
+
+        <rect x="430" y="30" width="160" height="70" rx="10" fill="#f4a259" stroke="#f4a259"/>
+        <text x="510" y="60" text-anchor="middle" fill="#0f1420" font-weight="700" font-size="13">Cron Worker</text>
+        <text x="510" y="78" text-anchor="middle" fill="#0f1420" font-size="10">every 1 hour</text>
+
+        <rect x="430" y="130" width="160" height="70" rx="10" fill="#0f1420" stroke="#f7567c"/>
+        <text x="510" y="160" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">Local Cache</text>
+        <text x="510" y="178" text-anchor="middle" fill="#f7567c" font-size="10">EXPLODING SIZE</text>
+
+        <rect x="660" y="120" width="180" height="80" rx="10" fill="#7048e8" stroke="#7048e8"/>
+        <text x="750" y="150" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Pricing Engine</text>
+        <text x="750" y="170" text-anchor="middle" fill="#fff" font-size="10">authoritative source</text>
+
+        <line x1="160" y1="160" x2="220" y2="160" stroke="#7fa2ff" stroke-width="2" marker-end="url(#oldarr)"/>
+        <line x1="370" y1="160" x2="430" y2="160" stroke="#f7567c" stroke-width="2" marker-end="url(#oldarr)"/>
+        <line x1="590" y1="65" x2="660" y2="130" stroke="#f4a259" stroke-width="2" marker-end="url(#oldarr)"/>
+        <line x1="590" y1="65" x2="510" y2="130" stroke="#f4a259" stroke-width="2" marker-end="url(#oldarr)"/>
+
+        <text x="450" y="260" fill="#f7567c" font-size="13" font-weight="700">Two failure modes:</text>
+        <text x="450" y="280" fill="#c6d0e0" font-size="12">1. Permutation explosion — 30 items × (variants × offers × addons) → thousands of records/page</text>
+        <text x="450" y="300" fill="#c6d0e0" font-size="12">2. Sync lag — flash sale prices trail authoritative source by up to 60 min</text>
+      </svg>
+    </div>
+    <p><strong>Why it broke.</strong> Two structural failures. First, the cache had to store <em>every</em> permutation a customer <em>might</em> request, most of which were never viewed. Cache size grew combinatorially with variants × offers × regions. Second, the hourly refresh window meant a flash sale that launched at 12:00 didn't reach the listing until 13:00 — while the checkout cart already had the new price. Customers saw <strong>$499 in the list, $449 in the cart</strong> — good for them, bad for revenue accounting; and the reverse case ($449 in list → $499 in cart) triggered abandoned checkouts.</p>
+    <p>Fix attempts (a shorter cron interval, incremental refresh) all made cache size worse or compute cost worse. The team decided: <em>rip the cache out entirely</em>, go stateless, and use edge caching for the "hot" reads only.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ New architecture</span>
+    <h2>The Bulk Arbitration Engine (stateless streaming)</h2>
+    <p>The new design is a "pass-through" pattern. There is no long-lived server-side cache of the catalog. Every request either <strong>hits CloudFront's short-TTL edge cache</strong> or triggers a Lambda that <strong>fans out 30 parallel calls</strong> to the Pricing Engine and <strong>streams NDJSON results as each price arrives</strong>. Freshness comes from the source; latency comes from the edge; parallelism comes from streaming.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 920 480" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="newarr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="stream" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/>
+          </marker>
+          <linearGradient id="cf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff9900"/><stop offset="1" stop-color="#e88600"/></linearGradient>
+          <linearGradient id="lam" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4361ee"/><stop offset="1" stop-color="#7048e8"/></linearGradient>
+        </defs>
+
+        <!-- Browser -->
+        <rect x="20" y="200" width="120" height="70" rx="10" fill="#2a3652" stroke="#7f8aa0"/>
+        <text x="80" y="230" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">Browser</text>
+        <text x="80" y="250" text-anchor="middle" fill="#c6d0e0" font-size="10">Product Listing Page</text>
+
+        <!-- CloudFront -->
+        <rect x="180" y="180" width="150" height="110" rx="12" fill="url(#cf)"/>
+        <text x="255" y="210" text-anchor="middle" fill="#0f1420" font-weight="800" font-size="14">CloudFront</text>
+        <text x="255" y="230" text-anchor="middle" fill="#0f1420" font-size="10">Edge cache · 5-min TTL</text>
+        <text x="255" y="250" text-anchor="middle" fill="#0f1420" font-size="10">Cache key = GET query</text>
+        <text x="255" y="270" text-anchor="middle" fill="#0f1420" font-size="11" font-weight="800">95% HIT ratio</text>
+
+        <!-- Lambda -->
+        <rect x="380" y="180" width="180" height="110" rx="12" fill="url(#lam)"/>
+        <text x="470" y="210" text-anchor="middle" fill="#fff" font-weight="800" font-size="14">Lambda (Node.js)</text>
+        <text x="470" y="230" text-anchor="middle" fill="#fff" font-size="10">streamifyResponse</text>
+        <text x="470" y="248" text-anchor="middle" fill="#fff" font-size="10">Provisioned Concurrency</text>
+        <text x="470" y="266" text-anchor="middle" fill="#fff" font-size="10">In VPC (private)</text>
+        <text x="470" y="284" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">Promise.all fan-out</text>
+
+        <!-- Pricing Engine (30 lookups) -->
+        <rect x="620" y="60" width="270" height="360" rx="12" fill="#1a2340" stroke="#2a3652"/>
+        <text x="755" y="86" text-anchor="middle" fill="#7fa2ff" font-weight="700" font-size="13">Pricing Engine (VPC-peered)</text>
+        <g font-size="10" fill="#c6d0e0">
+          <rect x="640" y="100" width="230" height="26" rx="6" fill="#2a3652" stroke="#7048e8"/>
+          <text x="755" y="118" text-anchor="middle">SKU-01 price lookup</text>
+          <rect x="640" y="130" width="230" height="26" rx="6" fill="#2a3652" stroke="#7048e8"/>
+          <text x="755" y="148" text-anchor="middle">SKU-02 price lookup</text>
+          <rect x="640" y="160" width="230" height="26" rx="6" fill="#2a3652" stroke="#7048e8"/>
+          <text x="755" y="178" text-anchor="middle">SKU-03 price lookup</text>
+          <text x="755" y="205" text-anchor="middle" fill="#7f8aa0" font-size="12">...</text>
+          <rect x="640" y="220" width="230" height="26" rx="6" fill="#2a3652" stroke="#7048e8"/>
+          <text x="755" y="238" text-anchor="middle">SKU-28 price lookup</text>
+          <rect x="640" y="250" width="230" height="26" rx="6" fill="#2a3652" stroke="#7048e8"/>
+          <text x="755" y="268" text-anchor="middle">SKU-29 price lookup</text>
+          <rect x="640" y="280" width="230" height="26" rx="6" fill="#2a3652" stroke="#7048e8"/>
+          <text x="755" y="298" text-anchor="middle">SKU-30 price lookup</text>
+        </g>
+        <text x="755" y="340" text-anchor="middle" fill="#f4a259" font-size="11" font-weight="700">HTTP/2 multiplexed · 1 TCP</text>
+        <text x="755" y="360" text-anchor="middle" fill="#c6d0e0" font-size="10">VPC endpoint · no public internet</text>
+        <text x="755" y="380" text-anchor="middle" fill="#c6d0e0" font-size="10">DNS/TLS overhead removed (~300 ms)</text>
+        <text x="755" y="400" text-anchor="middle" fill="#2dc653" font-size="11" font-weight="700">Authoritative source of truth</text>
+
+        <!-- Arrows -->
+        <line x1="140" y1="235" x2="180" y2="235" stroke="#7fa2ff" stroke-width="2" marker-end="url(#newarr)"/>
+        <line x1="330" y1="235" x2="380" y2="235" stroke="#7fa2ff" stroke-width="2" marker-end="url(#newarr)"/>
+        <line x1="560" y1="235" x2="620" y2="235" stroke="#7fa2ff" stroke-width="2" marker-end="url(#newarr)"/>
+
+        <!-- Stream back -->
+        <line x1="620" y1="270" x2="560" y2="270" stroke="#2dc653" stroke-width="2.5" marker-end="url(#stream)"/>
+        <text x="590" y="285" text-anchor="middle" fill="#2dc653" font-size="10" font-weight="700">NDJSON chunks</text>
+        <line x1="380" y1="270" x2="330" y2="270" stroke="#2dc653" stroke-width="2.5" marker-end="url(#stream)"/>
+        <line x1="180" y1="270" x2="140" y2="270" stroke="#2dc653" stroke-width="2.5" marker-end="url(#stream)"/>
+
+        <!-- labels below -->
+        <text x="80" y="430" text-anchor="middle" fill="#7f8aa0" font-size="11">GET /prices?g=…</text>
+        <text x="255" y="430" text-anchor="middle" fill="#7f8aa0" font-size="11">HIT → 5 ms</text>
+        <text x="470" y="430" text-anchor="middle" fill="#7f8aa0" font-size="11">MISS → fan-out</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#ff9900"></span> CloudFront (95% hit)</span>
+        <span><span class="dot" style="background:#4361ee"></span> Lambda streaming</span>
+        <span><span class="dot" style="background:#7048e8"></span> Pricing Engine (VPC)</span>
+        <span><span class="dot" style="background:#2dc653"></span> NDJSON stream back</span>
+      </div>
+    </div>
+    <p><strong>Five architectural moves that unlocked the wins:</strong></p>
+    <ol>
+      <li><strong>Cacheable GET</strong> — the client encodes 30 SKUs into a dense ~800 B query string (<code>g=group1(p=SKU-A:1:p=SKU-B:2)</code>) so CloudFront can cache by URL. POST would kill caching.</li>
+      <li><strong>CloudFront edge cache</strong> with 5-min TTL and <code>query_string_behavior = "all"</code>. Each unique SKU combination gets its own cache entry. 95% hit means the Pricing Engine sees only 1 in 20 real requests.</li>
+      <li><strong>Lambda in a VPC peered to the Pricing Engine</strong> — removes DNS (50 ms) + TCP handshake (100 ms) + TLS (150 ms) overhead that plagued the old public-internet path.</li>
+      <li><strong>HTTP/2 multiplexing</strong> — one persistent TCP + TLS session between Lambda and Pricing Engine carries all 30 lookups as concurrent streams. Cuts payload 76% (170 KB → 40 KB) with GZIP.</li>
+      <li><strong>Response streaming with NDJSON</strong> — Lambda writes each SKU's price to the response as soon as it lands, wrapped in <code>awslambda.streamifyResponse()</code>. TTFB drops to the time of the <em>fastest</em> price lookup, not the slowest.</li>
+    </ol>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch one request stream through, SKU by SKU</h2>
+    <p>The animation follows a single "cache miss" — 30 SKUs requested, Lambda fans out, prices stream back as each arrives, then CloudFront stores the result for the next 5 minutes.</p>
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="anim-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <!-- Browser -->
+        <rect id="a-browser" x="20" y="180" width="140" height="70" rx="10" fill="#2a3652" stroke="#7f8aa0" data-anim/>
+        <text x="90" y="215" text-anchor="middle" fill="#c6d0e0" font-size="13" font-weight="700">Browser</text>
+        <text x="90" y="234" text-anchor="middle" fill="#c6d0e0" font-size="10">30 SKUs to price</text>
+
+        <!-- CloudFront -->
+        <rect id="a-cf" x="200" y="180" width="150" height="70" rx="10" fill="#2a3652" stroke="#ff9900" data-anim/>
+        <text x="275" y="215" text-anchor="middle" fill="#c6d0e0" font-size="13" font-weight="700">CloudFront</text>
+        <text id="a-cf-status" x="275" y="234" text-anchor="middle" fill="#f4a259" font-size="10">edge cache</text>
+
+        <!-- Lambda -->
+        <rect id="a-lambda" x="390" y="180" width="150" height="70" rx="10" fill="#2a3652" stroke="#4361ee" data-anim/>
+        <text x="465" y="215" text-anchor="middle" fill="#c6d0e0" font-size="13" font-weight="700">Lambda</text>
+        <text x="465" y="234" text-anchor="middle" fill="#c6d0e0" font-size="10">streamifyResponse</text>
+
+        <!-- 6 SKU cells (representative of 30) -->
+        <g id="a-skus">
+          <rect id="sku-1" x="600" y="60"  width="130" height="34" rx="6" fill="#2a3652" stroke="#7048e8" data-anim/>
+          <text x="665" y="82" text-anchor="middle" fill="#c6d0e0" font-size="11">SKU-01</text>
+          <rect id="sku-2" x="600" y="100" width="130" height="34" rx="6" fill="#2a3652" stroke="#7048e8" data-anim/>
+          <text x="665" y="122" text-anchor="middle" fill="#c6d0e0" font-size="11">SKU-02</text>
+          <rect id="sku-3" x="600" y="140" width="130" height="34" rx="6" fill="#2a3652" stroke="#7048e8" data-anim/>
+          <text x="665" y="162" text-anchor="middle" fill="#c6d0e0" font-size="11">SKU-03</text>
+          <rect id="sku-4" x="600" y="180" width="130" height="34" rx="6" fill="#2a3652" stroke="#7048e8" data-anim/>
+          <text x="665" y="202" text-anchor="middle" fill="#c6d0e0" font-size="11">SKU-04</text>
+          <rect id="sku-5" x="600" y="220" width="130" height="34" rx="6" fill="#2a3652" stroke="#7048e8" data-anim/>
+          <text x="665" y="242" text-anchor="middle" fill="#c6d0e0" font-size="11">SKU-05</text>
+          <rect id="sku-6" x="600" y="260" width="130" height="34" rx="6" fill="#2a3652" stroke="#7048e8" data-anim/>
+          <text x="665" y="282" text-anchor="middle" fill="#c6d0e0" font-size="11">SKU-06 … 30</text>
+        </g>
+        <rect x="600" y="320" width="130" height="40" rx="6" fill="none" stroke="#7f8aa0" stroke-dasharray="3,3"/>
+        <text x="665" y="345" text-anchor="middle" fill="#7f8aa0" font-size="10">Pricing Engine (VPC)</text>
+
+        <!-- streaming chunks -->
+        <g id="a-chunks" data-anim class="a-hidden">
+          <rect x="200" y="290" width="340" height="40" rx="8" fill="#0f1a30" stroke="#2dc653"/>
+          <text x="370" y="315" text-anchor="middle" fill="#2dc653" font-size="11" font-weight="700">NDJSON chunks streaming ← ← ←</text>
+        </g>
+
+        <!-- render pane -->
+        <rect id="a-render" x="20" y="290" width="140" height="130" rx="10" fill="#0f1a30" stroke="#2a3652" data-anim/>
+        <text x="90" y="312" text-anchor="middle" fill="#7fa2ff" font-size="11" font-weight="700">Rendered on page</text>
+        <text id="r1" x="30" y="335" fill="#c6d0e0" font-size="10" data-anim class="a-hidden">✓ SKU-01 $499</text>
+        <text id="r2" x="30" y="352" fill="#c6d0e0" font-size="10" data-anim class="a-hidden">✓ SKU-02 $299</text>
+        <text id="r3" x="30" y="369" fill="#c6d0e0" font-size="10" data-anim class="a-hidden">✓ SKU-03 $799</text>
+        <text id="r4" x="30" y="386" fill="#c6d0e0" font-size="10" data-anim class="a-hidden">✓ SKU-04 $149</text>
+        <text id="r5" x="30" y="403" fill="#c6d0e0" font-size="10" data-anim class="a-hidden">✓ …29 more</text>
+
+        <!-- Ribbon -->
+        <rect x="20" y="15" width="860" height="30" rx="8" fill="#0f1a30" stroke="#2a3652"/>
+        <text x="35" y="34" fill="#7f8aa0" font-size="11" font-weight="700">STATE:</text>
+        <text id="ribbon" x="105" y="34" fill="#c6d0e0" font-size="11">idle</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+        function glow(id){$('#'+id).classList.add('a-glow');}
+        function dim(id){$('#'+id).classList.add('a-dim');}
+        function show(id){$('#'+id).classList.remove('a-hidden');}
+        function ribbon(t){$('#ribbon').textContent = t;}
+        function cfStat(t,c){const el=$('#a-cf-status');el.textContent=t;el.setAttribute('fill',c||'#f4a259');}
+
+        const CFG = {
+          intro: 'A single request: browser → CloudFront → Lambda fan-out → prices stream back as each SKU resolves.',
+          interval: 1700,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.remove('a-glow', 'a-dim');
+            });
+            ['a-chunks','r1','r2','r3','r4','r5'].forEach(id => $('#'+id).classList.add('a-hidden'));
+            cfStat('edge cache','#f4a259');
+            ribbon('idle');
+          },
+          steps: [
+            { caption: 'Browser sends GET /prices?g=SKU-01:...:SKU-30 to CloudFront.',
+              apply: (r,$) => { glow('a-browser'); ribbon('client GET · cacheable URL'); } },
+            { caption: 'CloudFront checks its edge cache. MISS — first request in the 5-min window.',
+              apply: (r,$) => { dim('a-browser'); glow('a-cf'); cfStat('MISS · forwarding','#f7567c'); ribbon('cache miss → forward to origin'); } },
+            { caption: 'Lambda handler starts (Provisioned Concurrency: no cold start). Wraps response with awslambda.streamifyResponse.',
+              apply: (r,$) => { dim('a-cf'); glow('a-lambda'); ribbon('Lambda invoked · warm · streaming response opened'); } },
+            { caption: 'Lambda fans out 30 parallel HTTP/2 requests to the Pricing Engine over VPC-peered connection.',
+              apply: (r,$) => { ['sku-1','sku-2','sku-3','sku-4','sku-5','sku-6'].forEach(id => glow(id)); ribbon('Promise.all(30) · HTTP/2 multiplexed on 1 TCP'); } },
+            { caption: 'SKU-01 resolves first. Lambda writes one NDJSON line to the response stream — browser gets bytes NOW.',
+              apply: (r,$) => { show('a-chunks'); show('r1'); ribbon('TTFB reached · first chunk on the wire'); } },
+            { caption: 'SKU-02 and SKU-03 resolve. Each becomes its own NDJSON line; DOM updates incrementally.',
+              apply: (r,$) => { show('r2'); show('r3'); ribbon('progressive rendering · not waiting for slowest'); } },
+            { caption: 'Remaining SKUs stream in. If one errors, only that line becomes an error object — the rest render.',
+              apply: (r,$) => { show('r4'); show('r5'); ribbon('partial failure isolated per SKU'); } },
+            { caption: 'Lambda closes the stream. Total upstream body is ~40 KB gzipped. Scope disposed.',
+              apply: (r,$) => { dim('a-lambda'); ribbon('response.end · gzipped NDJSON complete'); } },
+            { caption: 'CloudFront stores the response with cache key = full query string. TTL 5 min.',
+              apply: (r,$) => { glow('a-cf'); cfStat('STORED · TTL 5 min','#2dc653'); ribbon('edge cache warmed'); } },
+            { caption: 'Next 100 users hitting the same 30-SKU combo skip Lambda entirely. 95% hit ratio in production.',
+              apply: (r,$) => { glow('a-browser'); ribbon('95% cache hit · Lambda barely invoked'); } }
+          ]
+        };
+        let idx = -1, playing = false, timer = null;
+        function goto(i){ if(i<0||i>=CFG.steps.length) return; CFG.reset(root); for(let k=0;k<=i;k++) CFG.steps[k].apply(root,$,$$); idx=i; label.textContent=`Step ${i+1}/${CFG.steps.length}`; cap.textContent=CFG.steps[i].caption; }
+        function reset(){ idx=-1; playing=false; if(timer){clearTimeout(timer);timer=null;} CFG.reset(root); label.textContent='Ready'; cap.textContent=CFG.intro; btnPlay.textContent='▶ Play'; }
+        function play(){ if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play'; return;} if(idx>=CFG.steps.length-1) reset(); playing=true; btnPlay.textContent='⏸ Pause'; function tick(){ if(!playing) return; if(idx+1<CFG.steps.length) goto(idx+1); if(idx<CFG.steps.length-1) timer=setTimeout(tick,CFG.interval); else{playing=false; btnPlay.textContent='▶ Replay';} } timer=setTimeout(tick,400);}
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx+1); });
+        btnPrev && btnPrev.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx-1); });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>Cacheable GET — dense query encoding</h3>
+    <p>CloudFront can only cache <strong>GET/HEAD</strong>. A JSON POST body of 30 SKUs (3–4 KB) would be uncacheable. Samsung's client-side query builder packs each SKU into a token like <code>p=SKU-A:variant1</code>, groups them, and appends context: <code>g=group1(p=SKU-A:1:p=SKU-B:2:c=customerId=123:region=US-EAST-1)</code>. Total ~800 B — well under URL length limits, fully cacheable, and includes customer segment as part of the cache key (so employee pricing doesn't leak to guests).</p>
+
+    <h3>CloudFront cache &amp; origin request policies</h3>
+    <p>The Terraform picks a 5-min default TTL (300 s), 30-min max, and cache-by-query-string. Cookies are excluded so cache keys stay stable. A companion <em>Origin Request Policy</em> forwards allowlisted headers (variant selectors) and the query string to the origin — but only those. GZIP is enabled at the edge. On a cache MISS, CloudFront <em>collapses</em> concurrent identical requests (single-flight to origin), which is a hidden but crucial property that stops thundering herds during flash sales.</p>
+
+    <h3>Lambda response streaming — how it works under the hood</h3>
+    <p>Traditional Lambda is <em>buffered</em>: your handler returns an object, Lambda serialises it, and the whole body ships out at once. TTFB = duration of the slowest thing. Response streaming, introduced in 2023, adds a <code>responseStream</code> writable stream passed to the handler. Your handler is wrapped in <code>awslambda.streamifyResponse(...)</code>. As soon as you write bytes to <code>responseStream</code>, the platform ships them to the caller via <strong>HTTP chunked transfer encoding</strong>. Metadata (status, headers) is emitted first with <code>awslambda.HttpResponseStream.from(responseStream, {...})</code>. Body follows as chunks.</p>
+    <p>Samsung's handler pipes three streams: a custom <code>NDJSONTransform</code> that emits one JSON object per line, a Node.js <code>zlib.createGzip()</code> at <code>Z_BEST_SPEED</code> (level 1, latency over ratio), and the <code>responseStream</code> sink:</p>
+    <pre><span class="fn">pipeline</span>(ndjsonTransform, gzip, responseStream);</pre>
+    <p>Each SKU's price, as its Promise resolves, is pushed into <code>ndjsonTransform</code> — flowing through gzip and out to the client immediately.</p>
+
+    <h3>Fan-out pattern</h3>
+    <p>The controller pattern is <code>Promise.all(skus.map(sku =&gt; fetchPricingForSKU(sku).catch(err =&gt; ({sku, error: err.message}))))</code>. The <code>.catch</code> per SKU ensures a single failure doesn't reject the whole batch — instead it becomes a per-line error object in the NDJSON stream, and the browser can render the other 29 prices normally. Batch is capped at 30 SKUs so Lambda duration stays under 5 seconds even on the slowest cold path.</p>
+
+    <h3>VPC peering &amp; the connection budget</h3>
+    <p>On the legacy path, Lambda talked to the Pricing Engine over the public internet via a corporate VPN. Every request cold-paid <strong>50 ms DNS + 100 ms TCP + 150 ms TLS = 300 ms</strong> of connection overhead. Moving Lambda into a VPC peered with the Pricing Engine's VPC (via a VPC endpoint) put the two on the same private network — the TCP + TLS session becomes long-lived, reused across warm invocations, and DNS resolves through Route 53 private zones with sub-millisecond latency. This alone chopped ~500 ms off P90.</p>
+
+    <h3>Provisioned Concurrency</h3>
+    <p>Cold starts for Node.js Lambda in a VPC can be 500–1000 ms because the Elastic Network Interface must be attached before the runtime starts. Provisioned Concurrency keeps N warm executions ready — no cold starts for the first N concurrent calls. Samsung pre-warms enough capacity for expected traffic, and CloudFront's 95% cache hit means the "N" needed is very small (5–10 concurrent Lambdas).</p>
+
+    <h3>HTTP/2 multiplexing to the origin</h3>
+    <p>The Lambda-to-Pricing-Engine hop uses HTTP/2. All 30 concurrent SKU lookups share <strong>one TCP + TLS connection</strong>, opened once, reused across warm invocations. No per-request handshake. This is the single biggest reason parallel fan-out became viable — over HTTP/1.1 with buffered response, you'd need 30 sockets and 30 handshakes and the response would still wait for the slowest one before shipping.</p>
+
+    <h3>Client-side incremental rendering</h3>
+    <p>The Angular/React client uses <code>fetch()</code> then <code>response.body.getReader()</code> to read <code>Uint8Array</code> chunks. A <code>TextDecoder</code> converts bytes to text; the client splits on <code>\n</code>, parses each complete line as JSON, and invokes <code>onChunk(price)</code>. The DOM updates as each price arrives — TTFB, not full-response, is what the user perceives.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms hidden in this design</h2>
+    <table>
+      <thead><tr><th>Stage</th><th>Data structure / algorithm</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td>Query encoding</td><td><strong>Compact tokenized string</strong> (a domain-specific language over URL query params)</td><td>Fits 30 SKUs in 800 B, keeps GET cacheable, deterministic cache key.</td></tr>
+        <tr><td>CloudFront cache</td><td><strong>Distributed hash map</strong> keyed by URL + allowed headers/cookies, TTL-evicted, LRU per POP</td><td>O(1) lookup at edge, single-flight collapsing prevents thundering herd.</td></tr>
+        <tr><td>Fan-out orchestration</td><td><strong>Scatter-gather</strong> with <code>Promise.all</code> + per-item <code>.catch</code></td><td>N parallel tasks; single failure isolated to one item.</td></tr>
+        <tr><td>Streaming pipeline</td><td><strong>Producer-consumer stream</strong> chained by Node.js <code>pipeline()</code></td><td>Backpressure-aware, no full-response buffering, memory-bounded.</td></tr>
+        <tr><td>NDJSON</td><td><strong>Newline-delimited framing</strong> — a self-synchronising line-per-object encoding</td><td>Client can parse incrementally without a full JSON tree; naturally streamable.</td></tr>
+        <tr><td>Chunked transfer encoding</td><td><strong>HTTP/1.1 framing</strong> where the body is sent as size-prefixed chunks until a zero-length chunk terminates</td><td>Enables TTFB before full body known.</td></tr>
+        <tr><td>HTTP/2 stream multiplexing</td><td><strong>Interleaved binary frames</strong> over one TCP connection, per-stream flow control</td><td>30 parallel lookups on 1 socket, no head-of-line blocking above the transport.</td></tr>
+        <tr><td>GZIP (Deflate)</td><td><strong>LZ77 + Huffman coding</strong> at level 1 (Z_BEST_SPEED)</td><td>76% size reduction with minimal CPU — right knee for real-time streams.</td></tr>
+        <tr><td>Client incremental parser</td><td><strong>Line-oriented state machine</strong> over a byte stream (buffer, decode, split on \n, parse each line)</td><td>Renders prices as they arrive — perceived latency is fastest-SKU, not slowest.</td></tr>
+      </tbody>
+    </table>
+    <table>
+      <thead><tr><th>Operation</th><th>Complexity</th></tr></thead>
+      <tbody>
+        <tr><td>CloudFront lookup (edge)</td><td>O(1), ~1–5 ms</td></tr>
+        <tr><td>Lambda fan-out to N SKUs (parallel)</td><td>O(max latency of any single lookup) — not sum</td></tr>
+        <tr><td>NDJSON serialise per line</td><td>O(size of one price object)</td></tr>
+        <tr><td>Client parse per chunk</td><td>O(chunk size)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Every AWS service, why it was chosen</h2>
+    <table>
+      <thead><tr><th>Component</th><th>AWS service</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Edge cache</td><td><strong>Amazon CloudFront</strong></td><td>5-min TTL, cache-by-query-string, single-flight collapsing to origin, edge GZIP, TLS 1.3 termination close to user.</td></tr>
+        <tr><td>Serverless compute</td><td><strong>AWS Lambda</strong> with response streaming (Node.js 18+)</td><td>Only compute model natively supporting <code>streamifyResponse</code>; auto-scales; no idle cost.</td></tr>
+        <tr><td>Warm capacity</td><td><strong>Lambda Provisioned Concurrency</strong></td><td>Removes 500–1000 ms cold starts inside a VPC.</td></tr>
+        <tr><td>Private connectivity</td><td><strong>Amazon VPC</strong> + <strong>VPC Peering</strong> + <strong>VPC endpoints</strong></td><td>Peered to Pricing Engine's VPC — private, low-latency, no public internet.</td></tr>
+        <tr><td>DNS</td><td><strong>Route 53 Private Hosted Zone</strong></td><td>Resolves origin hostname inside the VPC — sub-ms lookups vs. public DNS.</td></tr>
+        <tr><td>Function URL</td><td><strong>Lambda Function URL</strong> (or API Gateway HTTP API)</td><td>Function URLs support response streaming; API Gateway v2 also supports it.</td></tr>
+        <tr><td>Metrics</td><td><strong>Amazon CloudWatch</strong> (metrics + logs)</td><td>P50/P90/P99 dashboards, Lambda concurrency, CloudFront hit ratio.</td></tr>
+        <tr><td>Audit</td><td><strong>AWS CloudTrail</strong></td><td>Control-plane audit; no PII/pricing algo in logs.</td></tr>
+        <tr><td>TLS certs</td><td><strong>ACM</strong></td><td>Free wildcard certs bound to CloudFront and origin ALB.</td></tr>
+        <tr><td>Load test</td><td><strong>k6</strong> (external) driving CloudFront</td><td>500 concurrent users, 30 items/request, ramps 100→500→0.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Deployment shape:</strong> a Terraform module provisions the CloudFront distribution, cache policy, origin request policy, Lambda function with streaming enabled, VPC config with peering, and Route 53 alias. A CI/CD pipeline builds the Node.js bundle and deploys the Lambda; CloudFront invalidates on deploy of the client SPA only (not the API path).</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 Reference implementation — the streaming handler</h2>
+    <p>Node.js 18+ Lambda handler wired for response streaming, NDJSON framing, GZIP, and per-SKU error isolation. This is the interview-whiteboard version, close to what Samsung deployed:</p>
+<pre><span class="cmt">// index.mjs — Lambda handler (Node.js 18+)</span>
+<span class="kw">import</span> { pipeline } <span class="kw">from</span> <span class="str">"node:stream/promises"</span>;
+<span class="kw">import</span> { Transform }  <span class="kw">from</span> <span class="str">"node:stream"</span>;
+<span class="kw">import</span> { createGzip } <span class="kw">from</span> <span class="str">"node:zlib"</span>;
+
+<span class="cmt">// A transform that turns each {sku, price} object into one NDJSON line.</span>
+<span class="kw">class</span> <span class="typ">NDJSONTransform</span> <span class="kw">extends</span> Transform {
+  <span class="fn">constructor</span>() { <span class="kw">super</span>({ writableObjectMode: <span class="kw">true</span> }); }
+  <span class="fn">_transform</span>(chunk, _enc, cb) {
+    <span class="kw">this</span>.<span class="fn">push</span>(JSON.<span class="fn">stringify</span>(chunk) + <span class="str">"\n"</span>);
+    <span class="fn">cb</span>();
+  }
+}
+
+<span class="cmt">// Each SKU lookup — HTTP/2 fetch to Pricing Engine, VPC-private endpoint.</span>
+<span class="kw">async function</span> <span class="fn">fetchPricingForSKU</span>(sku, ctx) {
+  <span class="kw">const</span> res = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">`https://pricing.internal/v1/price/${sku}?ctx=${ctx}`</span>, {
+    headers: { <span class="str">"x-request-id"</span>: process.env.AWS_REQUEST_ID }
+  });
+  <span class="kw">if</span> (!res.ok) <span class="kw">throw new</span> <span class="typ">Error</span>(<span class="str">`price lookup ${sku} → ${res.status}`</span>);
+  <span class="kw">return</span> { sku, ...(<span class="kw">await</span> res.<span class="fn">json</span>()) };
+}
+
+<span class="cmt">// Wrap the handler so Lambda knows it's a streaming response.</span>
+<span class="kw">export const</span> handler = awslambda.<span class="fn">streamifyResponse</span>(<span class="kw">async</span> (event, responseStream, _context) =&gt; {
+  <span class="cmt">// 1. Announce metadata (status + headers) before any body bytes.</span>
+  responseStream = awslambda.<span class="typ">HttpResponseStream</span>.<span class="fn">from</span>(responseStream, {
+    statusCode: 200,
+    headers: {
+      <span class="str">"content-type"</span>:     <span class="str">"application/x-ndjson"</span>,
+      <span class="str">"content-encoding"</span>: <span class="str">"gzip"</span>,
+      <span class="str">"cache-control"</span>:    <span class="str">"public, max-age=300"</span>,   <span class="cmt">// CloudFront TTL</span>
+    }
+  });
+
+  <span class="cmt">// 2. Parse the compact GET query (?g=group1(p=SKU-A:1:p=SKU-B:2...)).</span>
+  <span class="kw">const</span> { skus, ctx } = <span class="fn">parseQuery</span>(event.rawQueryString);
+  <span class="kw">if</span> (skus.length &gt; 30) <span class="kw">throw new</span> <span class="typ">Error</span>(<span class="str">"batch cap = 30"</span>);
+
+  <span class="cmt">// 3. Build the streaming pipeline: NDJSON → gzip → response.</span>
+  <span class="kw">const</span> nd   = <span class="kw">new</span> <span class="typ">NDJSONTransform</span>();
+  <span class="kw">const</span> gzip = <span class="fn">createGzip</span>({ level: 1 });   <span class="cmt">// Z_BEST_SPEED — latency &gt; ratio</span>
+  <span class="kw">const</span> done = <span class="fn">pipeline</span>(nd, gzip, responseStream);
+
+  <span class="cmt">// 4. Fan out 30 lookups; each price streams the moment it resolves.</span>
+  <span class="kw">await</span> <span class="typ">Promise</span>.<span class="fn">all</span>(skus.<span class="fn">map</span>(<span class="kw">async</span> (sku) =&gt; {
+    <span class="kw">try</span> {
+      nd.<span class="fn">write</span>(<span class="kw">await</span> <span class="fn">fetchPricingForSKU</span>(sku, ctx));
+    } <span class="kw">catch</span> (err) {
+      nd.<span class="fn">write</span>({ sku, error: err.message });      <span class="cmt">// isolate failure per SKU</span>
+    }
+  }));
+  nd.<span class="fn">end</span>();
+  <span class="kw">await</span> done;
+});
+</pre>
+    <p>The client streaming reader — this is what makes the incremental rendering visible to the user:</p>
+<pre><span class="cmt">// price-client.ts — read NDJSON as it streams</span>
+<span class="kw">export async function</span> <span class="fn">streamPrices</span>(url: <span class="typ">string</span>, onPrice: (p: <span class="typ">Price</span>) =&gt; <span class="typ">void</span>) {
+  <span class="kw">const</span> res = <span class="kw">await</span> <span class="fn">fetch</span>(url);
+  <span class="kw">const</span> reader = res.body!.<span class="fn">getReader</span>();
+  <span class="kw">const</span> decoder = <span class="kw">new</span> <span class="typ">TextDecoder</span>();
+  <span class="kw">let</span> buf = <span class="str">""</span>;
+  <span class="kw">while</span> (<span class="kw">true</span>) {
+    <span class="kw">const</span> { value, done } = <span class="kw">await</span> reader.<span class="fn">read</span>();
+    <span class="kw">if</span> (done) <span class="kw">break</span>;
+    buf += decoder.<span class="fn">decode</span>(value, { stream: <span class="kw">true</span> });
+    <span class="kw">let</span> nl;
+    <span class="kw">while</span> ((nl = buf.<span class="fn">indexOf</span>(<span class="str">"\n"</span>)) &gt;= 0) {
+      <span class="kw">const</span> line = buf.<span class="fn">slice</span>(0, nl).<span class="fn">trim</span>();
+      buf = buf.<span class="fn">slice</span>(nl + 1);
+      <span class="kw">if</span> (line) <span class="fn">onPrice</span>(JSON.<span class="fn">parse</span>(line));           <span class="cmt">// update DOM immediately</span>
+    }
+  }
+}
+</pre>
+  </section>
+
+  <section id="results" class="card">
+    <h2>📈 Results — the four optimization phases</h2>
+    <p>The team measured each optimization independently with k6 (500 concurrent users, 30 items/request). Each phase compounded onto the last.</p>
+    <table>
+      <thead><tr><th>Metric</th><th>Phase 1 baseline</th><th>Phase 2 VPC + Warm</th><th>Phase 3 HTTP/2 + GZIP</th><th>Phase 4 Edge cache</th></tr></thead>
+      <tbody>
+        <tr><td>P50</td><td>1,670 ms</td><td>501 ms</td><td>176 ms</td><td><strong>35 ms</strong></td></tr>
+        <tr><td>P90</td><td>4,500 ms</td><td>1,000 ms</td><td>218 ms</td><td><strong>50 ms</strong></td></tr>
+        <tr><td>P99</td><td>5,100 ms</td><td>2,400 ms</td><td>500 ms</td><td><strong>150 ms</strong></td></tr>
+        <tr><td>Cache hit ratio</td><td>&lt; 1%</td><td>&lt; 1%</td><td>&lt; 1%</td><td><strong>95%</strong></td></tr>
+        <tr><td>Response size</td><td>170 KB</td><td>170 KB</td><td>40 KB</td><td>40 KB</td></tr>
+        <tr><td>P90 vs baseline</td><td>1×</td><td>4.5×</td><td>20×</td><td><strong>90×</strong></td></tr>
+      </tbody>
+    </table>
+    <div class="metric-grid">
+      <div class="metric"><span class="n">90×</span><span class="l">P90 latency improvement</span></div>
+      <div class="metric"><span class="n">95%</span><span class="l">CloudFront hit ratio</span></div>
+      <div class="metric"><span class="n">76%</span><span class="l">Payload reduction (gzip)</span></div>
+      <div class="metric"><span class="n">100+ → 5-10</span><span class="l">Instance count during peak</span></div>
+    </div>
+    <p><strong>Phase 1 (baseline)</strong> — Lambda on public internet through a corporate VPN. ~300 ms per connection overhead (DNS 50 + TCP 100 + TLS 150). <strong>Phase 2</strong> — VPC peering to Pricing Engine + Provisioned Concurrency; removes handshake overhead and cold starts. <strong>Phase 3</strong> — HTTP/2 multiplexing (one TCP for 30 parallel lookups) + GZIP at level 1; cuts payload 76%. <strong>Phase 4</strong> — CloudFront edge caching with 5-min TTL and query-string cache key; 95% of requests never touch Lambda.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Freshness vs latency — why 5-minute TTL and not longer?</h3>
+    <p>Five minutes is short enough that flash sales stay coherent (checkout also honours the same window) yet long enough that CloudFront absorbs 95% of read traffic. Longer TTL improves cache hit but risks the stale-price problem again; shorter TTL raises Pricing Engine load. This is the classic <strong>cache TTL trade-off</strong>, and picking 5 min was product-driven, not technical.</p>
+
+    <h3>Batch cap at 30 SKUs</h3>
+    <p>Lambda's request timeout on Function URLs with streaming is 15 minutes, but you never want to sit near it. Capping at 30 keeps worst-case duration under 5 seconds even if a single SKU lookup goes wrong. The client splits larger listing pages into parallel batches with <code>Promise.all</code>, each landing on a different cache entry.</p>
+
+    <h3>Partial failure semantics</h3>
+    <p>Because each SKU's error becomes a per-line object in the NDJSON stream, the client renders 29 prices normally and shows a fallback for the 30th ("price unavailable, please refresh"). This is <em>much</em> better UX than 500-ing the entire batch. The interviewer might ask "what if the Pricing Engine is entirely down?" — the answer is a Lambda-side circuit breaker returning a cached-last-known-good or a graceful 503 that CloudFront won't cache (via <code>Cache-Control: no-store</code>).</p>
+
+    <h3>Streaming and status codes</h3>
+    <p>A subtle constraint: once you've written the first byte of the body, the HTTP status is already sent. If the Pricing Engine goes down mid-stream, you cannot switch to a 5xx — you must emit an error line and close cleanly. The client-side parser has to distinguish "SKU-level error object" from "protocol error".</p>
+
+    <h3>CloudFront cache stampede on cold cache</h3>
+    <p>CloudFront collapses concurrent identical requests to a single origin call per POP (single-flight per URL). This prevents thundering-herd during a flash sale when everyone lands on the same listing at once. If you span multiple POPs, each has its own miss — Origin Shield can further reduce this by adding a shared regional layer.</p>
+
+    <h3>When streaming is the wrong choice</h3>
+    <p>Streaming makes sense when (a) individual chunks are meaningful to the client (progressive render), and (b) end-to-end latency matters. If the client needs <em>all</em> data to compute a single answer (e.g. total cart), buffered is fine and simpler. If you'd JSON-parse the entire body before doing anything, don't bother streaming.</p>
+
+    <h3>Likely follow-up interview questions</h3>
+    <div class="qa"><p class="q">Q: Why NDJSON and not Server-Sent Events (SSE) or WebSockets?</p><p class="a">NDJSON on plain HTTP is CDN-cacheable; SSE requires a persistent connection to origin and isn't cache-friendly. WebSockets are bidirectional and stateful — overkill and uncacheable. NDJSON gives you the streaming benefit while remaining a normal GET.</p></div>
+    <div class="qa"><p class="q">Q: Why not just cache prices in DynamoDB or ElastiCache?</p><p class="a">That was essentially the old design's failure mode — stateful cache drift. The whole point is to keep the source of truth as the only truth and use edge caching only for read-through repeat traffic within a short window.</p></div>
+    <div class="qa"><p class="q">Q: Can you use response streaming through API Gateway?</p><p class="a">API Gateway HTTP APIs (v2) support Lambda response streaming since 2023. REST APIs (v1) do not. Function URLs are the simplest path.</p></div>
+    <div class="qa"><p class="q">Q: What's the maximum response size?</p><p class="a">Lambda response streaming caps at 20 MB per response (soft) and 6 MB for buffered mode. For 30 gzipped NDJSON prices, we're at ~40 KB — nowhere near limits.</p></div>
+    <div class="qa"><p class="q">Q: How do you invalidate a cache entry mid-TTL when a price actually changes?</p><p class="a">You typically don't — 5-min TTL is the SLA. If a price change is critical (recall, compliance), CloudFront supports invalidation by URL pattern; but this is a break-glass, not the norm.</p></div>
+    <div class="qa"><p class="q">Q: How does Lambda cold-start behave with response streaming?</p><p class="a">Cold starts still pay init overhead but the first byte can leave earlier because you don't have to build a full response object. Provisioned Concurrency removes this entirely.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "Samsung's product listing pages had 30 prices per view and a 1-hour cache drift versus the authoritative Pricing Engine — cart shock during flash sales. They replaced hourly precomputation with a stateless pass-through: <em>Browser → CloudFront (5-min TTL, cache by query string) → Lambda with response streaming → 30 parallel HTTP/2 lookups to the Pricing Engine over VPC-peered private network → NDJSON stream back through gzip → progressive DOM render</em>. Four compounding optimizations — VPC peering + Provisioned Concurrency (removed 300 ms + 1s cold start), HTTP/2 multiplexing + gzip (76% payload cut), CloudFront edge caching (95% hit ratio) — took P90 from 4,500 ms to 50 ms, a 90× improvement, and shrank a 100-instance fleet to 5–10 Lambdas."</p>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li><strong>"Response streaming gives you TTFB = fastest SKU, not slowest"</strong> — the whole reason to stream. Progressive render is the win.</li>
+      <li><strong>"Cacheable GETs let CloudFront do 95% of the work"</strong> — dense query encoding is the key that unlocks edge caching for what would otherwise be a POST.</li>
+      <li><strong>"VPC peering removes ~300 ms of DNS+TCP+TLS overhead"</strong> — private network is a huge latency win that nobody talks about.</li>
+      <li><strong>"HTTP/2 multiplexes 30 lookups on one TCP"</strong> — the alternative (30 sockets, 30 handshakes) makes parallel fan-out worthless.</li>
+      <li><strong>"Per-SKU error isolation in NDJSON"</strong> — partial failure becomes a per-line object; the other 29 prices still render. Massive UX win.</li>
+    </ul>
+    <h3>Numbers to quote confidently</h3>
+    <ul>
+      <li>P90: 4,500 ms → 50 ms (90×).</li>
+      <li>CloudFront hit ratio: 95%.</li>
+      <li>Payload: 170 KB → 40 KB (76% gzip savings).</li>
+      <li>Fleet: 100+ EC2 → 5–10 Lambdas.</li>
+      <li>Cache TTL: 5 min (matched to flash-sale coherence).</li>
+      <li>Batch cap: 30 SKUs per request.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://aws.amazon.com/blogs/architecture/how-samsung-achieved-real-time-pricing-with-aws-lambda-response-streaming/">How Samsung Achieved Real-Time Pricing with AWS Lambda Response Streaming — AWS Architecture Blog</a> (primary source)</li>
+      <li><a href="https://aws.amazon.com/blogs/compute/introducing-aws-lambda-response-streaming/">Introducing AWS Lambda Response Streaming — AWS Compute Blog</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html">Lambda response streaming — AWS documentation</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/controlling-the-cache-key.html">CloudFront cache policies &amp; cache keys — AWS documentation</a></li>
+      <li><a href="https://ndjson.org/">NDJSON specification</a></li>
+      <li><a href="https://k6.io/">k6 load testing</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

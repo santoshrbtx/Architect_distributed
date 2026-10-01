@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SQL Server vs PostgreSQL — Architecture Comparison</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #ffd166;
+    --laymen-bg: #fffbe6;
+    --sqlserver: #cc2927;
+    --sqlserver-bg: #fce7e6;
+    --pg: #336791;
+    --pg-bg: #e6eef6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #cc2927 0%, #7048e8 50%, #336791 100%); color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);  background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: #c99500; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  h4 { margin: 16px 0 6px; font-size: 1rem; color: var(--arch); }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .93rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  th.pg { background: var(--pg-bg); color: var(--pg); }
+  th.ss { background: var(--sqlserver-bg); color: var(--sqlserver); }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+
+  .pro-con { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+  @media (max-width: 720px) { .pro-con { grid-template-columns: 1fr; } }
+  .box { border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; background: var(--card); }
+  .box.pros { border-left: 5px solid var(--accent); background: #e6f9ec; }
+  .box.cons { border-left: 5px solid var(--scenario); background: #fff0f4; }
+  .box h4 { margin: 0 0 8px; color: inherit; }
+  .box ul { margin: 0; padding-left: 20px; }
+  .box.pros h4 { color: #208b3a; }
+  .box.cons h4 { color: var(--scenario); }
+  .pg-card { background: var(--pg-bg); border-left: 5px solid var(--pg); border-radius: 12px; padding: 16px 20px; margin: 14px 0; }
+  .ss-card { background: var(--sqlserver-bg); border-left: 5px solid var(--sqlserver); border-radius: 12px; padding: 16px 20px; margin: 14px 0; }
+  .pg-card h3, .ss-card h3 { margin-top: 0; }
+  .pg-card h3 { color: var(--pg); }
+  .ss-card h3 { color: var(--sqlserver); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Data Layer Trade-offs</div>
+    <h1>SQL Server vs PostgreSQL</h1>
+    <p>The architectural differences that actually matter — MVCC vs locking, WAL vs T-log, Always On vs streaming replication, licensing, extensibility, ecosystem, and how a senior architect picks between them.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#matrix">📋 At-a-glance</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#proscons">✅ Pros &amp; Cons</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#cloud">☁️ Cloud</a>
+    <a href="#code">💻 Code</a>
+    <a href="#decision">🧭 How to pick</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Scenario</span>
+    <h2>The question every architect gets asked</h2>
+    <p>"We are starting a new service. Which relational database should we pick — <strong>Microsoft SQL Server</strong> or <strong>PostgreSQL</strong>?" It's the most common architecture-review question of the last twenty years. Both are mature, ACID-compliant, SQL:2023-aligned RDBMSs used at Fortune-500 scale. Both have huge ecosystems and cloud-managed offerings (Azure SQL, AWS RDS/Aurora). The wrong answer never gets you fired, but a <em>weak</em> answer marks you as a mid-level engineer. A strong answer names the underlying architectural choices, the licensing model, the failure modes, and — most important — the specific workload characteristics that tilt the decision one way or the other.</p>
+    <p>This page gives you the whiteboard-grade answer. It covers <strong>process architecture</strong>, <strong>concurrency model</strong> (MVCC vs lock-based with optional row versioning), <strong>storage engine</strong> (heap + PK-clustered vs heap + optional CLUSTER), <strong>write-ahead logging</strong> (WAL vs T-log), <strong>replication and HA</strong> (streaming/logical vs Always On availability groups), <strong>partitioning</strong>, <strong>extensibility</strong>, <strong>licensing/cost</strong>, and <strong>ecosystem fit</strong>. Then it gives you a decision rubric with worked examples so you can pick fast in an interview.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In plain English</span>
+    <h2>The story, told without any jargon</h2>
+    <p>Both SQL Server and PostgreSQL are <strong>filing cabinets for your business data</strong>. Both keep every drawer neat, both can hand out receipts saying "your change is saved for good" (that's ACID), and both let you ask questions like "who spent the most money last month?" in the same language (SQL). If you only cared about the front door, they'd feel identical.</p>
+    <p>The real difference is <strong>how they handle two people reaching for the same folder at the same time</strong>. SQL Server, by default, does what feels intuitive: it <em>locks</em> the folder — you wait until the other person finishes. Simple, predictable, but if the other person is slow, you sit around doing nothing. PostgreSQL does something clever: it <em>photocopies</em> the folder for you. You each work on your own copy at the same time, and the system figures out how to merge (or reject) the changes at the end. That trick is called <strong>MVCC</strong>, and it is the single biggest architectural difference between the two products.</p>
+    <p>The <strong>second difference</strong> is who owns them. SQL Server is a Microsoft product — you buy it, you're tied to Microsoft's licensing, and everything works beautifully if you already live in Windows/.NET/Azure. PostgreSQL is a free, open-source community project — no vendor, no licence fee, and it runs equally well on Linux, Docker, AWS, Google Cloud, your laptop, or a Raspberry Pi. If you want to <em>extend</em> the database (add a new data type, plug in a new language, index geographic coordinates), PostgreSQL is <em>designed</em> to let you; SQL Server only lets you within the walls Microsoft built.</p>
+    <p>The <strong>third difference</strong> is the pack of tools each ships with. SQL Server comes with a full "business intelligence" toolkit — reporting servers, ETL packages, analysis cubes — all one purchase. PostgreSQL is just the database; anything else you build with best-of-breed pieces you glue together yourself. If you're a small IT team who wants "one thing that does everything", SQL Server wins. If you're a modern platform team who wants "the fastest, cheapest, most flexible SQL engine plus my own tooling", PostgreSQL wins.</p>
+    <p>That's the whole comparison in five paragraphs. The rest of this page is just how each of these plays out in practice.</p>
+  </section>
+
+  <section id="matrix" class="card reqs">
+    <span class="badge">📋 At-a-glance matrix</span>
+    <h2>The big-picture comparison</h2>
+    <table>
+      <thead><tr><th>Dimension</th><th class="ss">SQL Server</th><th class="pg">PostgreSQL</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Vendor / model</strong></td><td>Microsoft — commercial, closed source</td><td>Open source community — permissive PostgreSQL License</td></tr>
+        <tr><td><strong>Licensing</strong></td><td>Free Express (10 GB DB cap), then Standard, Enterprise, Web — per-core or per-user CAL. Enterprise features gated by edition.</td><td>Free for any use, no edition tiers. All features available in every install.</td></tr>
+        <tr><td><strong>Concurrency model</strong></td><td>Lock-based by default; optional row versioning (RCSI / snapshot isolation); Optimized Locking (2022+)</td><td>MVCC everywhere — no reader/writer blocking by design</td></tr>
+        <tr><td><strong>Isolation levels</strong></td><td>Read Uncommitted → Read Committed → Repeatable Read → Serializable, plus Snapshot &amp; RCSI</td><td>Read Uncommitted → Read Committed → Repeatable Read → Serializable (all MVCC-based)</td></tr>
+        <tr><td><strong>Storage layout</strong></td><td>Data files (<code>.mdf</code>/<code>.ndf</code>) + transaction log (<code>.ldf</code>); default clustered index on PK</td><td>Heap tables + B-tree indexes + WAL segments; PK is a regular index, not clustered by default</td></tr>
+        <tr><td><strong>Query language</strong></td><td>T-SQL (proprietary superset)</td><td>Standard SQL + rich PL/pgSQL, plus PL/Python, PL/Perl, PL/V8, etc.</td></tr>
+        <tr><td><strong>Extensibility</strong></td><td>CLR integration (.NET assemblies), limited plugins</td><td>Extensions system (PostGIS, TimescaleDB, pg_vector, pg_partman); custom types, operators, index methods; foreign data wrappers</td></tr>
+        <tr><td><strong>Data types</strong></td><td>Rich standard types + XML + JSON (parsed to text)</td><td>Everything SQL Server has + native JSONB, hstore, arrays, ranges, geometry, INET, UUID</td></tr>
+        <tr><td><strong>Replication &amp; HA</strong></td><td>Always On Availability Groups (sync/async), Failover Cluster Instance, log shipping, transactional/merge/snapshot replication</td><td>Streaming (physical) &amp; logical replication, synchronous or asynchronous, hot standbys, point-in-time recovery</td></tr>
+        <tr><td><strong>Sharding / horizontal scale</strong></td><td>Partitioning + Azure SQL Hyperscale (managed distributed storage). No native cross-node sharding.</td><td>Postgres native partitioning; sharding via <strong>Citus</strong> (now Microsoft-owned) or app-level.</td></tr>
+        <tr><td><strong>OLAP / columnstore</strong></td><td>Native columnstore indexes; excellent hybrid OLTP+OLAP</td><td>No native columnstore; extensions (Hydra, Citus columnar, ClickHouse via FDW)</td></tr>
+        <tr><td><strong>Ecosystem tooling</strong></td><td>SSMS, SSIS (ETL), SSAS (OLAP), SSRS (reports), Power BI — all first-party</td><td>pgAdmin, DBeaver, dbt, Airbyte, Grafana — all third-party, best-of-breed</td></tr>
+        <tr><td><strong>Cloud offerings</strong></td><td>Azure SQL DB, Azure SQL MI, SQL on Azure VM, AWS RDS SQL Server</td><td>Azure Database for Postgres, AWS RDS Postgres, Aurora Postgres, Google CloudSQL, Supabase, Neon, PlanetScale (limited)</td></tr>
+        <tr><td><strong>Container / DevOps</strong></td><td>Linux + container support since 2017; slower community docker adoption</td><td>Docker-native since day one; the default in every dev stack</td></tr>
+        <tr><td><strong>Platform maturity</strong></td><td>1989 (SQL Server), Microsoft-backed enterprise support</td><td>1986 (POSTGRES at UC Berkeley); ACID-compliant since 2001; 725+ contributors; 1.78M LOC</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ Architecture — how each is built</span>
+    <h2>The two engines, side by side</h2>
+    <p>Both are relational engines but they were designed from opposite starting points. SQL Server evolved from a Sybase codebase inside Microsoft — a <strong>single-process, multi-threaded</strong> engine with a bespoke user-mode scheduler (SQLOS) that thinks in terms of workers, tasks, and schedulers. PostgreSQL is a <strong>multi-process</strong> Unix-tradition engine — one <code>postgres</code> backend process per connection, coordinated through shared memory. That single choice ripples through everything else: pooling, concurrency, memory management, and failure isolation.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 920 480" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="a-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <!-- SQL Server side -->
+        <rect x="20" y="20" width="430" height="440" rx="14" fill="#1a2340" stroke="#2a3652"/>
+        <text x="235" y="46" text-anchor="middle" fill="#cc2927" font-weight="800" font-size="15">SQL Server · single process, many threads</text>
+
+        <rect x="50" y="70" width="370" height="42" rx="8" fill="#cc2927"/>
+        <text x="235" y="96" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">sqlservr.exe · one Windows/Linux process</text>
+
+        <rect x="50" y="122" width="370" height="60" rx="8" fill="#2a3652" stroke="#cc2927"/>
+        <text x="235" y="145" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">SQLOS — user-mode scheduler</text>
+        <text x="235" y="165" text-anchor="middle" fill="#c6d0e0" font-size="10">workers ↔ tasks ↔ schedulers · one scheduler per core</text>
+
+        <rect x="50" y="192" width="180" height="60" rx="8" fill="#2a3652" stroke="#cc2927"/>
+        <text x="140" y="215" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Buffer Pool</text>
+        <text x="140" y="232" text-anchor="middle" fill="#c6d0e0" font-size="10">8 KB pages in RAM</text>
+
+        <rect x="240" y="192" width="180" height="60" rx="8" fill="#2a3652" stroke="#cc2927"/>
+        <text x="330" y="215" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Query Optimizer</text>
+        <text x="330" y="232" text-anchor="middle" fill="#c6d0e0" font-size="10">cost-based plan cache</text>
+
+        <rect x="50" y="262" width="180" height="60" rx="8" fill="#2a3652" stroke="#cc2927"/>
+        <text x="140" y="285" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Storage Engine</text>
+        <text x="140" y="302" text-anchor="middle" fill="#c6d0e0" font-size="10">B+ tree indexes · pages</text>
+
+        <rect x="240" y="262" width="180" height="60" rx="8" fill="#2a3652" stroke="#cc2927"/>
+        <text x="330" y="285" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Lock Manager</text>
+        <text x="330" y="302" text-anchor="middle" fill="#c6d0e0" font-size="10">row/page/table locks</text>
+
+        <rect x="50" y="332" width="180" height="60" rx="8" fill="#0f1a30" stroke="#f4a259"/>
+        <text x="140" y="355" text-anchor="middle" fill="#f4a259" font-weight="700" font-size="12">Transaction Log</text>
+        <text x="140" y="372" text-anchor="middle" fill="#c6d0e0" font-size="10">.ldf · WAL</text>
+
+        <rect x="240" y="332" width="180" height="60" rx="8" fill="#0f1a30" stroke="#2dc653"/>
+        <text x="330" y="355" text-anchor="middle" fill="#2dc653" font-weight="700" font-size="12">Data Files</text>
+        <text x="330" y="372" text-anchor="middle" fill="#c6d0e0" font-size="10">.mdf / .ndf</text>
+
+        <text x="235" y="425" text-anchor="middle" fill="#c6d0e0" font-size="11">One process · threads share the buffer pool</text>
+        <text x="235" y="443" text-anchor="middle" fill="#7f8aa0" font-size="10">Crash of one worker cannot crash the process</text>
+
+        <!-- Postgres side -->
+        <rect x="470" y="20" width="430" height="440" rx="14" fill="#1a2340" stroke="#2a3652"/>
+        <text x="685" y="46" text-anchor="middle" fill="#336791" font-weight="800" font-size="15">PostgreSQL · many processes, shared memory</text>
+
+        <rect x="500" y="70" width="370" height="42" rx="8" fill="#336791"/>
+        <text x="685" y="96" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">postmaster · supervisor process</text>
+
+        <rect x="500" y="122" width="105" height="70" rx="8" fill="#2a3652" stroke="#336791"/>
+        <text x="552" y="145" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="11">backend</text>
+        <text x="552" y="160" text-anchor="middle" fill="#c6d0e0" font-size="10">conn 1</text>
+        <text x="552" y="177" text-anchor="middle" fill="#7fa2ff" font-size="9">1 process</text>
+
+        <rect x="612" y="122" width="105" height="70" rx="8" fill="#2a3652" stroke="#336791"/>
+        <text x="664" y="145" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="11">backend</text>
+        <text x="664" y="160" text-anchor="middle" fill="#c6d0e0" font-size="10">conn 2</text>
+
+        <rect x="724" y="122" width="105" height="70" rx="8" fill="#2a3652" stroke="#336791"/>
+        <text x="776" y="145" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="11">backend</text>
+        <text x="776" y="160" text-anchor="middle" fill="#c6d0e0" font-size="10">conn N</text>
+
+        <rect x="500" y="202" width="370" height="60" rx="8" fill="#2a3652" stroke="#336791"/>
+        <text x="685" y="225" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Shared Buffer Pool + Shared Memory</text>
+        <text x="685" y="245" text-anchor="middle" fill="#c6d0e0" font-size="10">shared_buffers · WAL buffers · lock hash</text>
+
+        <rect x="500" y="272" width="120" height="50" rx="8" fill="#2a3652" stroke="#336791"/>
+        <text x="560" y="295" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="11">bgwriter</text>
+        <text x="560" y="310" text-anchor="middle" fill="#c6d0e0" font-size="9">dirty pages → disk</text>
+
+        <rect x="628" y="272" width="120" height="50" rx="8" fill="#2a3652" stroke="#336791"/>
+        <text x="688" y="295" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="11">walwriter</text>
+        <text x="688" y="310" text-anchor="middle" fill="#c6d0e0" font-size="9">flush WAL</text>
+
+        <rect x="755" y="272" width="115" height="50" rx="8" fill="#2a3652" stroke="#336791"/>
+        <text x="812" y="295" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="11">autovacuum</text>
+        <text x="812" y="310" text-anchor="middle" fill="#c6d0e0" font-size="9">MVCC cleanup</text>
+
+        <rect x="500" y="332" width="180" height="60" rx="8" fill="#0f1a30" stroke="#f4a259"/>
+        <text x="590" y="355" text-anchor="middle" fill="#f4a259" font-weight="700" font-size="12">WAL segments</text>
+        <text x="590" y="372" text-anchor="middle" fill="#c6d0e0" font-size="10">pg_wal/ · streamed to replicas</text>
+
+        <rect x="690" y="332" width="180" height="60" rx="8" fill="#0f1a30" stroke="#2dc653"/>
+        <text x="780" y="355" text-anchor="middle" fill="#2dc653" font-weight="700" font-size="12">Heap files (per table)</text>
+        <text x="780" y="372" text-anchor="middle" fill="#c6d0e0" font-size="10">8 KB pages · per-relation</text>
+
+        <text x="685" y="425" text-anchor="middle" fill="#c6d0e0" font-size="11">One process per connection · isolated crashes</text>
+        <text x="685" y="443" text-anchor="middle" fill="#7f8aa0" font-size="10">Connection pooler almost mandatory (PgBouncer)</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#cc2927"></span> SQL Server subsystems</span>
+        <span><span class="dot" style="background:#336791"></span> Postgres processes</span>
+        <span><span class="dot" style="background:#f4a259"></span> Write-ahead log</span>
+        <span><span class="dot" style="background:#2dc653"></span> Data files</span>
+      </div>
+    </div>
+
+    <p>Two consequences of that process/thread split you should be able to name in an interview: <strong>(1) SQL Server connections are cheap</strong> — a thread inside the shared process. <strong>Postgres connections are expensive</strong> — each is a separate process holding ~10 MB, so a pooler (<code>PgBouncer</code>) is standard. <strong>(2) SQL Server is easier to run on Windows</strong>; PostgreSQL is a first-class citizen of Linux/Docker/Kubernetes and often feels more natural in cloud-native stacks.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch two concurrent updates — SQL Server vs PostgreSQL</h2>
+    <p>The animation plays the same scenario on both engines: two clients update the same row. SQL Server (default) blocks Client B until A commits. PostgreSQL's MVCC lets B read its own snapshot without blocking — until they collide on write.</p>
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="a-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <!-- SQL Server pane -->
+        <rect x="20" y="30" width="420" height="380" rx="14" fill="#1a2340" stroke="#2a3652"/>
+        <text x="230" y="55" text-anchor="middle" fill="#cc2927" font-weight="800" font-size="14">SQL Server (default)</text>
+        <rect id="ss-a" x="40" y="80" width="180" height="46" rx="8" fill="#2a3652" stroke="#4361ee" data-anim/>
+        <text x="130" y="108" text-anchor="middle" fill="#c6d0e0" font-size="12">Client A</text>
+        <rect id="ss-b" x="240" y="80" width="180" height="46" rx="8" fill="#2a3652" stroke="#4361ee" data-anim/>
+        <text x="330" y="108" text-anchor="middle" fill="#c6d0e0" font-size="12">Client B</text>
+        <rect id="ss-row" x="140" y="180" width="180" height="60" rx="8" fill="#2a3652" stroke="#cc2927" data-anim/>
+        <text x="230" y="205" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">row id=42</text>
+        <text id="ss-row-txt" x="230" y="225" text-anchor="middle" fill="#7fa2ff" font-size="11">value=100</text>
+        <rect id="ss-lock" x="140" y="255" width="180" height="30" rx="6" fill="#0f1a30" stroke="#f4a259" data-anim class="a-hidden"/>
+        <text id="ss-lock-txt" x="230" y="275" text-anchor="middle" fill="#f4a259" font-size="11" font-weight="700">🔒 LOCK held by A</text>
+        <text id="ss-status" x="230" y="330" text-anchor="middle" fill="#c6d0e0" font-size="12">idle</text>
+        <text id="ss-b-status" x="230" y="355" text-anchor="middle" fill="#f7567c" font-size="11" font-weight="700"></text>
+        <text x="230" y="390" text-anchor="middle" fill="#7f8aa0" font-size="10">Client B WAITS on shared page/row lock</text>
+
+        <!-- Postgres pane -->
+        <rect x="460" y="30" width="420" height="380" rx="14" fill="#1a2340" stroke="#2a3652"/>
+        <text x="670" y="55" text-anchor="middle" fill="#336791" font-weight="800" font-size="14">PostgreSQL (MVCC default)</text>
+        <rect id="pg-a" x="480" y="80" width="180" height="46" rx="8" fill="#2a3652" stroke="#4361ee" data-anim/>
+        <text x="570" y="108" text-anchor="middle" fill="#c6d0e0" font-size="12">Client A</text>
+        <rect id="pg-b" x="680" y="80" width="180" height="46" rx="8" fill="#2a3652" stroke="#4361ee" data-anim/>
+        <text x="770" y="108" text-anchor="middle" fill="#c6d0e0" font-size="12">Client B</text>
+
+        <rect id="pg-v1" x="500" y="180" width="150" height="46" rx="8" fill="#2a3652" stroke="#336791" data-anim/>
+        <text x="575" y="200" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="11">version 1</text>
+        <text id="pg-v1-txt" x="575" y="217" text-anchor="middle" fill="#7fa2ff" font-size="10">value=100 · visible</text>
+
+        <rect id="pg-v2" x="680" y="180" width="150" height="46" rx="8" fill="#2a3652" stroke="#336791" data-anim class="a-hidden"/>
+        <text x="755" y="200" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="11">version 2</text>
+        <text id="pg-v2-txt" x="755" y="217" text-anchor="middle" fill="#2dc653" font-size="10">value=150 · new tuple</text>
+
+        <text id="pg-status" x="670" y="290" text-anchor="middle" fill="#c6d0e0" font-size="12">Snapshot MVCC: both read own version — no blocking</text>
+        <text id="pg-vac" x="670" y="315" text-anchor="middle" fill="#7f8aa0" font-size="11">autovacuum will reclaim old tuples later</text>
+        <text id="pg-conflict" x="670" y="360" text-anchor="middle" fill="#f7567c" font-size="11" font-weight="700"></text>
+        <text x="670" y="390" text-anchor="middle" fill="#7f8aa0" font-size="10">Serializable → SSI aborts one on true conflict</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next" class="secondary">Step →</button>
+        <button data-act="prev" class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+    <script>
+    (function(){
+      const root=document.getElementById('anim1'); if(!root) return;
+      const $=(s)=>root.querySelector(s);
+      const $$=(s)=>root.querySelectorAll(s);
+      const label=$('.anim-step-label'); const cap=$('.anim-step-caption');
+      const btnPlay=root.querySelector('[data-act="play"]');
+      const btnNext=root.querySelector('[data-act="next"]');
+      const btnPrev=root.querySelector('[data-act="prev"]');
+      const btnReset=root.querySelector('[data-act="reset"]');
+      function show(id){ $('#'+id).classList.remove('a-hidden'); }
+      function hide(id){ $('#'+id).classList.add('a-hidden'); }
+      function glow(id){ $('#'+id).classList.add('a-glow'); }
+      function txt(id,t,color){ const el=$('#'+id); el.textContent=t; if(color) el.setAttribute('fill',color); }
+
+      const CFG = {
+        intro: 'Same workload — SQL Server default locking on the left, Postgres MVCC on the right.',
+        interval: 1800,
+        reset:(r)=>{
+          r.querySelectorAll('[data-anim]').forEach(el => el.classList.remove('a-glow'));
+          hide('ss-lock'); hide('pg-v2');
+          txt('ss-row-txt','value=100','#7fa2ff'); txt('pg-v1-txt','value=100 · visible','#7fa2ff');
+          txt('ss-status','idle','#c6d0e0'); txt('ss-b-status',''); txt('pg-conflict','');
+          txt('pg-status','Snapshot MVCC: both read own version — no blocking','#c6d0e0');
+        },
+        steps: [
+          { caption: 'Client A begins a transaction on both engines: UPDATE table SET value=150 WHERE id=42.',
+            apply:(r)=>{ glow('ss-a'); glow('pg-a'); txt('ss-status','A: BEGIN + UPDATE','#7fa2ff'); } },
+          { caption: 'SQL Server: A takes an exclusive lock on the row. Postgres: A writes a NEW tuple version, leaves the old one visible to others.',
+            apply:(r)=>{ show('ss-lock'); txt('ss-lock-txt','🔒 X-LOCK held by A','#f4a259'); show('pg-v2'); txt('pg-v2-txt','value=150 · A only','#f4a259'); } },
+          { caption: 'Client B tries to READ the row. SQL Server: B is BLOCKED waiting on A. Postgres: B sees the OLD version — no blocking.',
+            apply:(r)=>{ glow('ss-b'); glow('pg-b'); txt('ss-b-status','⏸ B waits on lock','#f7567c'); txt('pg-status','B reads version 1 (value=100) — no wait','#2dc653'); } },
+          { caption: 'A commits. SQL Server releases the lock; B proceeds. Postgres marks v1 dead; v2 becomes visible.',
+            apply:(r)=>{ hide('ss-lock'); txt('ss-status','A: COMMIT','#2dc653'); txt('ss-row-txt','value=150','#2dc653'); txt('ss-b-status','B: unblocked, reads 150','#2dc653'); txt('pg-v1-txt','value=100 · dead','#f7567c'); txt('pg-v2-txt','value=150 · visible','#2dc653'); } },
+          { caption: 'Postgres autovacuum eventually reclaims the dead tuple. SQL Server has no equivalent — pages just get rewritten in place.',
+            apply:(r)=>{ txt('pg-vac','autovacuum removes v1 · frees space','#2dc653'); } },
+          { caption: 'Under Serializable isolation, if A and B both wrote conflicting rows, Postgres SSI would abort one; SQL Server would use range/key locks or serializable read locks.',
+            apply:(r)=>{ txt('pg-conflict','serialization_failure — retry the txn','#f7567c'); txt('ss-b-status','SQL Server: lock escalation on hot conflict','#f4a259'); } }
+        ]
+      };
+      let idx=-1, playing=false, timer=null;
+      function goto(i){ if(i<0||i>=CFG.steps.length) return; CFG.reset(root); for(let k=0;k<=i;k++) CFG.steps[k].apply(root); idx=i; label.textContent=`Step ${i+1}/${CFG.steps.length}`; cap.textContent=CFG.steps[i].caption; }
+      function reset(){ idx=-1; playing=false; if(timer){clearTimeout(timer); timer=null;} CFG.reset(root); label.textContent='Ready'; cap.textContent=CFG.intro; btnPlay.textContent='▶ Play'; }
+      function play(){ if(playing){ playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play'; return; } if(idx>=CFG.steps.length-1) reset(); playing=true; btnPlay.textContent='⏸ Pause'; function tick(){ if(!playing) return; if(idx+1<CFG.steps.length) goto(idx+1); if(idx<CFG.steps.length-1) timer=setTimeout(tick,CFG.interval); else{playing=false; btnPlay.textContent='▶ Replay';} } timer=setTimeout(tick,400); }
+      btnPlay.addEventListener('click', play);
+      btnReset.addEventListener('click', reset);
+      btnNext && btnNext.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx+1); });
+      btnPrev && btnPrev.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx-1); });
+      reset();
+    })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Deep-dive — the architecturally interesting differences</h2>
+
+    <h3>1. Concurrency: MVCC vs locking (with row-versioning opt-in)</h3>
+    <p>The <em>single largest</em> architectural difference. <strong>PostgreSQL uses MVCC everywhere</strong>: every UPDATE creates a new tuple version rather than mutating in place; readers see the version visible to their transaction's snapshot; writers never block readers, readers never block writers. This gives Postgres exceptional read throughput under concurrent writes — at the cost of <strong>bloat</strong> (dead tuples pile up until <code>autovacuum</code> cleans them). SQL Server started life <strong>pessimistic and lock-based</strong>: readers hold shared locks that block writers and vice versa. Since SQL Server 2005 you can opt-in to <strong>Read Committed Snapshot Isolation (RCSI)</strong> or <strong>Snapshot Isolation</strong>, which use row versioning stored in <code>tempdb</code>; SQL Server 2022 added <strong>Optimized Locking</strong> (TID + LAQ) to reduce lock memory. Even so, most SQL Server deployments still run with the pessimistic default and lean on indexes to avoid escalation. This is why "converting a legacy SQL Server app to Postgres" is not a purely mechanical port — the isolation semantics can differ subtly.</p>
+
+    <h3>2. Storage: heap + clustered index vs heap + optional cluster</h3>
+    <p><strong>SQL Server</strong> stores data in 8 KB pages inside <code>.mdf</code> / <code>.ndf</code> files. Every table has either a <em>heap</em> or a <em>clustered index</em> — and by default, the primary key IS the clustered index, so the table is physically sorted by PK. This makes range queries on PK fast but makes inserts anywhere except the tail slow, and it means every non-clustered index carries the PK as its row locator. <strong>PostgreSQL</strong> stores every table as a plain heap (unordered by default); the PK is just another B-tree index pointing into the heap. Ordering by insertion is preserved unless you explicitly <code>CLUSTER</code>. This gives Postgres more predictable insert performance and simpler mental model, at the cost of losing the "clustered scan" trick.</p>
+
+    <h3>3. Write-ahead log: T-log vs WAL</h3>
+    <p>Both engines use write-ahead logging (durability, crash recovery, replication all depend on it). SQL Server's <strong>transaction log (<code>.ldf</code>)</strong> and Postgres's <strong>WAL segments (<code>pg_wal/</code>)</strong> serve the same purpose — <em>flush the log before the data page</em>. The differences are operational: SQL Server has a single per-database log file, backup modes (<code>SIMPLE</code>, <code>FULL</code>, <code>BULK_LOGGED</code>), and log-shipping/replication features tied to log backups. Postgres has fixed-size 16 MB WAL segments that stream continuously to replicas; recovery is naturally continuous (PITR to any second). Both support <strong>synchronous replication</strong> — commit blocks until the replica has ACKed the log record.</p>
+
+    <h3>4. Replication &amp; HA architecture</h3>
+    <p><strong>SQL Server's flagship is Always On Availability Groups (AG)</strong>: a group of databases replicated to up to 8 secondaries (2 sync, rest async in Enterprise). Automatic failover uses Windows Server Failover Cluster (WSFC) as the quorum layer. Read-only routing at the listener lets you offload reads. Also available: log shipping (simple, granular), transactional replication (per-table CDC), Failover Cluster Instance (shared-storage HA). <strong>PostgreSQL</strong> gives you two flavours: <em>physical streaming replication</em> (byte-for-byte WAL shipped to hot standbys) and <em>logical replication</em> (row-level events, cross-version, subset of tables). Tools like <strong>Patroni</strong>, <strong>repmgr</strong>, or <strong>pg_auto_failover</strong> orchestrate failover; on cloud, RDS Multi-AZ and Aurora handle it for you.</p>
+
+    <h3>5. Partitioning &amp; sharding</h3>
+    <p>Both offer native <strong>partitioning</strong>: split a big table into partitions by range, list, or hash; the planner prunes irrelevant partitions. Neither offers native cross-node <strong>sharding</strong>: SQL Server's answer is <em>Azure SQL Hyperscale</em> (managed distributed storage under one logical DB) or app-level shard maps; Postgres uses <strong>Citus</strong> (columnar + sharding extension, now Microsoft-owned), <strong>PostgresXL</strong>, or app-level routing. If you need &gt; single-node writes, Aurora Postgres + read replicas + Citus is the modern shape.</p>
+
+    <h3>6. Extensibility — Postgres's superpower</h3>
+    <p>PostgreSQL was designed from day one to be <strong>extended without recompiling the server</strong>. New data types, operators, index methods, procedural languages, foreign data wrappers — all first-class extensions. The ecosystem is huge: <strong>PostGIS</strong> (geo, industry-leading), <strong>TimescaleDB</strong> (timeseries), <strong>pgvector</strong> (vector search for LLMs — the reason Postgres is now a top RAG engine), <strong>pg_partman</strong>, <strong>pg_cron</strong>, <strong>Citus</strong>, <strong>hstore</strong>. SQL Server's extension story is <strong>CLR integration</strong> (embed .NET assemblies) and native features shipped by Microsoft; there is no "install this open-source extension" culture. If you need a specialized data model, Postgres almost certainly has an extension for it already.</p>
+
+    <h3>7. JSON &amp; document workloads</h3>
+    <p>Both engines support JSON, but architecturally differently. SQL Server stores JSON as <code>nvarchar</code> and provides <code>JSON_VALUE</code> / <code>JSON_QUERY</code> / <code>OPENJSON</code> functions — the JSON is unparsed on disk. <strong>PostgreSQL has native <code>JSONB</code></strong>: JSON is parsed to a binary tree on write, indexed with GIN, queried with the <code>-&gt;</code> and <code>@&gt;</code> operators. Postgres genuinely competes with MongoDB for document workloads; SQL Server's JSON is best used sparingly.</p>
+
+    <h3>8. Analytics &amp; columnstore</h3>
+    <p><strong>SQL Server has native columnstore indexes since 2012</strong>: 10× compression, 100× scan speed, and hybrid clustered/nonclustered variants. This makes SQL Server genuinely capable at hybrid OLTP+OLAP without a separate warehouse. Postgres has <strong>no native columnstore</strong>; you use extensions (<em>Hydra</em>, <em>Citus columnar</em>, or replicate to <em>ClickHouse</em> or a warehouse). If your workload mixes transactions with heavy analytical scans, SQL Server has the built-in edge — although a Postgres + ClickHouse combo is a very common and cheaper alternative.</p>
+
+    <h3>9. Ecosystem &amp; tooling — first-party vs best-of-breed</h3>
+    <p>SQL Server ships a full BI stack from Microsoft: <strong>SSMS</strong> (management), <strong>SSIS</strong> (ETL), <strong>SSAS</strong> (OLAP), <strong>SSRS</strong> (reports), <strong>Power BI</strong>. Buying one product buys you everything a small IT team needs. Postgres has none of that in-box — you pick <em>pgAdmin</em> or <em>DBeaver</em> for management, <em>dbt</em>, <em>Airbyte</em>, or <em>Fivetran</em> for ETL, <em>Grafana</em> or <em>Metabase</em> for dashboards, <em>Debezium</em> for CDC. This is either "flexible best-of-breed" or "too many moving parts" depending on your team.</p>
+
+    <h3>10. Licensing &amp; cost</h3>
+    <p>This is the deciding factor for many organisations. SQL Server is <strong>expensive</strong>: Enterprise Edition can run five to six figures per socket-year; Standard is cheaper but drops Always On, columnstore optimisations, and unlimited memory. There's a free <strong>Express</strong> edition capped at 10 GB DBs and 1 CPU socket / 1.4 GB RAM. PostgreSQL is <strong>free forever, no editions</strong> — every feature is available in the free download. On cloud, Azure SQL vs Aurora Postgres pricing is closer than the on-prem numbers, but the licensing complexity difference remains.</p>
+
+    <h3>11. Operational culture</h3>
+    <p>SQL Server DBAs live in Windows and PowerShell; the tooling is GUI-heavy (SSMS is genuinely excellent). Postgres administrators live in <code>psql</code>, <code>bash</code>, and Terraform; the tooling is CLI-heavy and code-friendly. Neither is inherently harder — but a team's existing skillset makes a huge difference to day-2 operations. A shop full of .NET engineers on Windows will feel at home with SQL Server; a shop of Go / Node / Python engineers on Linux will feel at home with Postgres.</p>
+  </section>
+
+  <section id="proscons" class="card">
+    <h2>✅ Pros &amp; Cons</h2>
+
+    <div class="ss-card">
+      <h3>Microsoft SQL Server</h3>
+      <div class="pro-con">
+        <div class="box pros">
+          <h4>Strengths</h4>
+          <ul>
+            <li>Best-in-class GUI tooling (SSMS) — DBAs love it.</li>
+            <li>First-party BI stack in the box (SSIS, SSAS, SSRS, Power BI).</li>
+            <li>Native columnstore &amp; excellent hybrid OLTP+OLAP.</li>
+            <li>Always On AGs — mature, well-documented HA.</li>
+            <li>Deep .NET / C# integration; Entity Framework's home ground.</li>
+            <li>Azure SQL family (DB, MI, Hyperscale) — the smoothest managed cloud story if you're already on Azure.</li>
+            <li>T-SQL is expressive and stable; MERGE, window functions, temporal tables are mature.</li>
+          </ul>
+        </div>
+        <div class="box cons">
+          <h4>Weaknesses</h4>
+          <ul>
+            <li>Licensing cost — Enterprise is very expensive; edition matrix is confusing.</li>
+            <li>Lock-based concurrency default causes blocking under contention (RCSI helps).</li>
+            <li>Extensibility is limited — no rich extension ecosystem outside Microsoft-shipped features.</li>
+            <li>Weaker JSON support than Postgres.</li>
+            <li>Less popular in modern cloud-native / container-first shops.</li>
+            <li>Historically Windows-first; Linux support has caught up but ecosystem lags.</li>
+            <li>No native sharding — Hyperscale addresses read scale, not write scale.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="pg-card">
+      <h3>PostgreSQL</h3>
+      <div class="pro-con">
+        <div class="box pros">
+          <h4>Strengths</h4>
+          <ul>
+            <li>Free and open source — no licensing cost or edition tiers.</li>
+            <li>MVCC by default — excellent concurrency without configuration.</li>
+            <li>Huge extension ecosystem: PostGIS, TimescaleDB, pgvector, Citus, pg_partman, pg_cron.</li>
+            <li>Native JSONB — genuinely competes with MongoDB.</li>
+            <li>Cross-platform, container-native, cloud-neutral.</li>
+            <li>Rich standards-compliant SQL; multiple procedural languages (PL/pgSQL, PL/Python, PL/V8).</li>
+            <li>Logical replication for zero-downtime major-version upgrades and cross-region replication.</li>
+          </ul>
+        </div>
+        <div class="box cons">
+          <h4>Weaknesses</h4>
+          <ul>
+            <li>One process per connection → connection pooling essentially mandatory at scale (PgBouncer / RDS Proxy).</li>
+            <li>Vacuum &amp; bloat management — a real operational burden if you have very high update rates.</li>
+            <li>No native cross-node sharding (need Citus / app-level).</li>
+            <li>No native columnstore.</li>
+            <li>Tooling is fragmented — you assemble your own BI stack.</li>
+            <li>GUI clients (pgAdmin, DBeaver) are functional but not as polished as SSMS.</li>
+            <li>Enterprise vendor support is via third parties (EnterpriseDB, Crunchy, Percona) rather than a single vendor.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 DSA — the internals</span>
+    <h2>Data structures each engine relies on</h2>
+    <table>
+      <thead><tr><th>Concept</th><th class="ss">SQL Server</th><th class="pg">PostgreSQL</th></tr></thead>
+      <tbody>
+        <tr><td>Row storage</td><td>8 KB page; heap OR clustered B+ tree on PK</td><td>8 KB page; heap always; PK is separate B-tree</td></tr>
+        <tr><td>Index type</td><td>B+ tree (default); columnstore (segments); XML/spatial/full-text</td><td>B-tree, hash, GIN (inverted for arrays/JSONB), GiST (geometry), BRIN (block-range), SP-GiST</td></tr>
+        <tr><td>Concurrency</td><td>Locks (S / U / X / IX / SIX) + hash-based lock manager; optional row-versioning in tempdb (RCSI)</td><td>Per-tuple MVCC with xmin/xmax; predicate locks for SSI</td></tr>
+        <tr><td>Query optimizer</td><td>Cost-based, cached plans; adaptive query processing</td><td>Cost-based; Genetic Query Optimizer (GEQO) for many-way joins</td></tr>
+        <tr><td>Statistics</td><td>Auto-created; histograms per index</td><td>Auto-analyzed; extended stats + MCV lists</td></tr>
+        <tr><td>Backup granularity</td><td>DB, filegroup, page-level restore</td><td>Base backup + WAL (PITR to any LSN)</td></tr>
+        <tr><td>Compression</td><td>Row + Page + Columnstore compression</td><td>TOAST for large values (pglz, lz4, zstd); no page-level compression natively</td></tr>
+        <tr><td>Recovery</td><td>Analysis → Redo → Undo (ARIES-style); Accelerated Database Recovery (per-DB PVS)</td><td>WAL replay from last checkpoint</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="cloud" class="card aws">
+    <span class="badge">☁️ Cloud offerings</span>
+    <h2>Managed database options on each cloud</h2>
+    <table>
+      <thead><tr><th>Cloud</th><th class="ss">SQL Server</th><th class="pg">PostgreSQL</th></tr></thead>
+      <tbody>
+        <tr><td>AWS</td><td><strong>RDS for SQL Server</strong> (all editions); <strong>SQL Server on EC2</strong> for full control</td><td><strong>RDS for PostgreSQL</strong>; <strong>Aurora PostgreSQL</strong> (Amazon's rewritten storage layer, up to 15 replicas, &lt; 20 ms lag); <strong>Aurora Serverless v2</strong>; <strong>Aurora DSQL</strong> (new distributed)</td></tr>
+        <tr><td>Azure</td><td><strong>Azure SQL Database</strong> (PaaS), <strong>Azure SQL Managed Instance</strong>, <strong>SQL Server on Azure VM</strong>, <strong>Azure SQL Hyperscale</strong> (distributed storage)</td><td><strong>Azure Database for PostgreSQL — Flexible Server</strong>; <strong>Azure Cosmos DB for PostgreSQL</strong> (Citus-based sharding)</td></tr>
+        <tr><td>Google Cloud</td><td>Cloud SQL for SQL Server (limited features)</td><td>Cloud SQL for PostgreSQL, <strong>AlloyDB</strong> (Google's rebuilt Postgres)</td></tr>
+        <tr><td>Independent</td><td>—</td><td><strong>Supabase</strong>, <strong>Neon</strong> (serverless branching), <strong>Crunchy Bridge</strong>, <strong>Aiven</strong>, <strong>EDB Cloud</strong></td></tr>
+      </tbody>
+    </table>
+    <p><strong>Two cloud-era trends:</strong> (1) Postgres has more managed options because of open-source portability — you're not locked in. (2) Both AWS Aurora and Azure Hyperscale <em>rewrite the storage layer</em> to gain horizontal scale — Aurora replicates a shared distributed log; Hyperscale keeps one primary but pushes IO to a fleet of "page servers". These are the cloud-native answers to the single-node ceiling.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 Small code — same task in both dialects</h2>
+
+    <h4>Table + JSON + indexed query</h4>
+<pre><span class="cmt">-- SQL Server --------------------------------</span>
+<span class="kw">CREATE TABLE</span> orders (
+    id      INT IDENTITY <span class="kw">PRIMARY KEY</span>,
+    payload NVARCHAR(MAX)   <span class="cmt">-- JSON stored as text</span>
+);
+<span class="kw">CREATE INDEX</span> ix_customer <span class="kw">ON</span> orders (JSON_VALUE(payload,<span class="str">'$.customerId'</span>));
+
+<span class="kw">SELECT</span> id, JSON_VALUE(payload,<span class="str">'$.total'</span>)
+<span class="kw">FROM</span>   orders
+<span class="kw">WHERE</span>  JSON_VALUE(payload,<span class="str">'$.customerId'</span>) = <span class="str">'42'</span>;
+</pre>
+<pre><span class="cmt">-- PostgreSQL --------------------------------</span>
+<span class="kw">CREATE TABLE</span> orders (
+    id      SERIAL <span class="kw">PRIMARY KEY</span>,
+    payload JSONB           <span class="cmt">-- native binary JSON</span>
+);
+<span class="kw">CREATE INDEX</span> ix_customer <span class="kw">ON</span> orders <span class="kw">USING</span> GIN ((payload -&gt; <span class="str">'customerId'</span>));
+
+<span class="kw">SELECT</span> id, payload -&gt;&gt; <span class="str">'total'</span>
+<span class="kw">FROM</span>   orders
+<span class="kw">WHERE</span>  payload @&gt; <span class="str">'{"customerId":"42"}'</span>::jsonb;   <span class="cmt">-- uses GIN index</span>
+</pre>
+
+    <h4>Snapshot isolation</h4>
+<pre><span class="cmt">-- SQL Server — opt-in per DB, then set the level</span>
+<span class="kw">ALTER DATABASE</span> mydb <span class="kw">SET</span> READ_COMMITTED_SNAPSHOT <span class="kw">ON</span>;
+<span class="kw">SET TRANSACTION ISOLATION LEVEL</span> SNAPSHOT;
+<span class="cmt">-- Postgres — always MVCC; just set the level</span>
+<span class="kw">SET TRANSACTION ISOLATION LEVEL</span> REPEATABLE READ;
+</pre>
+
+    <h4>Read replica routing (ADO.NET / Npgsql)</h4>
+<pre><span class="cmt">// SQL Server — Always On listener with ApplicationIntent</span>
+<span class="kw">var</span> read = <span class="kw">new</span> <span class="typ">SqlConnection</span>(<span class="str">"Server=agListener;Database=app;ApplicationIntent=ReadOnly;..."</span>);
+<span class="kw">var</span> write= <span class="kw">new</span> <span class="typ">SqlConnection</span>(<span class="str">"Server=agListener;Database=app;ApplicationIntent=ReadWrite;..."</span>);
+
+<span class="cmt">// Postgres — separate primary and replica DSNs, app-side routing</span>
+<span class="kw">var</span> read = <span class="kw">new</span> <span class="typ">NpgsqlConnection</span>(<span class="str">"Host=replica-1.db,replica-2.db;LoadBalanceHosts=true;TargetSessionAttributes=any"</span>);
+<span class="kw">var</span> write= <span class="kw">new</span> <span class="typ">NpgsqlConnection</span>(<span class="str">"Host=primary.db;TargetSessionAttributes=read-write"</span>);
+</pre>
+  </section>
+
+  <section id="decision" class="card">
+    <h2>🧭 How to pick in an architecture review</h2>
+    <p>Reduced to a one-page rubric. When someone asks "SQL Server or Postgres?" answer this:</p>
+    <table>
+      <thead><tr><th>Signal</th><th>Choose</th></tr></thead>
+      <tbody>
+        <tr><td>Heavy .NET stack, Azure-first, Windows-native team</td><td><strong>SQL Server / Azure SQL</strong></td></tr>
+        <tr><td>Existing SSRS/SSIS/SSAS/Power BI investment</td><td><strong>SQL Server</strong> (keeps the BI stack intact)</td></tr>
+        <tr><td>Hybrid OLTP + OLAP on the same box, native columnstore</td><td><strong>SQL Server</strong></td></tr>
+        <tr><td>Enterprise IT team that prefers a single vendor with paid support</td><td><strong>SQL Server</strong></td></tr>
+        <tr><td>Open-source-first, container/Kubernetes native</td><td><strong>PostgreSQL</strong></td></tr>
+        <tr><td>Multi-cloud or "avoid vendor lock-in" mandate</td><td><strong>PostgreSQL</strong></td></tr>
+        <tr><td>Need PostGIS / pgvector / TimescaleDB / Citus specifically</td><td><strong>PostgreSQL</strong> (only option)</td></tr>
+        <tr><td>Heavy JSON/document workloads inside a relational store</td><td><strong>PostgreSQL</strong> (JSONB + GIN)</td></tr>
+        <tr><td>Startup, minimum licensing spend, small ops team on Linux</td><td><strong>PostgreSQL</strong></td></tr>
+        <tr><td>High-concurrency reads with heavy writes and no team appetite for RCSI</td><td><strong>PostgreSQL</strong> (MVCC gives it for free)</td></tr>
+        <tr><td>Very high per-row update churn (millions/hour)</td><td><strong>SQL Server</strong> tends to age better; Postgres vacuum can be a burden — but with tuning both work</td></tr>
+        <tr><td>Regulated Windows-only environment (banks, healthcare on-prem)</td><td><strong>SQL Server</strong> (mature Windows stack + AD integration)</td></tr>
+      </tbody>
+    </table>
+
+    <p>Two worked examples an interviewer likes:</p>
+    <div class="qa"><p class="q">You're building a healthcare EMR at a hospital that already runs Windows/AD, Power BI, and SSRS. Which DB?</p><p class="a"><strong>SQL Server.</strong> AD integration, in-box BI, mature backup story, existing DBA skills. The extra licence is small compared to retraining the org.</p></div>
+    <div class="qa"><p class="q">You're building a modern SaaS multi-tenant app deployed on Kubernetes, using Go microservices, needing geo + vector search.</p><p class="a"><strong>PostgreSQL.</strong> Free, PostGIS + pgvector cover the specialised needs, container-native, no licence. Add PgBouncer for connection pooling and Citus if you outgrow one node.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "SQL Server and PostgreSQL are both mature ACID-compliant RDBMSs, but they differ architecturally in four ways. <em>One:</em> concurrency — Postgres is MVCC everywhere, SQL Server is lock-based with opt-in row versioning (RCSI / Snapshot / Optimized Locking). <em>Two:</em> process model — SQL Server is one process with many threads under SQLOS, Postgres is one process per connection so pooling is essential. <em>Three:</em> ecosystem — SQL Server ships a full first-party BI stack (SSIS, SSAS, SSRS, Power BI) plus native columnstore, Postgres is best-of-breed extensions (PostGIS, pgvector, TimescaleDB, Citus). <em>Four:</em> licensing — SQL Server is commercial, Postgres is free forever. Choose SQL Server when you're .NET + Azure + Windows + already invested in the Microsoft BI stack. Choose Postgres for open-source-first, container-native, multi-cloud, or specialised extension needs like PostGIS or pgvector."</p>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li><strong>"Postgres = MVCC by default, SQL Server = locking by default."</strong> One sentence, senior-level signal.</li>
+      <li><strong>"Postgres has one process per connection — pooling isn't optional at scale."</strong> Naming PgBouncer / RDS Proxy is the tell.</li>
+      <li><strong>"SQL Server has native columnstore; Postgres doesn't."</strong> Big deal for hybrid OLTP+OLAP workloads.</li>
+      <li><strong>"Postgres wins on extensibility — PostGIS, pgvector, TimescaleDB."</strong> The reason modern AI/RAG stacks pick Postgres.</li>
+      <li><strong>"Licensing is often the deciding factor."</strong> Enterprise SQL Server can be 5–6 figures per socket-year.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://www.postgresql.org/about/">PostgreSQL — About page (features overview)</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/sql/sql-server/what-is-sql-server">What is SQL Server? — Microsoft Learn</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/sql/relational-databases/sql-server-transaction-locking-and-row-versioning-guide">SQL Server transaction locking &amp; row versioning guide — Microsoft Learn</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/sql/relational-databases/performance/optimized-locking">SQL Server Optimized Locking (2022+) — Microsoft Learn</a></li>
+      <li><a href="https://www.postgresql.org/docs/current/mvcc.html">PostgreSQL — Concurrency Control (MVCC)</a></li>
+      <li><a href="https://www.postgresql.org/docs/current/wal-intro.html">PostgreSQL — WAL introduction</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/sql/database-engine/availability-groups/windows/overview-of-always-on-availability-groups-sql-server">Always On Availability Groups — Microsoft Learn</a></li>
+      <li><a href="https://www.postgresql.org/docs/current/logical-replication.html">PostgreSQL — Logical replication</a></li>
+      <li><a href="https://www.postgresql.org/docs/current/ddl-partitioning.html">PostgreSQL — Table partitioning</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/sql/relational-databases/partitions/partitioned-tables-and-indexes">SQL Server — Partitioned tables &amp; indexes</a></li>
+      <li><a href="https://www.citusdata.com/">Citus (distributed Postgres)</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

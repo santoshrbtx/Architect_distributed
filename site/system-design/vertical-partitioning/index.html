@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vertical Partitioning — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c;   --scenario-bg: #fff0f4;
+    --laymen: #ffd166;     --laymen-bg: #fffaeb;
+    --reqs: #f4a259;       --reqs-bg: #fff7ed;
+    --arch: #4361ee;       --arch-bg: #eef2ff;
+    --anim: #00b4d8;       --anim-bg: #eef9fc;
+    --dsa: #7048e8;        --dsa-bg: #f3effe;
+    --aws: #ff9900;        --aws-bg: #fff6e6;
+    --code-bg: #1e2430;    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%); color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.12rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); color: #7c5c00; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .93rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; line-height: 1.5; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; }
+  .faq-item .q::before { content: "Q "; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] { transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease; transform-box: fill-box; }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+  .tbl-wide { border: 2px solid #7fa2ff; border-radius: 10px; margin: 12px 0; padding: 10px 14px; background: #eef2ff; }
+  .tbl-narrow { border: 2px solid #2dc653; border-radius: 10px; margin: 8px 0; padding: 8px 12px; background: #f0f9f0; }
+  html[data-theme="dark"] .tbl-wide { background: rgba(67,97,238,.16); color:#e7ecf3; }
+  html[data-theme="dark"] .tbl-narrow { background: rgba(45,198,83,.16); color:#e7ecf3; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Vertical Partitioning &amp; Zero-Downtime Sharding</h1>
+    <p>Splitting one wide table into narrow ones by columns — using ZooKeeper as the routing map, MySQL binlog / Postgres WAL to keep them in sync, and live cutover so users never see a blip.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>The problem: one table is doing too much</h2>
+    <p>Every fast-growing product hits the same wall. Your <code>users</code> table started with a handful of columns — id, email, password hash — and, three years later, it has 47 columns, some of them 4-KB blobs, and it's the hottest table in the database. Every login reads it, every profile view reads it, every settings page reads it. The table is <strong>too wide</strong>: rarely-used columns bloat the buffer pool, cold JSON payloads share a page with the hot ones, and a lock on <em>any</em> user row for <em>any</em> reason blocks unrelated queries.</p>
+    <p><strong>Vertical partitioning</strong> is the surgical answer. Instead of splitting rows (that's <em>horizontal</em> sharding), you split <em>columns</em> — the wide table becomes several narrow tables that share the same primary key. The hot columns land in <code>user_core</code>. Profile bio and avatar go to <code>user_profile</code>. Preferences, notification settings, feature flags — the cold, rarely-touched fields — move to <code>user_preferences</code>. The hot path only reads <code>user_core</code>; the entire hot working set now fits in RAM, and locks on cold data no longer block auth.</p>
+    <p>This is exactly the pattern <strong>YouTube's Vitess</strong> team formalised as a first-class workflow (<em>MoveTables</em>), which is how they carved up MySQL for YouTube, Slack, and Square. <strong>Pinterest</strong>, <strong>Facebook</strong>, and <strong>Uber</strong> all describe similar moves in their engineering blogs — usually to isolate a hot subsystem from a slower one. The interview question is: <em>how do you actually pull it off without downtime, without data loss, and without a big-bang deploy where hundreds of engineers have to change code at the same time?</em> The answer is a coordinated dance between <strong>ZooKeeper (for the routing map)</strong>, <strong>MySQL binlog / Postgres WAL replication</strong> (to backfill and keep the shards in sync), and <strong>reactive re-routing driven by ZooKeeper watches</strong> so the application layer picks up the new topology automatically.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Splitting one enormous filing cabinet into three specialised ones</h2>
+    <p><strong>Imagine one giant filing cabinet</strong> in the office that holds a folder for every customer. Each folder has grown huge over the years — a name and phone number at the top, then a chunky biography, a photo, a wish-list, notification preferences, historical purchases, feature-flag experiments the marketing team keeps adding, and so on. Every time <em>anyone</em> pulls a folder out, they lug the whole thing over — even if they only wanted the phone number.</p>
+    <p>The office manager decides to split each folder into <strong>three thinner folders</strong>, all with the same customer number stapled on top. The first folder — <em>Core</em> — holds only the name, email, and password. The second — <em>Profile</em> — holds the bio and photo. The third — <em>Preferences</em> — holds the notification settings and marketing preferences. The <em>Core</em> folders are the ones staff grab a hundred times a day, so they stay in a small locked drawer near the front desk. <em>Profile</em> and <em>Preferences</em> live in less-hot cabinets in the back room. Suddenly, the front-desk drawer is small enough that any folder can be found in seconds.</p>
+    <p><strong>Here's the tricky part: doing this without closing the office.</strong> There's already a live queue of customers at the desk. You can't just say "we'll be back tomorrow." So the team does it in stages. First, they set up the three new cabinets, empty. Then a helper copies existing folders into the new cabinets, one customer at a time, in the background — while the front desk keeps working with the old cabinet. Every time a customer updates their address at the front desk, a "little scribe" writes the same update to the new cabinets too, so they stay in sync. Once the copy is complete and the scribe confirms both sets match perfectly, the office manager updates <strong>the noticeboard</strong> — a wall-mounted map that tells every staff member <em>which cabinet holds which type of folder</em> — and everyone switches to reading from the new cabinets. Nobody was turned away. The switchover took a second.</p>
+    <p><strong>The noticeboard is called ZooKeeper.</strong> The little scribe is called <strong>binary-log replication</strong>. And the reason it doesn't lose any change is that the scribe reads the office's own daily log of updates — every write is recorded before it happens, so the scribe just replays those log entries into the new cabinet.</p>
+    <p><em>Concrete example.</em> LinkedIn ran their profile system this way for years — hot login data on one MySQL shard, resume &amp; work history on another, feed activity on a third. When you log in, you hit the fast one. When you view your resume, a second call goes to the slow one. Because the noticeboard says exactly where each type of data lives, the application code doesn't need to know the actual server addresses — it asks the noticeboard, gets an answer, and reads.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Functional &amp; non-functional</h2>
+    <h3>Functional</h3>
+    <ul>
+      <li>Split a wide table into ≥2 narrower tables by column group, preserving the primary key.</li>
+      <li>Perform the migration <strong>online</strong> — reads and writes continue throughout.</li>
+      <li>Route each query to the correct shard based on which columns it needs.</li>
+      <li>Keep source and target in strict sync during backfill and steady-state.</li>
+      <li>Allow reversible cutover — if something goes wrong, flip back to the old table with zero data loss.</li>
+      <li>Support cross-shard reads (joins) and, where necessary, transactions across shards.</li>
+    </ul>
+    <h3>Non-functional targets</h3>
+    <table>
+      <tr><th>Metric</th><th>Target</th><th>Why</th></tr>
+      <tr><td>Downtime during cutover</td><td><strong>0 seconds</strong></td><td>Non-negotiable for customer-facing systems</td></tr>
+      <tr><td>Replication lag (steady state)</td><td>&lt; 1 s p99</td><td>Otherwise reads on new shard return stale data at cutover</td></tr>
+      <tr><td>Backfill throughput</td><td>10k–100k rows/sec per stream</td><td>A billion-row table finishes in hours, not weeks</td></tr>
+      <tr><td>Routing-map propagation</td><td>&lt; 1 s to every proxy</td><td>ZooKeeper watch delivery latency</td></tr>
+      <tr><td>Post-split hot-path memory footprint</td><td>~5–20% of original</td><td>The hot table drops all cold columns</td></tr>
+      <tr><td>Post-split query latency</td><td>2–10× faster on the hot path</td><td>Smaller pages, better cache hit rate, no lock contention with cold reads</td></tr>
+      <tr><td>Rollback time</td><td>&lt; 1 minute</td><td>Update the routing map back; reverse replication was already running</td></tr>
+    </table>
+    <h3>Back-of-the-envelope</h3>
+    <p>A billion-row <code>users</code> table with 47 columns totalling 4 KB average per row = <strong>4 TB</strong>. If the hot path only needs 5 columns totalling ~200 bytes, then after vertical partitioning the hot table is <strong>200 GB</strong> — small enough to hold entirely in RAM on a decent MySQL box. That single number — 4 TB → 200 GB — is the reason vertical partitioning is one of the highest-leverage database optimisations in existence.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>The migration architecture, top-down</h2>
+    <p>Three moving parts do the heavy lifting: (1) a <strong>routing proxy</strong> (Vitess VTGate, Pinterest PinDB, or your own thin layer) that reads a <em>routing map</em> from ZooKeeper and translates each query into requests against the right physical shards; (2) a <strong>replication worker</strong> (Vitess VReplication, Debezium, or a hand-rolled reader) that tails the source database's <em>binlog</em> (MySQL) or <em>WAL</em> (Postgres) and applies each change to the new tables; and (3) <strong>ZooKeeper itself</strong>, which holds the routing map and pushes updates via watches the instant the operator flips the cutover.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 960 500" xmlns="http://www.w3.org/2000/svg" role="img">
+        <defs>
+          <marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/></marker>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/></marker>
+          <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/></marker>
+        </defs>
+        <style>
+          .b { fill: #1a2340; stroke: #4361ee; stroke-width: 1.5; rx: 8; }
+          .b.zk    { stroke: #ff9900; }
+          .b.repl  { stroke: #f4a259; }
+          .b.src   { stroke: #f7567c; }
+          .b.tgt   { stroke: #2dc653; }
+          .b.proxy { stroke: #7048e8; }
+          .lbl { fill: #e7ecf3; font: 700 12px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .sub { fill: #a0aec0; font: 10px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .fl { stroke: #7fa2ff; stroke-width: 2; fill: none; }
+          .fl.repl { stroke: #f4a259; }
+          .fl.watch { stroke: #2dc653; stroke-dasharray: 5 3; }
+          .pl { fill: #7fa2ff; font: 700 10px monospace; text-anchor: middle; }
+          .pl.repl { fill: #f4a259; }
+          .pl.watch { fill: #2dc653; }
+        </style>
+
+        <!-- App -->
+        <rect class="b" x="20" y="60" width="130" height="52" rx="8"/>
+        <text class="lbl" x="85" y="82">App instance</text>
+        <text class="sub" x="85" y="100">(N replicas)</text>
+
+        <!-- Proxy -->
+        <rect class="b proxy" x="200" y="60" width="150" height="52" rx="8"/>
+        <text class="lbl" x="275" y="82">Query Proxy (VTGate)</text>
+        <text class="sub" x="275" y="100">routes by routing-map</text>
+
+        <!-- ZK -->
+        <rect class="b zk" x="200" y="180" width="150" height="90" rx="8"/>
+        <text class="lbl" x="275" y="204">ZooKeeper Ensemble</text>
+        <text class="sub" x="275" y="222">/topology/routing/users</text>
+        <text class="sub" x="275" y="238">= &quot;core→srcDB; profile→newDB&quot;</text>
+        <text class="sub" x="275" y="256">watches → all proxies</text>
+
+        <!-- Source DB -->
+        <rect class="b src" x="440" y="30" width="200" height="110" rx="8"/>
+        <text class="lbl" x="540" y="54">Source: MySQL (old)</text>
+        <text class="sub" x="540" y="72">users(id, email, pwd,</text>
+        <text class="sub" x="540" y="88">bio, avatar, prefs...)</text>
+        <text class="sub" x="540" y="106">binlog / WAL emitted</text>
+        <text class="sub" x="540" y="124">on every write</text>
+
+        <!-- VReplication worker -->
+        <rect class="b repl" x="440" y="180" width="200" height="90" rx="8"/>
+        <text class="lbl" x="540" y="204">VReplication Worker</text>
+        <text class="sub" x="540" y="222">1. copy phase (batch backfill)</text>
+        <text class="sub" x="540" y="240">2. replicate phase (binlog tail)</text>
+        <text class="sub" x="540" y="258">3. VDiff verification</text>
+
+        <!-- Target DB -->
+        <rect class="b tgt" x="700" y="30" width="220" height="60" rx="8"/>
+        <text class="lbl" x="810" y="52">Target: user_profile</text>
+        <text class="sub" x="810" y="70">(id, bio, avatar_url)</text>
+
+        <rect class="b tgt" x="700" y="110" width="220" height="60" rx="8"/>
+        <text class="lbl" x="810" y="132">Target: user_preferences</text>
+        <text class="sub" x="810" y="150">(id, prefs, feature_flags)</text>
+
+        <rect class="b tgt" x="700" y="190" width="220" height="80" rx="8"/>
+        <text class="lbl" x="810" y="214">Source stays: user_core</text>
+        <text class="sub" x="810" y="230">(id, email, pwd_hash)</text>
+        <text class="sub" x="810" y="248">hot table — small &amp; fast</text>
+        <text class="sub" x="810" y="264">stays in RAM</text>
+
+        <!-- Query flow -->
+        <path class="fl" d="M150,86 L200,86" marker-end="url(#ar1)"/>
+        <text class="pl" x="175" y="76">SQL</text>
+
+        <path class="fl" d="M350,86 L440,60"  marker-end="url(#ar1)"/>
+        <text class="pl" x="395" y="60">core cols</text>
+
+        <path class="fl" d="M350,86 L700,60" marker-end="url(#ar1)"/>
+        <text class="pl" x="600" y="60">profile</text>
+
+        <path class="fl" d="M350,86 L700,140" marker-end="url(#ar1)"/>
+        <text class="pl" x="600" y="126">prefs</text>
+
+        <!-- Proxy reads routing map from ZK -->
+        <path class="fl watch" d="M275,180 L275,112" marker-end="url(#ar2)"/>
+        <text class="pl watch" x="330" y="150">watch fires</text>
+
+        <!-- binlog to VReplication -->
+        <path class="fl repl" d="M540,140 L540,180" marker-end="url(#ar3)"/>
+        <text class="pl repl" x="600" y="163">binlog stream (GTID)</text>
+
+        <!-- VReplication writes to targets -->
+        <path class="fl repl" d="M640,190 L700,60" marker-end="url(#ar3)"/>
+        <path class="fl repl" d="M640,220 L700,140" marker-end="url(#ar3)"/>
+        <text class="pl repl" x="680" y="200">apply</text>
+
+        <!-- Legend -->
+        <rect x="20" y="440" width="920" height="40" rx="6" fill="#0b1020"/>
+        <circle cx="45" cy="460" r="6" fill="#7fa2ff"/><text x="60" y="464" fill="#c6d0e0" font-size="11">query flow</text>
+        <circle cx="180" cy="460" r="6" fill="#f4a259"/><text x="195" y="464" fill="#c6d0e0" font-size="11">binlog replication (async)</text>
+        <circle cx="380" cy="460" r="6" fill="#2dc653"/><text x="395" y="464" fill="#c6d0e0" font-size="11">ZooKeeper watch push</text>
+        <text x="700" y="464" fill="#7f8aa0" font-size="11" font-style="italic">Same PK (user_id) links the three tables</text>
+      </svg>
+    </div>
+
+    <p>Three colour flows: the <span style="color:#4361ee;font-weight:700">blue query path</span> is what the app sees — one SQL statement fans out to whichever shards hold the columns it selected. The <span style="color:#c07521;font-weight:700">amber replication path</span> is asynchronous — the worker tails the source binlog and writes to the new tables continuously. The <span style="color:#208b3a;font-weight:700">green watch push</span> is instant — the moment the operator changes the routing map, every proxy re-reads and re-routes without a restart.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Live migration: backfill → dual-write → cutover</h2>
+    <p>Watch a wide <code>users</code> table split into <code>user_core</code>, <code>user_profile</code>, and <code>user_preferences</code> with zero downtime. Blue = live traffic, amber = replication, pink = the cutover event.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg" role="img">
+        <style>
+          .n { fill: #1a2340; stroke: #4361ee; stroke-width: 1.5; rx: 8; }
+          .n.src { stroke: #f7567c; }
+          .n.tgt { stroke: #2dc653; }
+          .n.zk  { stroke: #ff9900; }
+          .txt { fill: #e7ecf3; font: 700 11px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .sub { fill: #a0aec0; font: 10px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .pkt { r: 8; }
+          .pkt.read { fill: #7fa2ff; }
+          .pkt.copy { fill: #f4a259; }
+          .pkt.repl { fill: #f4a259; }
+          .pkt.cut  { fill: #f7567c; }
+        </style>
+
+        <!-- app -->
+        <rect class="n" x="20" y="30" width="120" height="46" rx="8"/>
+        <text class="txt" x="80" y="52">App</text>
+        <text class="sub" x="80" y="68">writes/reads</text>
+
+        <!-- proxy -->
+        <rect class="n zk" x="20" y="170" width="120" height="60" rx="8"/>
+        <text class="txt" x="80" y="192">ZK Routing Map</text>
+        <text class="sub" x="80" y="208">users → old-DB</text>
+        <text class="sub" x="80" y="224">(then flips)</text>
+
+        <!-- source db -->
+        <rect class="n src" x="200" y="30" width="200" height="100" rx="8"/>
+        <text class="txt" x="300" y="54">Source: users (wide)</text>
+        <text class="sub" x="300" y="72">id, email, pwd, bio,</text>
+        <text class="sub" x="300" y="88">avatar, prefs, flags...</text>
+        <text class="sub" x="300" y="106">binlog stream</text>
+
+        <!-- vrepl -->
+        <rect class="n" x="200" y="170" width="200" height="60" rx="8"/>
+        <text class="txt" x="300" y="192">VReplication Worker</text>
+        <text class="sub" x="300" y="208">copy → replicate → verify</text>
+
+        <!-- targets -->
+        <rect class="n tgt" x="460" y="20" width="200" height="50" rx="8"/>
+        <text class="txt" x="560" y="42">user_core (kept)</text>
+        <text class="sub" x="560" y="58">id, email, pwd</text>
+
+        <rect class="n tgt" x="460" y="90" width="200" height="50" rx="8"/>
+        <text class="txt" x="560" y="112">user_profile (new)</text>
+        <text class="sub" x="560" y="128">id, bio, avatar</text>
+
+        <rect class="n tgt" x="460" y="160" width="200" height="50" rx="8"/>
+        <text class="txt" x="560" y="182">user_preferences (new)</text>
+        <text class="sub" x="560" y="198">id, prefs, flags</text>
+
+        <!-- verify -->
+        <rect class="n tgt" x="460" y="240" width="200" height="50" rx="8"/>
+        <text class="txt" x="560" y="262">VDiff Report</text>
+        <text class="sub" x="560" y="278" id="vd">rows match: 0 / N</text>
+
+        <!-- flying packets -->
+        <circle class="pkt read a-el a-hidden" id="pk-read" cx="80" cy="53"/>
+        <circle class="pkt copy a-el a-hidden" id="pk-copy" cx="300" cy="53"/>
+        <circle class="pkt repl a-el a-hidden" id="pk-repl" cx="300" cy="80"/>
+        <circle class="pkt cut  a-el a-hidden" id="pk-cut"  cx="80" cy="200"/>
+
+        <!-- captions -->
+        <text class="sub" id="stage" x="80" y="105" fill="#7fa2ff" opacity="0"></text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next" class="secondary">Step →</button>
+        <button data-act="prev" class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+    <script>
+      (function () {
+        const root = document.getElementById('anim1'); if (!root) return;
+        const $ = s => root.querySelector(s);
+        const label = $('.anim-step-label'), cap = $('.anim-step-caption');
+        const btnP = root.querySelector('[data-act="play"]');
+        const btnN = root.querySelector('[data-act="next"]');
+        const btnB = root.querySelector('[data-act="prev"]');
+        const btnR = root.querySelector('[data-act="reset"]');
+        function set(sel,x,y){ const e=$(sel); if(!e) return; e.setAttribute('cx',x); e.setAttribute('cy',y); e.classList.remove('a-hidden'); }
+        function hide(sel){ $(sel)?.classList.add('a-hidden'); }
+        function txt(sel,t){ const e=$(sel); if(e){ e.textContent=t; e.setAttribute('opacity','1'); } }
+        function clr(sel){ const e=$(sel); if(e){ e.setAttribute('opacity','0'); } }
+
+        const CFG = {
+          intro: 'Split a wide users table into three narrow tables — with zero downtime.',
+          interval: 1900,
+          reset: (r) => {
+            ['#pk-read','#pk-copy','#pk-repl','#pk-cut'].forEach(hide);
+            $('#pk-read').setAttribute('cx',80);   $('#pk-read').setAttribute('cy',53);
+            $('#pk-copy').setAttribute('cx',300);  $('#pk-copy').setAttribute('cy',53);
+            $('#pk-repl').setAttribute('cx',300);  $('#pk-repl').setAttribute('cy',80);
+            $('#pk-cut').setAttribute('cx',80);    $('#pk-cut').setAttribute('cy',200);
+            clr('#stage');
+            $('#vd').textContent = 'rows match: 0 / N';
+          },
+          steps: [
+            { caption: '1. Baseline: app reads/writes the wide users table. Routing map in ZooKeeper points at the source DB.',
+              apply: (r,$) => set('#pk-read', 300, 53) },
+            { caption: '2. Create empty target tables user_profile and user_preferences. Nothing else changes.',
+              apply: (r,$) => { txt('#stage','targets created (empty)'); } },
+            { caption: '3. Kick off VReplication copy phase: batches of rows are read from users and inserted into the targets by column projection.',
+              apply: (r,$) => { set('#pk-copy', 560, 115); txt('#stage','copy phase: 40% of rows...'); $('#vd').textContent = 'rows match: 400M / 1B'; } },
+            { caption: '4. Copy completes. Now the worker attaches to the binlog stream at the exact GTID where the copy started.',
+              apply: (r,$) => { $('#vd').textContent = 'rows match: 1B / 1B'; } },
+            { caption: '5. Replicate phase: every INSERT/UPDATE/DELETE on users is projected to the corresponding target row within milliseconds.',
+              apply: (r,$) => set('#pk-repl', 560, 115) },
+            { caption: '6. VDiff verifies both sides byte-for-byte using consistent snapshots. Discrepancies get replayed.',
+              apply: (r,$) => txt('#stage','VDiff: 100% match') },
+            { caption: '7. Operator issues SwitchTraffic. Reads flip first — routing map updated in ZooKeeper.',
+              apply: (r,$) => { set('#pk-cut', 80, 200); txt('#stage','routing map: profile→new, prefs→new'); } },
+            { caption: '8. ZooKeeper watch fires on every proxy. Every VTGate re-reads the map. Sub-second propagation.',
+              apply: (r,$) => set('#pk-cut', 80, 200) },
+            { caption: '9. Writes flip next. Reverse replication is armed (new → old) in case rollback is needed.',
+              apply: (r,$) => { txt('#stage','writes flipped; reverse repl armed'); } },
+            { caption: '10. After the confidence window elapses, the old wide columns are dropped from users. Migration complete — the hot table is now 20× smaller.',
+              apply: (r,$) => { hide('#pk-cut'); txt('#stage','✓ migration complete'); } }
+          ]
+        };
+
+        let idx=-1, playing=false, timer=null;
+        function goto(i){ if(i<0||i>=CFG.steps.length) return; CFG.reset(root); for(let k=0;k<=i;k++) CFG.steps[k].apply(root,$); idx=i; label.textContent=`Step ${i+1}/${CFG.steps.length}`; cap.textContent=CFG.steps[i].caption; }
+        function reset(){ idx=-1; playing=false; if(timer){clearTimeout(timer); timer=null;} CFG.reset(root); label.textContent='Ready'; cap.textContent=CFG.intro; btnP.textContent='▶ Play'; }
+        function play(){ if(playing){ playing=false; if(timer)clearTimeout(timer); btnP.textContent='▶ Play'; return; } if(idx>=CFG.steps.length-1) reset(); playing=true; btnP.textContent='⏸ Pause'; function tick(){ if(!playing) return; if(idx+1<CFG.steps.length) goto(idx+1); if(idx<CFG.steps.length-1) timer=setTimeout(tick, CFG.interval); else { playing=false; btnP.textContent='▶ Replay'; } } timer=setTimeout(tick, 400); }
+        btnP.addEventListener('click', play);
+        btnR.addEventListener('click', reset);
+        btnN.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnP.textContent='▶ Play';} goto(idx+1); });
+        btnB.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnP.textContent='▶ Play';} goto(idx-1); });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive — every stage of the migration</h2>
+
+    <h3>1. What vertical partitioning actually is (and isn't)</h3>
+    <p>Vertical partitioning splits <em>columns</em>. Horizontal partitioning (sharding) splits <em>rows</em>. Given the classic problem — a wide <code>users</code> table with 47 columns — vertical splitting decomposes it into narrow tables that share the same primary key:</p>
+
+    <div class="tbl-wide"><strong>Before:</strong> <code>users(id, email, pwd_hash, status, display_name, bio, avatar_url, phone, country, locale, timezone, notification_email, notification_sms, notification_push, marketing_optout, feature_flag_1..N, last_login_at, ...)</code> — 4 KB average row width.</div>
+
+    <div class="tbl-narrow"><strong>After:</strong> <code>user_core(id, email, pwd_hash, status)</code> — ~120 bytes/row. Every auth request reads this table.</div>
+    <div class="tbl-narrow"><code>user_profile(id, display_name, bio, avatar_url, phone, country, locale, timezone)</code> — ~1 KB/row. Read on profile view.</div>
+    <div class="tbl-narrow"><code>user_preferences(id, notification_email, notification_sms, notification_push, marketing_optout, feature_flags jsonb)</code> — ~2 KB/row. Read on settings page only.</div>
+
+    <p>The critical property: every row in every child table shares the same <code>user_id</code>, so the original table can always be reconstructed via a three-way join. This 1:1 relationship is what distinguishes vertical partitioning from normalisation — <em>you're not eliminating redundancy, you're isolating by access pattern</em>.</p>
+
+    <h3>2. Vertical vs horizontal — when to reach for each</h3>
+    <table>
+      <tr><th>Symptom</th><th>Right tool</th></tr>
+      <tr><td>Too many rows (billions) on one node; disk full</td><td>Horizontal (sharding by user_id / hash)</td></tr>
+      <tr><td>Table is too wide; cold columns bloat memory</td><td>Vertical (split by column group)</td></tr>
+      <tr><td>Hot subsystem (auth) blocked by cold subsystem (analytics events)</td><td>Vertical, then move cold table to its own server</td></tr>
+      <tr><td>Read QPS higher than one primary can serve</td><td>Read replicas first, then horizontal</td></tr>
+      <tr><td>Locks on unrelated fields hurt throughput</td><td>Vertical</td></tr>
+      <tr><td>Uneven skew — one user has 90% of rows in a related table</td><td>Horizontal with hash-based routing</td></tr>
+    </table>
+    <p>They compose. Vitess routinely does <strong>vertical first, then horizontal</strong> on the tables that stay hot. YouTube's original migration path: monolithic MySQL → vertically split into ~30 keyspaces (users, videos, comments, ads) → horizontally shard the hottest 5-6 of those keyspaces to hundreds of shards each.</p>
+
+    <h3>3. ZooKeeper's job — the routing map</h3>
+    <p>The routing map is the single source of truth for "given a query for column X of table T, which physical DB holds it?" It lives in ZooKeeper as a small JSON blob under a well-known path, e.g.:</p>
+
+    <div class="viz">/vitess/topology/keyspaces/users/routing
+{
+  "users.user_core":        { "physical": "shard-users-old",  "state": "serving" },
+  "users.user_profile":     { "physical": "shard-users-new1", "state": "serving" },
+  "users.user_preferences": { "physical": "shard-users-new2", "state": "serving" },
+  "users":                  { "view_of":  ["user_core","user_profile","user_preferences"] }
+}
+</div>
+
+    <p>Every VTGate (or your query proxy) sets a <strong>persistent watch</strong> on this znode. When the operator flips the map, ZooKeeper pushes the update to every proxy in under a second — the proxies re-read and start routing to the new physical destination immediately, without a restart. See the full ZooKeeper mechanics on <a href="../zookeeper-watches/index.html">this page</a>.</p>
+
+    <p><strong>Why ZooKeeper and not just a config file?</strong> Because a config file doesn't push updates. You'd have to poll or restart. And a config server that isn't strongly consistent might tell one proxy the new map and another the old map, causing writes to hit different physical DBs — a split-brain scenario that corrupts data. ZooKeeper's ZAB guarantees every proxy sees the same map at any point in wall-clock time, or gets an error.</p>
+
+    <h3>4. Binlog / WAL replication — the "little scribe"</h3>
+    <p>MySQL's <strong>binlog</strong> (binary log) and Postgres's <strong>WAL</strong> (write-ahead log) both record every write in strict order, before it's committed to the data files. This log is the foundation of every replication tool. Vitess's <strong>VReplication</strong> — the workflow originally built at YouTube — attaches to the binlog stream identified by a global transaction ID (<strong>GTID</strong>) and processes each event in order.</p>
+
+    <p>The migration runs in three canonical phases:</p>
+    <ol>
+      <li><strong>Copy phase.</strong> The worker takes a consistent snapshot of the source (using MySQL's <code>--single-transaction</code> or Postgres logical replication slot) and streams rows into the target tables via a <code>SELECT column_subset FROM users</code>. Because it's a projection, only the columns you're moving actually get copied. This phase handles a billion rows in hours, not weeks, and can be interrupted and resumed at the same GTID.</li>
+      <li><strong>Replicate phase.</strong> Once the copy is done, the worker seamlessly transitions to <strong>tailing the binlog from the GTID at which the copy started</strong>. Every INSERT/UPDATE/DELETE on the source is projected and applied to the targets. Steady-state lag is milliseconds on a healthy system.</li>
+      <li><strong>Verification (VDiff).</strong> The worker takes fresh consistent snapshots of both sides and compares them row-by-row for the moved columns. Any drift is replayed. Only after VDiff reports 100% match do you cut over.</li>
+    </ol>
+
+    <h3>5. The cutover — SwitchTraffic in stages</h3>
+    <p>Cutover is not a big bang. Vitess splits it into <em>reads first, then writes</em>, with a reversible checkpoint in between:</p>
+    <ol>
+      <li><strong>SwitchReads.</strong> Update the routing map in ZooKeeper so read queries for the moved columns now go to the new tables. Writes still go to the old wide table; the replication worker still keeps the new tables current. If anything looks wrong (latency spike, error rate), the operator flips the map back and it's as if nothing happened.</li>
+      <li><strong>Freeze &amp; drain.</strong> Wait for the binlog tail to reach zero lag — the new tables are 100% caught up.</li>
+      <li><strong>SwitchWrites.</strong> Briefly pause writes on the moved columns (~100 ms), wait for any in-flight replication to complete, update the routing map to send writes to the new tables. Because the pause is bounded by the wait for the last GTID to apply, it's imperceptible at the client. Vitess journals the binlog position of the cutover event so the reverse-replication stream (new → old) knows exactly where to start, giving you a working <em>reverse</em> replication in case rollback is needed.</li>
+      <li><strong>Drop the old columns.</strong> After a confidence window (hours or days), the columns are dropped from the source. This step is not urgent — the migration is already logically complete.</li>
+    </ol>
+
+    <h3>6. Handling reads &amp; joins after the split</h3>
+    <p>Queries that used to be a single table scan now become fan-out queries. The proxy is responsible for splitting a query like <code>SELECT id, email, bio FROM users WHERE id = ?</code> into two lookups — one against <code>user_core</code>, one against <code>user_profile</code> — and merging the results by <code>user_id</code>. For hot-path queries that only need core columns, the proxy sends a single query to a single shard — the whole point of the exercise.</p>
+
+    <p>For legacy code that still writes <code>SELECT * FROM users</code>, most proxies (including Vitess VTGate) expose a <strong>logical view</strong> that transparently joins the underlying tables. This lets you migrate the schema without simultaneously migrating every client — the client cutover can be an independent, gradual effort.</p>
+
+    <h3>7. Transactions across the split</h3>
+    <p>If all vertical partitions live on the <em>same MySQL/Postgres instance</em>, a standard local transaction covers all of them — no distributed transaction needed. This is the easy and common case; vertical partitioning does not <em>require</em> separate physical machines. The benefit even on one machine is smaller pages, better cache locality, and reduced lock contention.</p>
+    <p>If you move a partition to <em>a different server</em> for capacity reasons, cross-partition writes need either two-phase commit (correct but slow — Vitess supports 2PC with reasonable latency) or the <a href="../outbox-pattern/index.html">outbox pattern</a> (eventual consistency, no distributed transaction). In practice, most vertical splits keep all partitions on one host or one MySQL group so 2PC never comes up.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <table>
+      <tr><th>Component</th><th>Structure / algorithm</th><th>Why chosen</th><th>Complexity</th></tr>
+      <tr><td>Routing map</td><td>Hash map <code>logical_name → physical_shard</code>, stored as JSON in ZooKeeper znode</td><td>O(1) lookup; consistent snapshot on watch fire</td><td>O(1) route</td></tr>
+      <tr><td>Watch delivery</td><td>Reverse index <code>znode → set&lt;client&gt;</code> maintained per ZK follower</td><td>O(1) fire; watches are lightweight</td><td>O(1) push</td></tr>
+      <tr><td>Binlog / WAL</td><td>Append-only sequential log; global transaction id (GTID)</td><td>Totally ordered, replayable, seek-by-position</td><td>O(1) append; O(n) replay</td></tr>
+      <tr><td>Copy-phase batching</td><td>Bounded parallelism + <code>SELECT ... WHERE id BETWEEN ...</code></td><td>Stream at max source read throughput without locking</td><td>O(n) total</td></tr>
+      <tr><td>VDiff verification</td><td>Hash-join over consistent snapshots keyed on <code>(id, checksum)</code></td><td>Detect drift without shipping full rows</td><td>O(n + m)</td></tr>
+      <tr><td>Cross-shard fan-out</td><td>Parallel query dispatch + merge on <code>user_id</code>; heap for ordered results</td><td>Reconstruct the wide row when needed</td><td>O(k) shards</td></tr>
+      <tr><td>2PC (if cross-host writes)</td><td>Prepare → commit protocol with a coordinator</td><td>Atomicity across shards</td><td>O(shards) messages</td></tr>
+      <tr><td>Reverse replication</td><td>Same binlog-tailing worker in the opposite direction</td><td>Enables rollback with zero data loss</td><td>O(1) per event</td></tr>
+      <tr><td>Idempotent apply</td><td>GTID position + primary-key upsert</td><td>Replay-safe under worker restart</td><td>O(1)</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <table>
+      <tr><th>Layer</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Source database</td><td>Amazon RDS for MySQL / Aurora MySQL (binlog on)</td><td>Managed backups + native binlog stream; can use Aurora Backtrack for rollback</td></tr>
+      <tr><td>Target database(s)</td><td>Another RDS/Aurora instance per keyspace</td><td>Independent scaling; different instance sizes for hot vs cold</td></tr>
+      <tr><td>Routing map / coordination</td><td>Self-managed ZooKeeper on EC2 (3 or 5 nodes) or <strong>etcd on EKS</strong></td><td>Native for Vitess; etcd is the modern default</td></tr>
+      <tr><td>Query proxy</td><td>Vitess VTGate on EKS/ECS</td><td>Battle-tested vertical/horizontal routing with online migrations</td></tr>
+      <tr><td>Replication worker</td><td>Vitess VReplication (bundled) <em>or</em> AWS DMS <em>or</em> Debezium on MSK</td><td>All three tail binlog and apply projections; Vitess integrates natively with the topology</td></tr>
+      <tr><td>Migration alternative (no Vitess)</td><td>AWS DMS with column-mapping transformation rules</td><td>Managed CDC into a new RDS target; simpler for one-off splits</td></tr>
+      <tr><td>Observability</td><td>CloudWatch + Vitess Prometheus metrics + <code>SHOW BINLOG EVENTS</code></td><td>Track lag, VDiff mismatches, query fan-out ratios</td></tr>
+      <tr><td>Reverse channel storage</td><td>The same RDS instances — reverse VReplication stream</td><td>Rollback safety</td></tr>
+      <tr><td>Verification data lake</td><td>S3 + Athena for offline row-by-row diff on multi-TB tables</td><td>Faster than repeated in-DB VDiff for huge tables</td></tr>
+    </table>
+    <p><strong>Typical deployment.</strong> Provision the source and target RDS/Aurora clusters. Deploy a 3-node ZooKeeper (or etcd) ensemble on EC2 across AZs. Deploy VTGate and VTTablet sidecars on EKS. Register the source in the ZK topology. Kick off <code>MoveTables</code> with the column projection defining the vertical split. Monitor lag via VReplication metrics; when VDiff reports zero drift, run <code>SwitchReads</code> then <code>SwitchWrites</code>. Leave reverse replication armed for a week before dropping the old columns. Total wall-clock for a 1 TB migration: 4–8 hours copy phase, then arbitrary hold at zero lag, then seconds for cutover.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — the routing proxy</h2>
+    <p>Here's the core of the <strong>query proxy</strong> — the piece that reads the routing map from ZooKeeper and dispatches each SQL statement to the right underlying connection. In production this is Vitess VTGate written in Go; below is an idiomatic C# port showing the two important patterns: <em>routing-map-driven dispatch</em> and <em>reactive re-load on ZK watch</em>.</p>
+<pre><span class="cmt">// Reactive routing proxy — reads the routing map from ZooKeeper, watches for
+// updates, and dispatches each SQL statement to the correct physical shard.</span>
+<span class="kw">using</span> System.Text.Json;
+<span class="kw">using</span> org.apache.zookeeper;
+
+<span class="kw">public class</span> <span class="typ">RoutingMap</span>
+{
+    <span class="cmt">// logical_table.column_group → physical_dsn</span>
+    <span class="kw">public</span> <span class="typ">Dictionary</span>&lt;<span class="typ">string</span>, <span class="typ">string</span>&gt; Routes { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="kw">new</span>();
+}
+
+<span class="kw">public class</span> <span class="typ">VerticalRouter</span> : <span class="typ">Watcher</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">ZooKeeper</span> _zk;
+    <span class="kw">private const string</span> ROUTING_PATH = <span class="str">"/vitess/topology/keyspaces/users/routing"</span>;
+    <span class="kw">private volatile</span> <span class="typ">RoutingMap</span> _map = <span class="kw">new</span>();
+
+    <span class="kw">public</span> <span class="fn">VerticalRouter</span>(<span class="typ">ZooKeeper</span> zk) { _zk = zk; }
+
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">StartAsync</span>()
+    {
+        <span class="cmt">// Read the map AND arm the watch atomically.</span>
+        <span class="kw">var</span> res = <span class="kw">await</span> _zk.getDataAsync(ROUTING_PATH, watcher: <span class="kw">this</span>);
+        _map = <span class="typ">JsonSerializer</span>.Deserialize&lt;<span class="typ">RoutingMap</span>&gt;(res.Data)!;
+    }
+
+    <span class="cmt">// Fires on any change to the routing znode — including operator SwitchTraffic.</span>
+    <span class="kw">public override async</span> <span class="typ">Task</span> <span class="fn">process</span>(<span class="typ">WatchedEvent</span> ev)
+    {
+        <span class="kw">if</span> (ev.get_Type() == <span class="typ">Event</span>.EventType.NodeDataChanged &amp;&amp; ev.getPath() == ROUTING_PATH)
+        {
+            <span class="kw">var</span> res = <span class="kw">await</span> _zk.getDataAsync(ROUTING_PATH, watcher: <span class="kw">this</span>);
+            _map = <span class="typ">JsonSerializer</span>.Deserialize&lt;<span class="typ">RoutingMap</span>&gt;(res.Data)!;
+            <span class="cmt">// Sub-second: every query from this point onward uses the new map.</span>
+        }
+    }
+
+    <span class="cmt">// Given a query plan (which columns from which logical table) return
+    // the set of physical connections to fan out to.</span>
+    <span class="kw">public</span> <span class="typ">List</span>&lt;<span class="typ">string</span>&gt; <span class="fn">Route</span>(<span class="typ">string</span> logicalTable, <span class="typ">HashSet</span>&lt;<span class="typ">string</span>&gt; columns)
+    {
+        <span class="kw">var</span> shards = <span class="kw">new</span> <span class="typ">HashSet</span>&lt;<span class="typ">string</span>&gt;();
+        <span class="kw">foreach</span> (<span class="kw">var</span> col <span class="kw">in</span> columns)
+        {
+            <span class="kw">var</span> key = <span class="str">$"{</span>logicalTable<span class="str">}.{</span>ColumnGroupFor(col)<span class="str">}"</span>;
+            <span class="kw">if</span> (_map.Routes.TryGetValue(key, <span class="kw">out var</span> dsn)) shards.Add(dsn);
+        }
+        <span class="kw">return</span> shards.ToList();
+    }
+
+    <span class="cmt">// A simple column → group mapping. In production this is part of the schema config.</span>
+    <span class="kw">private static string</span> <span class="fn">ColumnGroupFor</span>(<span class="typ">string</span> column) =&gt; column <span class="kw">switch</span>
+    {
+        <span class="str">"id"</span> <span class="kw">or</span> <span class="str">"email"</span> <span class="kw">or</span> <span class="str">"pwd_hash"</span> <span class="kw">or</span> <span class="str">"status"</span>          =&gt; <span class="str">"user_core"</span>,
+        <span class="str">"display_name"</span> <span class="kw">or</span> <span class="str">"bio"</span> <span class="kw">or</span> <span class="str">"avatar_url"</span>              =&gt; <span class="str">"user_profile"</span>,
+        <span class="str">"notification_email"</span> <span class="kw">or</span> <span class="str">"feature_flags"</span>                =&gt; <span class="str">"user_preferences"</span>,
+        _ =&gt; <span class="str">"user_core"</span>
+    };
+}
+
+<span class="cmt">// Executing a query — fan out, gather, merge on primary key.</span>
+<span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">List</span>&lt;<span class="typ">UserRow</span>&gt;&gt; <span class="fn">SelectUsers</span>(
+    <span class="typ">VerticalRouter</span> router, <span class="typ">HashSet</span>&lt;<span class="typ">string</span>&gt; columns, <span class="typ">long</span>[] userIds)
+{
+    <span class="kw">var</span> shards = router.<span class="fn">Route</span>(<span class="str">"users"</span>, columns);
+    <span class="kw">var</span> perShard = <span class="kw">await</span> <span class="typ">Task</span>.WhenAll(shards.Select(dsn =&gt;
+        <span class="fn">QueryShard</span>(dsn, columns, userIds)));
+
+    <span class="cmt">// Merge results keyed by user_id — each shard returned a subset of columns.</span>
+    <span class="kw">var</span> merged = <span class="kw">new</span> <span class="typ">Dictionary</span>&lt;<span class="kw">long</span>, <span class="typ">UserRow</span>&gt;();
+    <span class="kw">foreach</span> (<span class="kw">var</span> partial <span class="kw">in</span> perShard)
+        <span class="kw">foreach</span> (<span class="kw">var</span> row <span class="kw">in</span> partial)
+        {
+            <span class="kw">if</span> (!merged.TryGetValue(row.Id, <span class="kw">out var</span> agg))
+                merged[row.Id] = agg = <span class="kw">new</span> <span class="typ">UserRow</span> { Id = row.Id };
+            agg.Merge(row);   <span class="cmt">// copy over columns present in this partial</span>
+        }
+    <span class="kw">return</span> merged.Values.ToList();
+}
+</pre>
+    <p>Two things this snippet gets right: (a) the routing map is <strong>reloaded inside the watch callback</strong> and the watch is re-armed — same pattern as the <a href="../zookeeper-watches/index.html">ZooKeeper watches</a> page. Miss this and you get exactly one update and then silently stop reacting. (b) The query merge happens <strong>on the primary key</strong> in the proxy layer — no cross-shard SQL join, just parallel single-shard reads followed by in-memory zip-by-PK. This keeps every physical DB doing single-table lookups, which is the whole reason vertical partitioning is fast in the first place.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <h3>Where it actually breaks</h3>
+    <p><strong>Cross-shard joins.</strong> If a query needs 10 columns spread across all three tables, you're doing three shard reads + merge on every request. For hot paths, either duplicate a small hot column across shards or redesign the split so the hot path only ever hits one shard. <strong>Foreign key constraints.</strong> Traditional FK constraints don't cross physical shards. You lose that referential integrity at the DB layer and have to enforce it in application code (delete-cascades become application-level cleanup jobs). <strong>Backfill throttling.</strong> A naïve copy-phase can max out the source disk IO and hurt production. Every serious tool (Vitess, DMS, gh-ost) throttles based on replica lag. <strong>Replication lag during binary migrations.</strong> If you're doing dual-write from the app <em>instead</em> of binlog-based replication, a partial failure between the two writes leaves the shards drifted — you must catch and reconcile. Binlog replication doesn't have this failure mode because the binlog write itself is transactional with the data write.</p>
+
+    <h3>Consistency during cutover</h3>
+    <p>Between SwitchReads and SwitchWrites, reads come from the new table but writes still land in the old and get replicated over. If replication lags by even 100 ms, a read-your-writes flow (user updates bio, immediately reloads profile) can show stale data. The mitigation is either (a) wait for zero lag before cutover, (b) route "read-your-writes" traffic to the old side until SwitchWrites completes, or (c) enforce read-after-write via a session cookie routed to primary — the same techniques you'd use with normal read replicas. See <a href="../consistency-models/index.html">Consistency Models</a>.</p>
+
+    <h3>Interviewer follow-ups (with crisp answers)</h3>
+    <div class="qa">
+      <p class="q">Q. When would you pick vertical over horizontal?</p>
+      <p class="a">A. When the pain is <em>row width</em>, <em>heterogeneous access patterns</em>, or <em>subsystem isolation</em> — not row count. If your users table is huge because there are two billion users, that's horizontal. If it's huge because each user has 50 KB of columns most of which are rarely read, that's vertical. Very often the answer is "vertical first, then horizontal on the resulting hot table."</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. Why use binlog replication instead of dual-write from the application?</p>
+      <p class="a">A. Binlog replication is transactionally consistent — the log is written atomically with the row commit, so there's no window where the app crashes between writes and the shards diverge. Dual-write requires distributed-transaction discipline (2PC or a compensating-action outbox) that most application code doesn't get right. The binlog is <em>already there</em>; use it.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. Why ZooKeeper for the routing map — why not put it in Redis or a config service?</p>
+      <p class="a">A. Because during cutover, every proxy must see the same map at the same wall-clock instant. ZooKeeper's ZAB guarantees a single system image with sub-second watch propagation. Redis with keyspace notifications is best-effort and won't survive Redis restarts; a plain config service isn't strongly consistent. For a cutover that mustn't cause split writes, you want a coordinator with real consensus.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. How does Vitess achieve zero-downtime cutover exactly?</p>
+      <p class="a">A. Three moves: reads flip first (readable from new tables, writes still on old, reverse replication armed); wait for replication lag to hit zero; then a brief coordinated pause on writes for the split columns while the last binlog events apply, then the routing map is flipped for writes. The write pause is bounded by the wait for the final GTID to catch up, usually under 100 ms. VReplication also journals the cutover position so reverse replication can start exactly there.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. What's a good acceptance test for the migration before flipping?</p>
+      <p class="a">A. VDiff: a full row-by-row comparison of source and target using consistent snapshots. Ideally run it end-to-end at least once with zero mismatches, then re-run it in "streaming" mode during the confidence window. Also verify: replication lag is stable near zero for a sustained period, and no application errors under load with the new routing.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. How do you roll back if something goes wrong after SwitchWrites?</p>
+      <p class="a">A. Because reverse replication was armed at the SwitchWrites moment, the old wide table has been receiving every new-side write via replication. To roll back, you simply update the routing map back to the old table — the old table is already caught up. This is the entire reason Vitess journals the cutover binlog position.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "Vertical partitioning splits a wide table into narrow tables by column group, sharing the same primary key, so hot columns get their own small fast table and cold columns get their own. To do it online, you use a <em>routing proxy</em> like VTGate that reads its map from <em>ZooKeeper</em>, a <em>replication worker</em> like VReplication that tails the source database's <em>binlog</em> to backfill and keep the new tables in sync, and a two-stage cutover: SwitchReads flips reads to the new tables while writes still go to the old and continue to replicate, then SwitchWrites briefly pauses, waits for zero lag, and flips writes — with reverse replication armed for rollback. ZooKeeper watches propagate the routing-map change to every proxy in under a second, so nobody needs a restart. This is the same pattern YouTube built into Vitess and Pinterest, LinkedIn, and Uber use in various forms."</p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Hot table footprint after split: <strong>5–20% of original</strong>.</li>
+      <li>Replication lag steady-state: <strong>&lt; 1 s p99</strong>.</li>
+      <li>Cutover write pause: <strong>&lt; 100 ms</strong>, bounded by "wait for last GTID."</li>
+      <li>Routing-map propagation: <strong>&lt; 1 s</strong> via ZK watch.</li>
+      <li>Backfill throughput: <strong>10k–100k rows/sec</strong> per stream.</li>
+      <li>Rollback time: <strong>&lt; 1 minute</strong> — just flip the routing map back.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li>Say "column-group projection, same primary key" — that's the crisp definition.</li>
+      <li>Describe the three replication phases: copy, replicate, verify. Interviewers listen for VDiff.</li>
+      <li>Split the cutover into SwitchReads and SwitchWrites — the reversible checkpoint is the win.</li>
+      <li>Name ZooKeeper watches as the mechanism that avoids proxy restarts.</li>
+      <li>Reverse replication is armed at cutover — <em>that's</em> what makes rollback safe, not a database backup.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://www.youtube.com/watch?v=9iAJjtvBwyI">YouTube — the original video you shared on vertical partitioning</a> (note: an automated fetch was blocked by Google's captcha; content synthesised from the primary sources below plus general knowledge of the topic)</li>
+      <li><a href="https://vitess.io/docs/22.0/reference/vreplication/vreplication/">Vitess — VReplication reference (MoveTables, copy → replicate, VDiff, cutover journaling)</a></li>
+      <li><a href="https://vitess.io/docs/22.0/user-guides/migration/move-tables/">Vitess — MoveTables user guide (SwitchTraffic, ReverseTraffic)</a></li>
+      <li><a href="https://en.wikipedia.org/wiki/Partition_(database)">Wikipedia — Database partitioning (vertical vs horizontal, composite)</a></li>
+      <li><a href="https://dev.mysql.com/doc/refman/8.0/en/binary-log.html">MySQL — Binary log &amp; GTID reference</a></li>
+      <li><a href="https://www.postgresql.org/docs/current/wal-intro.html">PostgreSQL — Write-Ahead Log (WAL) reference</a></li>
+      <li><a href="https://vitess.io/blog/2020-04-15-life-of-a-cluster/">Vitess Blog — Life of a Cluster (topology, keyspaces, VTGate)</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

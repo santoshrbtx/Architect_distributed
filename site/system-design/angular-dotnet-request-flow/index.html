@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Angular → .NET Core Request Flow — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #ffd166;
+    --laymen-bg: #fffbe6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #dd0031 0%, #7048e8 50%, #4361ee 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);  background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: #c99500; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Request Flow: Angular → .NET Core</h1>
+    <p>The complete lifetime of one HTTP call — from an Angular click, across the wire, through Kestrel and the middleware pipeline, to the thread pool and back — with every process, thread, and context tracked.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Concerns</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>The scenario &amp; where it shows up</h2>
+    <p>Almost every modern enterprise line-of-business app is an <strong>Angular SPA talking to a .NET Core (ASP.NET Core) Web API</strong>. Think of an internal admin portal, a bank's dashboard, an e-commerce checkout, a healthcare EMR — the front end is a bundle of TypeScript running in Chrome; the back end is a farm of stateless <code>dotnet</code> processes fronted by a load balancer. This pattern powers everything from Microsoft's own <em>Azure Portal</em> pieces to countless internal tools at Fortune 500s, and it is <strong>the</strong> most common "senior engineer / architect interview" whiteboard question after "design URL shortener".</p>
+    <p>What the interviewer really wants to test is whether you can trace <strong>one request end-to-end</strong> and describe, in exact terms, <em>which process is doing what, on which thread, holding which context</em>. That is the difference between a mid-level engineer ("Angular calls the API") and an architect ("the browser opens a TCP+TLS connection, HttpClient dispatches over Fetch inside NgZone, Kestrel accepts on an I/O thread, the middleware pipeline runs on a thread-pool worker, the request creates a scoped DI container, EF Core opens a scoped DbContext, the response body is written back through the reverse chain — and the thread that finishes the response is almost never the same one that started it").</p>
+    <p>This page walks that path once, precisely, so you can narrate it out loud in an interview.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In plain English</span>
+    <h2>What actually happens when you click a button</h2>
+    <p>Imagine you're at a busy restaurant. <strong>You</strong> are the user, sitting at a table with a menu. The <strong>waiter</strong> is Angular running in your browser — friendly, quick, but not the one cooking. The <strong>kitchen</strong> is the .NET server, far away in a building called a <em>data center</em>. The <strong>road</strong> between them is the internet.</p>
+    <p>When you tap "Order pizza", the waiter (Angular) doesn't run to the kitchen personally. Instead, they <strong>write a small note</strong> ("one margherita, table 4") and drop it into a <em>pneumatic tube</em> — that tube is an HTTP request. The note travels over the road (through a router, through a company's front door called a <em>load balancer</em>) and arrives at the kitchen. A <strong>doorman</strong> at the kitchen (a piece of software called Kestrel) catches the note, hands it to the first available <strong>chef</strong> (a thread), and the chef reads through a <em>checklist</em> — is the note signed? does the customer have credit? does the pizza exist on the menu? That checklist is called <strong>middleware</strong>, and each item on it is a small program that either says "OK, next chef please" or "stop, send this back with an error".</p>
+    <p>Now, the clever part: while the chef is <em>waiting for the oven</em> (waiting for the database), <strong>the chef doesn't stand there doing nothing</strong>. They put the ticket on a shelf and go help another customer. When the oven pings, <em>any</em> free chef picks up the ticket and finishes the job. That's why one .NET server can handle thousands of people at once — the chefs never idle.</p>
+    <p>When the pizza is ready, it goes back through the tube. The waiter (Angular) hears the "pizza's here" ping, updates the screen — <strong>and only then does your table re-render</strong> to show "your order is on its way". You never touched a thread, a socket, or a database — but every one of them worked for you for about 80 milliseconds. This exact dance happens on <strong>WhatsApp Web, Microsoft Teams, LinkedIn, most bank portals</strong> — anywhere a modern web app talks to a server.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 What we're tracking</span>
+    <h2>The concerns an architect must explain</h2>
+    <p>Unlike a "design X" question, this is a <strong>trace</strong> question. The interviewer picks one HTTP call and asks: "walk me through it — every hop, every process boundary, every thread transition, every context." Your job is to volunteer the following numbers and boundaries <em>without being prompted</em>:</p>
+    <table>
+      <thead><tr><th>Concern</th><th>What you must be able to state</th><th>Typical numbers</th></tr></thead>
+      <tbody>
+        <tr><td>Processes involved</td><td>Browser (Chrome renderer + network process) → optional CDN/reverse proxy → Kestrel <code>dotnet.exe</code> process → optional DB process.</td><td>3–5 processes; each isolated at OS level.</td></tr>
+        <tr><td>Threads per process</td><td>Browser main + network; Kestrel <em>I/O threads</em> (~1 per core) + <em>thread-pool workers</em> (default: min = #cores, max = 32k).</td><td>8-core box → 8 I/O + up to 32,767 workers.</td></tr>
+        <tr><td>Concurrent requests / server</td><td>Kestrel comfortably handles <strong>10k+ concurrent connections</strong> per instance because it is fully async and uses <code>libuv</code>-style I/O completion.</td><td>~50k rps on a 4-core VM for a hello-world endpoint.</td></tr>
+        <tr><td>Latency budget (P99)</td><td>Wire: 5–40 ms; TLS handshake (first hit): 30–80 ms; middleware: &lt;1 ms; controller + DB: 5–200 ms; JSON serialize + response: 1–5 ms.</td><td>Golden goal: &lt;200 ms user-perceived P99.</td></tr>
+        <tr><td>Contexts flowing</td><td><code>HttpContext</code> (per request), <code>IServiceScope</code> (per request), <code>ExecutionContext</code> (flows across <code>await</code>), <code>SynchronizationContext</code> (Angular's <code>NgZone</code> on the client; <em>none</em> on ASP.NET Core server).</td><td>4 distinct context types.</td></tr>
+        <tr><td>Memory per request</td><td>An <code>HttpContext</code> + scoped DI container + a rented buffer from <code>ArrayPool</code> ≈ 2–15 KB; pooling means very few allocations after warm-up.</td><td>Gen-0 GC every ~10k requests.</td></tr>
+        <tr><td>Failure surfaces</td><td>DNS, TCP RST, TLS mismatch, CORS preflight, 401 from JWT middleware, 429 from rate limiter, model-binding 400, 500 from unhandled exception, thread-pool starvation on sync-over-async.</td><td>Interviewer <em>will</em> ask about at least two.</td></tr>
+      </tbody>
+    </table>
+    <p>The other implicit requirement is <strong>correctness across <code>await</code></strong>: which state must survive when a thread hop happens? <code>HttpContext.Items</code>, <code>ILogger</code> scopes, <code>Activity</code> (for tracing), <code>CultureInfo</code>, and <code>ExecutionContext</code>-carried values (like <code>AsyncLocal&lt;T&gt;</code>) — all of these must flow. If any of them "get lost" you have a bug that only appears under load. Architects know exactly which ones flow automatically and which do not.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>The eleven hops, from click to render</h2>
+    <p>A single Angular <code>this.http.get(...)</code> travels through an <strong>eleven-hop</strong> path if you count everything an architect would name. Two independent runtimes are involved: the browser's <strong>V8 + Chromium networking process</strong>, and the server's <strong>.NET runtime</strong>. Between them sits DNS, TLS, and often a reverse proxy (nginx, ALB, IIS, or Azure App Service Front Door).</p>
+    <div class="diagram">
+      <svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f7567c"/>
+          </marker>
+          <linearGradient id="ng" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#dd0031"/><stop offset="1" stop-color="#c3002f"/></linearGradient>
+          <linearGradient id="dn" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4361ee"/><stop offset="1" stop-color="#7048e8"/></linearGradient>
+        </defs>
+
+        <!-- Client side -->
+        <rect x="20" y="20" width="360" height="460" rx="14" fill="#1a2340" stroke="#2a3652"/>
+        <text x="200" y="46" text-anchor="middle" fill="#7fa2ff" font-weight="700" font-size="14">CLIENT · Chrome (multi-process)</text>
+
+        <rect x="45" y="60" width="310" height="70" rx="10" fill="url(#ng)"/>
+        <text x="200" y="86" text-anchor="middle" fill="#fff" font-weight="800" font-size="15">Angular Component</text>
+        <text x="200" y="106" text-anchor="middle" fill="#fff" font-size="11" opacity=".9">click → service.get() → HttpClient</text>
+        <text x="200" y="120" text-anchor="middle" fill="#fff" font-size="10" opacity=".8">runs on renderer main thread, inside NgZone</text>
+
+        <rect x="45" y="145" width="310" height="55" rx="10" fill="#2a3652" stroke="#4361ee"/>
+        <text x="200" y="167" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">HTTP Interceptors chain</text>
+        <text x="200" y="184" text-anchor="middle" fill="#c6d0e0" font-size="10">Auth, retry, logging, error map (RxJS)</text>
+
+        <rect x="45" y="215" width="310" height="55" rx="10" fill="#2a3652" stroke="#4361ee"/>
+        <text x="200" y="237" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">Fetch / XHR handoff</text>
+        <text x="200" y="254" text-anchor="middle" fill="#c6d0e0" font-size="10">renderer → Chrome NetworkService process</text>
+
+        <rect x="45" y="285" width="310" height="55" rx="10" fill="#1e2f4e" stroke="#5b6677"/>
+        <text x="200" y="307" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">DNS + TCP + TLS handshake</text>
+        <text x="200" y="324" text-anchor="middle" fill="#c6d0e0" font-size="10">separate OS-level networking process</text>
+
+        <rect x="45" y="355" width="310" height="60" rx="10" fill="#0f1a30" stroke="#5b6677"/>
+        <text x="200" y="378" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">HTTP/2 or HTTP/1.1 frame on the wire</text>
+        <text x="200" y="395" text-anchor="middle" fill="#c6d0e0" font-size="10">GET /api/orders  Host: api...  Authorization: Bearer…</text>
+
+        <text x="200" y="450" text-anchor="middle" fill="#7f8aa0" font-size="10">V8 event loop · single thread · zone.js patches</text>
+
+        <!-- wire -->
+        <line x1="380" y1="250" x2="520" y2="250" stroke="#7fa2ff" stroke-width="2.5" marker-end="url(#arr)"/>
+        <text x="450" y="242" text-anchor="middle" fill="#7fa2ff" font-size="11" font-weight="700">request</text>
+        <line x1="520" y1="290" x2="380" y2="290" stroke="#f7567c" stroke-width="2.5" marker-end="url(#arrR)"/>
+        <text x="450" y="308" text-anchor="middle" fill="#f7567c" font-size="11" font-weight="700">response</text>
+
+        <!-- Server side -->
+        <rect x="520" y="20" width="360" height="460" rx="14" fill="#1a2340" stroke="#2a3652"/>
+        <text x="700" y="46" text-anchor="middle" fill="#7fa2ff" font-weight="700" font-size="14">SERVER · dotnet.exe (single process)</text>
+
+        <rect x="545" y="60" width="310" height="55" rx="10" fill="url(#dn)"/>
+        <text x="700" y="82" text-anchor="middle" fill="#fff" font-weight="800" font-size="14">Kestrel — I/O threads</text>
+        <text x="700" y="100" text-anchor="middle" fill="#fff" font-size="10" opacity=".9">~1 per CPU core · accept + read/write sockets</text>
+
+        <rect x="545" y="125" width="310" height="45" rx="10" fill="#2a3652" stroke="#00b4d8"/>
+        <text x="700" y="152" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">HttpContext + IServiceScope created</text>
+
+        <rect x="545" y="180" width="310" height="115" rx="10" fill="#2a3652" stroke="#00b4d8"/>
+        <text x="700" y="200" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">Middleware pipeline (on thread-pool)</text>
+        <text x="700" y="218" text-anchor="middle" fill="#c6d0e0" font-size="10">Exception → HSTS → HTTPS-redirect → Static</text>
+        <text x="700" y="232" text-anchor="middle" fill="#c6d0e0" font-size="10">Routing → CORS → Auth (JWT) → Authorization</text>
+        <text x="700" y="246" text-anchor="middle" fill="#c6d0e0" font-size="10">Rate Limiter → Custom logging → Endpoint</text>
+        <text x="700" y="266" text-anchor="middle" fill="#7fa2ff" font-size="10" font-weight="700">each `await` may switch to a new pool thread</text>
+        <text x="700" y="282" text-anchor="middle" fill="#7fa2ff" font-size="10">ExecutionContext + HttpContext still flow</text>
+
+        <rect x="545" y="305" width="310" height="45" rx="10" fill="#2a3652" stroke="#7048e8"/>
+        <text x="700" y="332" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Controller / Minimal API endpoint</text>
+
+        <rect x="545" y="360" width="310" height="45" rx="10" fill="#2a3652" stroke="#7048e8"/>
+        <text x="700" y="386" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">EF Core / HttpClient → external I/O</text>
+
+        <rect x="545" y="415" width="310" height="45" rx="10" fill="#0f1a30" stroke="#f4a259"/>
+        <text x="700" y="442" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Response serialize · scope disposed · reply</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#dd0031"></span> Angular (renderer, single-threaded)</span>
+        <span><span class="dot" style="background:#4361ee"></span> Kestrel + middleware (async, multi-thread)</span>
+        <span><span class="dot" style="background:#f7567c"></span> Response path</span>
+      </div>
+    </div>
+    <p>Read the diagram top-to-bottom on each side. The <strong>client is single-process, single-thread</strong> (V8 event loop) but split into logical stages by Angular's <code>HttpClient</code>. The <strong>server is one process, many threads</strong> — Kestrel's <em>I/O threads</em> own the sockets, while every request handler runs on <em>thread-pool worker threads</em> that come and go with every <code>await</code>. The interviewer wants you to name each hop; the animation below plays it live.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch one request travel — process, thread, and context</h2>
+    <p>The animation follows a single <code>GET /api/orders/42</code>. Colored dots mark <strong>the thread currently in control</strong>; boxes light up as the request enters them; the "context" bar at the bottom lists everything currently flowing (HttpContext, DI scope, ExecutionContext).</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="anim-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <!-- Client column -->
+        <rect x="20" y="20" width="240" height="380" rx="14" fill="#1a2340" stroke="#2a3652"/>
+        <text x="140" y="42" text-anchor="middle" fill="#7fa2ff" font-weight="700" font-size="13">CLIENT · Angular</text>
+        <rect id="cli-comp"  x="40" y="60"  width="200" height="46" rx="8" fill="#2a3652" stroke="#dd0031" data-anim/>
+        <text x="140" y="88" text-anchor="middle" fill="#c6d0e0" font-size="12" font-weight="700">Component (NgZone)</text>
+        <rect id="cli-intr"  x="40" y="120" width="200" height="46" rx="8" fill="#2a3652" stroke="#dd0031" data-anim/>
+        <text x="140" y="148" text-anchor="middle" fill="#c6d0e0" font-size="12" font-weight="700">Interceptors</text>
+        <rect id="cli-net"   x="40" y="180" width="200" height="46" rx="8" fill="#2a3652" stroke="#dd0031" data-anim/>
+        <text x="140" y="208" text-anchor="middle" fill="#c6d0e0" font-size="12" font-weight="700">Fetch / NetworkSvc</text>
+        <rect id="cli-tls"   x="40" y="240" width="200" height="46" rx="8" fill="#2a3652" stroke="#dd0031" data-anim/>
+        <text x="140" y="268" text-anchor="middle" fill="#c6d0e0" font-size="12" font-weight="700">TCP + TLS</text>
+        <rect id="cli-render" x="40" y="330" width="200" height="46" rx="8" fill="#2a3652" stroke="#dd0031" data-anim/>
+        <text x="140" y="358" text-anchor="middle" fill="#c6d0e0" font-size="12" font-weight="700">Change Detection</text>
+
+        <!-- Server column -->
+        <rect x="450" y="20" width="430" height="380" rx="14" fill="#1a2340" stroke="#2a3652"/>
+        <text x="665" y="42" text-anchor="middle" fill="#7fa2ff" font-weight="700" font-size="13">SERVER · dotnet.exe (Kestrel)</text>
+        <rect id="srv-kestrel" x="470" y="60"  width="390" height="42" rx="8" fill="#2a3652" stroke="#00b4d8" data-anim/>
+        <text x="665" y="86" text-anchor="middle" fill="#c6d0e0" font-size="12" font-weight="700">Kestrel I/O thread — accept + parse</text>
+        <rect id="srv-ctx"     x="470" y="112" width="390" height="34" rx="8" fill="#2a3652" stroke="#00b4d8" data-anim/>
+        <text x="665" y="134" text-anchor="middle" fill="#c6d0e0" font-size="12" font-weight="700">HttpContext + Scope created</text>
+        <rect id="srv-mw"      x="470" y="156" width="390" height="70" rx="8" fill="#2a3652" stroke="#00b4d8" data-anim/>
+        <text x="665" y="178" text-anchor="middle" fill="#c6d0e0" font-size="12" font-weight="700">Middleware pipeline</text>
+        <text x="665" y="196" text-anchor="middle" fill="#7fa2ff" font-size="10">Routing · CORS · Auth · Rate limit</text>
+        <text x="665" y="212" text-anchor="middle" fill="#7fa2ff" font-size="10">runs on ThreadPool worker #A</text>
+        <rect id="srv-ctrl"    x="470" y="236" width="390" height="42" rx="8" fill="#2a3652" stroke="#7048e8" data-anim/>
+        <text x="665" y="262" text-anchor="middle" fill="#c6d0e0" font-size="12" font-weight="700">Controller / Minimal API endpoint</text>
+        <rect id="srv-io"      x="470" y="288" width="390" height="42" rx="8" fill="#2a3652" stroke="#f4a259" data-anim/>
+        <text x="665" y="314" text-anchor="middle" fill="#c6d0e0" font-size="12" font-weight="700">await db.Query — I/O suspended</text>
+        <rect id="srv-resp"    x="470" y="340" width="390" height="42" rx="8" fill="#2a3652" stroke="#2dc653" data-anim/>
+        <text x="665" y="366" text-anchor="middle" fill="#c6d0e0" font-size="12" font-weight="700">Resume on ThreadPool worker #B — serialize + write</text>
+
+        <!-- The wire packet -->
+        <circle id="packet" cx="260" cy="203" r="10" fill="#f4a259" data-anim class="a-hidden"/>
+        <!-- Thread badge -->
+        <g id="threadBadge" data-anim class="a-hidden">
+          <rect x="360" y="15" width="180" height="24" rx="12" fill="#0f1a30" stroke="#7fa2ff"/>
+          <text id="threadBadgeText" x="450" y="31" text-anchor="middle" fill="#7fa2ff" font-size="11" font-weight="700">Thread: —</text>
+        </g>
+        <!-- Context ribbon -->
+        <rect x="20" y="415" width="860" height="30" rx="8" fill="#0f1a30" stroke="#2a3652"/>
+        <text x="35" y="434" fill="#7f8aa0" font-size="11" font-weight="700">CONTEXT:</text>
+        <text id="ctxText" x="115" y="434" fill="#c6d0e0" font-size="11">idle</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        function setThread(text, color) {
+          const g = $('#threadBadge'); const t = $('#threadBadgeText');
+          g.classList.remove('a-hidden');
+          t.textContent = 'Thread: ' + text;
+          t.setAttribute('fill', color || '#7fa2ff');
+          g.querySelector('rect').setAttribute('stroke', color || '#7fa2ff');
+        }
+        function setCtx(text) { $('#ctxText').textContent = text; }
+        function glow(id) { $('#' + id).classList.add('a-glow'); }
+        function dim(id)  { $('#' + id).classList.add('a-dim'); }
+
+        const CFG = {
+          intro: 'One request from an Angular click to the render — with every process, thread, and context tracked.',
+          interval: 2000,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.remove('a-glow', 'a-dim');
+              el.removeAttribute('transform');
+            });
+            $('#packet').classList.add('a-hidden');
+            $('#packet').setAttribute('transform', 'translate(0,0)');
+            $('#threadBadge').classList.add('a-hidden');
+            setCtx('idle');
+          },
+          steps: [
+            { caption: 'User clicks button. Angular component runs on the browser\'s renderer main thread, inside NgZone.',
+              apply: (r, $) => { glow('cli-comp'); setThread('renderer main', '#dd0031'); setCtx('NgZone · component instance'); } },
+            { caption: 'HttpClient dispatches the Observable through the interceptor chain (auth token, retry, logging).',
+              apply: (r, $) => { dim('cli-comp'); glow('cli-intr'); setCtx('NgZone · RxJS observable · interceptors'); } },
+            { caption: 'Fetch handoff: the renderer asks Chrome\'s NetworkService process (a different OS process) to open the connection.',
+              apply: (r, $) => { dim('cli-intr'); glow('cli-net'); setThread('renderer → NetworkService', '#dd0031'); setCtx('cross-process IPC · zone.js await'); } },
+            { caption: 'DNS + TCP + TLS handshake completes. HTTP/2 frame goes on the wire.',
+              apply: (r, $) => { dim('cli-net'); glow('cli-tls'); $('#packet').classList.remove('a-hidden'); $('#packet').setAttribute('transform', 'translate(200,0)'); setCtx('TLS session · TCP socket'); } },
+            { caption: 'Kestrel I/O thread (~1 per core) accepts the socket, parses the HTTP request. This thread must NOT run user code — it hands off fast.',
+              apply: (r, $) => { $('#packet').setAttribute('transform', 'translate(420,-140)'); glow('srv-kestrel'); setThread('Kestrel I/O #3', '#00b4d8'); setCtx('raw HttpRequest · socket'); } },
+            { caption: 'HttpContext and a scoped DI container are created. This is the request "envelope" — everything downstream reads from it.',
+              apply: (r, $) => { dim('srv-kestrel'); glow('srv-ctx'); setThread('ThreadPool worker #A', '#7fa2ff'); setCtx('HttpContext · IServiceScope · ExecutionContext'); } },
+            { caption: 'Middleware pipeline runs: routing → CORS → auth → rate limit → controller selector. All on the same worker until the first true await.',
+              apply: (r, $) => { dim('srv-ctx'); glow('srv-mw'); setCtx('HttpContext · DI scope · JWT claims · ILogger scope'); } },
+            { caption: 'Endpoint invoked. Model binding fills the parameter object. HttpContext flows through as AsyncLocal, so `HttpContextAccessor` works.',
+              apply: (r, $) => { dim('srv-mw'); glow('srv-ctrl'); } },
+            { caption: 'await db.Query — the worker is RELEASED back to the pool. The request state (HttpContext, DI scope) parks on the heap.',
+              apply: (r, $) => { dim('srv-ctrl'); glow('srv-io'); setThread('(no thread — parked)', '#f4a259'); setCtx('parked on heap · ExecutionContext saved'); } },
+            { caption: 'Database result arrives. A DIFFERENT ThreadPool worker resumes the continuation. ExecutionContext restores HttpContext, ILogger, Activity.',
+              apply: (r, $) => { dim('srv-io'); glow('srv-resp'); setThread('ThreadPool worker #B', '#2dc653'); setCtx('HttpContext restored · same scope · same trace-id'); } },
+            { caption: 'JSON serialized, response written to socket by Kestrel, DI scope disposed (DbContext, scoped services released). Wire packet returns.',
+              apply: (r, $) => { $('#packet').setAttribute('transform', 'translate(-30,140)'); setThread('Kestrel I/O #3', '#00b4d8'); setCtx('scope disposed · Response.Complete'); } },
+            { caption: 'Browser receives bytes, resolves the Observable inside NgZone → Angular runs change detection → DOM updates. User sees the data.',
+              apply: (r, $) => { $('#packet').classList.add('a-hidden'); glow('cli-render'); setThread('renderer main', '#dd0031'); setCtx('NgZone.run → tick() → DOM patched'); } }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive — process, thread, context, at every hop</h2>
+
+    <h3>1. Angular side — one process, one thread, one zone</h3>
+    <p>The browser gives an Angular app <strong>one V8 isolate per tab</strong>, running JavaScript on a single main thread. There is no "worker thread" doing your service call — all your TypeScript executes sequentially on the event loop. When you write <code>this.http.get(url)</code>, Angular's <code>HttpClient</code> returns an RxJS <code>Observable</code>. Subscribing pushes the request through the <strong>interceptor chain</strong> (a linked list of <code>HttpInterceptor</code> or functional interceptors) in order — typical entries are an auth interceptor that injects a JWT header, a retry interceptor, and a logging interceptor. The final interceptor hands the request to Angular's <code>HttpBackend</code>, which by default calls the browser's <code>fetch</code> API (or the older <code>XMLHttpRequest</code>).</p>
+    <p>Crucially, all of this is wrapped in <strong>NgZone</strong>. Zone.js monkey-patches every async primitive (<code>setTimeout</code>, <code>Promise</code>, <code>fetch</code>, <code>XHR</code>) so Angular knows when async work starts and ends. When the response arrives, the callback runs <em>inside</em> NgZone, and NgZone.onMicrotaskEmpty fires, which triggers <code>ApplicationRef.tick()</code> — change detection — which updates the DOM. That's why you almost never need <code>changeDetectorRef.detectChanges()</code> after an HTTP call. If you were to escape the zone with <code>NgZone.runOutsideAngular</code>, the UI wouldn't update until you re-entered.</p>
+    <p>The <code>fetch</code> call is <em>not</em> executed by the renderer directly — Chrome delegates it via IPC to a separate <strong>Network Service process</strong>, which is what actually opens the socket, does the DNS lookup (cached), performs the TLS handshake, and drives the HTTP/2 or HTTP/3 conversation. The renderer thread returns to the event loop immediately; the eventual response is delivered back as a promise resolution.</p>
+
+    <h3>2. The wire — DNS, TLS, HTTP/2</h3>
+    <p>A modern Angular deployment terminates TLS at a CDN or reverse proxy (CloudFront, ALB, nginx, Azure Front Door). The renderer <em>believes</em> it is talking directly to <code>api.foo.com</code>, but really the TCP connection ends at the CDN edge, which then re-uses a <strong>backend HTTP/2 connection pool</strong> to reach the origin. TLS 1.3 needs 1-RTT (3-way TCP + one handshake = ~3 round-trips first time, 0-RTT on resumption). This is the biggest source of first-request latency; subsequent calls reuse the connection.</p>
+
+    <h3>3. Kestrel — the async socket dispatcher</h3>
+    <p>On the server, <strong>Kestrel is the ASP.NET Core web server</strong>. It is the default and is used everywhere — even when hosted behind IIS, the Windows service simply forwards HTTP to a Kestrel instance running in the same process. Kestrel uses <strong>libuv-style asynchronous I/O</strong> (System.IO.Pipelines on top of the OS event notification: epoll on Linux, kqueue on macOS, IOCP on Windows). It starts a small pool of <em>I/O threads</em> — approximately one per logical CPU core — and their <strong>only</strong> job is to accept connections, read bytes off the socket, and hand parsed HTTP requests to the application. If your controller ever blocks on an I/O thread, Kestrel's throughput collapses.</p>
+    <p>Kestrel supports HTTP/1.1, HTTP/2, and HTTP/3 (QUIC). HTTP/2 multiplexes many streams over one TCP connection, so 100 in-flight Angular calls from one page share a single socket. Kestrel parses each stream into an <code>HttpRequest</code> object, then <strong>schedules the request onto the .NET ThreadPool</strong>, releasing the I/O thread immediately.</p>
+
+    <h3>4. Hosting model — in-process vs out-of-process, single-process vs multi-process</h3>
+    <p>ASP.NET Core runs as <strong>a single <code>dotnet.exe</code> process</strong>. Unlike the classic .NET Framework model where IIS spawned an <code>w3wp.exe</code> per app pool and used worker threads managed by the CLR, .NET Core owns its own runtime. Two common hosting modes:</p>
+    <ul>
+      <li><strong>In-process (IIS + ASP.NET Core Module V2)</strong>: IIS launches your app inside its own <code>w3wp.exe</code>. Kestrel runs in the same process as IIS's native module. Recommended for Windows.</li>
+      <li><strong>Out-of-process / stand-alone</strong>: Nginx/ALB/App Runner proxies to a stand-alone <code>dotnet ./MyApi.dll</code> process bound to a port. This is the Linux and container default.</li>
+    </ul>
+    <p>For horizontal scale you run many replicas of that process behind a load balancer. Each replica is <em>completely isolated</em> — no shared memory. That's what makes an ASP.NET Core service <strong>stateless</strong> and easy to auto-scale.</p>
+
+    <h3>5. The middleware pipeline — the biggest source of interview questions</h3>
+    <p>Once the request lands on a ThreadPool worker, ASP.NET Core runs the middleware pipeline. Middleware is a chain of delegates registered in <code>Program.cs</code> via <code>app.UseXxx()</code>. Each middleware has the signature <code>async (HttpContext ctx, RequestDelegate next) => …</code>. The <strong>order matters</strong>: exception handling first (so it catches everything downstream), then HSTS/HTTPS redirect, then static files, then routing, then CORS, then authentication, then authorization, then rate limiting, then your endpoint. Each middleware can short-circuit (skip <code>next</code>, e.g. auth returns 401) or invoke <code>next</code> and then post-process on the way back out.</p>
+    <p>Middleware runs <strong>on ThreadPool worker threads</strong>. Every <code>await</code> is a potential thread switch: the worker returns to the pool while the awaited task pends, and when the task completes, a (possibly different) worker picks up the continuation. That is the fundamental async model — worker threads are precious, requests are cheap.</p>
+
+    <h3>6. HttpContext — the request envelope</h3>
+    <p><code>HttpContext</code> is created once per request and lives for the request's lifetime. It carries <code>Request</code>, <code>Response</code>, <code>User</code> (the <code>ClaimsPrincipal</code> after auth), <code>Items</code> (a dictionary for cross-middleware state), <code>Features</code>, <code>Session</code>, and — most importantly for architects — <code>RequestServices</code>, which is the <strong>scoped IServiceProvider</strong> for this request. The scope is what makes <code>services.AddScoped&lt;IFoo, Foo&gt;()</code> mean "one instance per request". EF Core's <code>DbContext</code> is registered scoped, so every request gets its own <code>DbContext</code>, which is disposed when the request ends.</p>
+    <p>A subtle but interview-critical point: <code>HttpContextAccessor.HttpContext</code> works across <code>await</code> because it uses <code>AsyncLocal&lt;T&gt;</code>, which flows through <code>ExecutionContext</code>. Do <em>not</em> store <code>HttpContext</code> in a static field or capture it in a task that outlives the request; after the response completes, the context is recycled and its fields are cleared.</p>
+
+    <h3>7. ExecutionContext, SynchronizationContext, and threads across await</h3>
+    <p>These three are commonly confused. Interview answer:</p>
+    <ul>
+      <li><strong>ExecutionContext</strong> — flows automatically across <code>await</code>. Carries <code>AsyncLocal&lt;T&gt;</code> values (used by <code>HttpContextAccessor</code>, <code>ILogger</code> scopes, <code>Activity.Current</code> for OpenTelemetry). Yes, it flows.</li>
+      <li><strong>SynchronizationContext</strong> — pins continuations to a specific thread (WinForms UI thread, WPF dispatcher). <strong>ASP.NET Core has NO SynchronizationContext</strong>. That's a huge difference from the old <code>System.Web</code> stack. Continuations run on <em>any</em> ThreadPool thread, freely. That's why <code>ConfigureAwait(false)</code> is unnecessary in ASP.NET Core (it's still needed in libraries you want to share with WinForms/WPF/Xamarin).</li>
+      <li><strong>CurrentCulture / CurrentUICulture</strong> — flow with ExecutionContext since .NET 4.6/Core 1.0. Localization survives thread hops automatically.</li>
+    </ul>
+
+    <h3>8. Controller → repository → EF Core → database</h3>
+    <p>Inside your controller action, DI resolves the scoped <code>DbContext</code>. When you write <code>await _db.Orders.FindAsync(id)</code>, EF Core generates SQL, opens (or reuses from a pool) a connection to SQL Server / Postgres, sends the query async, and the awaiting task suspends. During that suspension <strong>your ThreadPool worker is completely free</strong> — it goes back to the pool and can start serving another request. When the DB result comes back, EF Core's continuation runs on <em>whichever</em> worker is next available, materializes the entity, and returns it to your action.</p>
+
+    <h3>9. The response path</h3>
+    <p>Your controller returns an object. The endpoint executor calls <code>System.Text.Json</code> to serialize it into the response body (Kestrel exposes the body as a <code>PipeWriter</code>). Kestrel's I/O thread flushes bytes onto the socket, either as HTTP/1.1 chunks or HTTP/2 frames. When all bytes are flushed, ASP.NET Core disposes the <code>IServiceScope</code>: your <code>DbContext</code> closes, <code>IDisposable</code> services are disposed, <code>IAsyncDisposable</code> services are awaited-disposed. The <code>HttpContext</code> is returned to a pool for reuse. The connection stays open (HTTP/2 or keep-alive) for the next request.</p>
+
+    <h3>10. Back at the browser — Angular renders</h3>
+    <p>Bytes stream into the browser's Network Service, get decompressed and parsed by <code>fetch</code>, and the promise resolves inside NgZone. Angular's RxJS pipeline maps and shares the response; the component's subscription callback assigns <code>this.orders = response</code>. NgZone detects the microtask completed and schedules <code>ApplicationRef.tick()</code>. Change detection walks the component tree, diffs bindings, and Angular's renderer produces DOM mutations. The user sees the new data — usually within one 16.6-ms browser frame.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms hidden in this flow</h2>
+    <p>A senior engineer knows this isn't "just an HTTP call" — it's four or five different DSA problems solved by frameworks under the covers:</p>
+    <table>
+      <thead><tr><th>Stage</th><th>Data structure / algorithm</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td>Angular interceptors</td><td><strong>Chain of Responsibility</strong> (linked list of handlers) + <strong>Observable / push stream</strong></td><td>Each interceptor decides to pass, mutate, retry, or short-circuit. Same structure as the .NET middleware chain, different runtime.</td></tr>
+        <tr><td>ASP.NET Core middleware</td><td><strong>Reverse-composed function chain</strong> — build the pipeline by wrapping delegates from the last one in, first one out</td><td>Compilation happens once at startup, giving O(1) dispatch per request.</td></tr>
+        <tr><td>Routing</td><td><strong>Trie</strong> (radix tree of URL segments)</td><td>Matches <code>/api/orders/{id}</code> against thousands of endpoints in O(path-length) rather than O(endpoints).</td></tr>
+        <tr><td>Kestrel socket I/O</td><td><strong>OS-level event queues</strong>: epoll (Linux), kqueue (macOS), IOCP (Windows). System.IO.Pipelines is a lock-free ring buffer on top.</td><td>Enables one process to hold 10k+ sockets with a small thread count.</td></tr>
+        <tr><td>Thread pool</td><td><strong>Hill-climbing algorithm</strong> that grows/shrinks worker count based on throughput samples; work-stealing double-ended queue per thread.</td><td>Explains why cold start needs "warm-up" — the pool needs signals before it grows.</td></tr>
+        <tr><td>AsyncLocal / ExecutionContext</td><td><strong>Copy-on-write dictionary</strong> attached to each async logical call</td><td>How <code>HttpContext</code> and trace IDs flow across <code>await</code> without you passing them.</td></tr>
+        <tr><td>DI scope</td><td><strong>Hash map</strong> of <code>Type → instance</code> with a lifetime enum (singleton/scoped/transient); scoped map keyed by request.</td><td>O(1) resolution after cache; per-request map is disposed on request end.</td></tr>
+        <tr><td>JSON serialization</td><td><strong>UTF-8 byte-stream state machine</strong>; <code>System.Text.Json</code> uses source generators to skip reflection.</td><td>Massive perf win over Newtonsoft — near-zero allocation.</td></tr>
+        <tr><td>Change detection (Angular)</td><td><strong>Tree traversal with reference-equality diff</strong> (OnPush mode)</td><td>Explains why immutable state or signals speed rendering.</td></tr>
+      </tbody>
+    </table>
+    <table>
+      <thead><tr><th>Operation</th><th>Time</th><th>Space</th></tr></thead>
+      <tbody>
+        <tr><td>URL routing match</td><td>O(L) where L = URL segments</td><td>O(routes)</td></tr>
+        <tr><td>Middleware dispatch (per request)</td><td>O(M) where M = middleware count</td><td>O(1)</td></tr>
+        <tr><td>DI resolve (scoped, cached)</td><td>O(1)</td><td>O(services in scope)</td></tr>
+        <tr><td>Angular change detection (default)</td><td>O(components)</td><td>O(components)</td></tr>
+        <tr><td>Angular change detection (OnPush)</td><td>O(changed sub-tree)</td><td>O(1)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Deploying this on AWS</h2>
+    <p>A production Angular + .NET Core stack on AWS looks like this. Notice every AWS choice maps to a step in the request flow above.</p>
+    <table>
+      <thead><tr><th>Layer</th><th>AWS service</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Angular static bundle</td><td><strong>S3</strong> + <strong>CloudFront</strong></td><td>Serve <code>main.js</code>, <code>styles.css</code>, and <code>index.html</code> from a global CDN. Zero servers, immutable versioned assets.</td></tr>
+        <tr><td>DNS</td><td><strong>Route 53</strong></td><td>Alias records to CloudFront and to the API load balancer.</td></tr>
+        <tr><td>TLS termination</td><td><strong>ACM</strong> + CloudFront + ALB</td><td>Free certs, automatic renewal. TLS terminates at the edge (CloudFront) and again at the ALB.</td></tr>
+        <tr><td>Load balancer</td><td><strong>Application Load Balancer (ALB)</strong></td><td>Layer 7, path-based routing, sticky sessions if needed. Health checks target ASP.NET Core's <code>/health</code>.</td></tr>
+        <tr><td>API compute</td><td><strong>ECS Fargate</strong> or <strong>EKS</strong> running the <code>dotnet</code> container; <strong>Lambda</strong> for low-QPS APIs (via <code>Amazon.Lambda.AspNetCoreServer</code>)</td><td>Fargate = one <code>dotnet.exe</code> process per task, auto-scaled. Lambda if traffic is spiky and cold-start acceptable.</td></tr>
+        <tr><td>Auth</td><td><strong>Cognito</strong> or an OIDC provider; JWTs validated by ASP.NET Core's <code>JwtBearer</code> middleware</td><td>Angular stores the token, appends it via an interceptor; .NET validates the signature offline against the JWKS.</td></tr>
+        <tr><td>Datastore</td><td><strong>RDS (Postgres/SQL Server)</strong> or <strong>Aurora</strong>; <strong>DynamoDB</strong> if key-value</td><td>EF Core's <code>DbContext</code> pools connections to RDS. RDS Proxy for Lambda-based APIs to avoid connection storms.</td></tr>
+        <tr><td>Cache</td><td><strong>ElastiCache Redis</strong></td><td><code>IDistributedCache</code> Redis provider — session, hot query cache, rate-limit counters.</td></tr>
+        <tr><td>Observability</td><td><strong>CloudWatch Logs</strong>, <strong>X-Ray</strong>, <strong>OpenTelemetry → AWS Distro</strong></td><td>Every ILogger message + Activity trace-id propagated from Angular via <code>traceparent</code> header.</td></tr>
+        <tr><td>Static config &amp; secrets</td><td><strong>SSM Parameter Store</strong>, <strong>Secrets Manager</strong></td><td>Injected as env vars into the ECS task definition; .NET picks them up via <code>IConfiguration</code>.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Deployment shape:</strong> Angular ships to S3 via CI (a single <code>ng build --configuration production</code> + <code>aws s3 sync</code>). The .NET API ships as a Docker image to ECR, then <code>aws ecs update-service</code> rolls out new Fargate tasks with a rolling deployment. ALB drains connections gracefully — Kestrel's <code>UseShutdownTimeout</code> gives in-flight requests time to finish before the process exits.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — a minimal reference API that shows every context</h2>
+    <p>The snippet below is a working ASP.NET Core 8 <code>Program.cs</code> plus a controller. It demonstrates: middleware ordering, DI scope, an <code>AsyncLocal</code>-backed request-id, an <code>await</code> point that hops threads, and disposal of the scoped context. Every line is real production shape.</p>
+<pre><span class="cmt">// Program.cs — ASP.NET Core 8 minimal-hosting</span>
+<span class="kw">var</span> builder = WebApplication.CreateBuilder(args);
+
+<span class="cmt">// --- DI registrations: lifetimes matter -----------------------------</span>
+builder.Services.<span class="fn">AddSingleton</span>&lt;<span class="typ">IClock</span>, <span class="typ">SystemClock</span>&gt;();              <span class="cmt">// one for the process</span>
+builder.Services.<span class="fn">AddScoped</span>&lt;<span class="typ">IOrderRepository</span>, <span class="typ">OrderRepository</span>&gt;();  <span class="cmt">// one per HTTP request</span>
+builder.Services.<span class="fn">AddDbContext</span>&lt;<span class="typ">AppDb</span>&gt;(o =&gt; o.<span class="fn">UseNpgsql</span>(config.<span class="fn">Get</span>(<span class="str">"Db"</span>))); <span class="cmt">// scoped by default</span>
+builder.Services.<span class="fn">AddHttpContextAccessor</span>();                                <span class="cmt">// AsyncLocal-backed</span>
+builder.Services.<span class="fn">AddControllers</span>();
+
+<span class="kw">var</span> app = builder.<span class="fn">Build</span>();
+
+<span class="cmt">// --- Middleware pipeline: ORDER IS THE CONTRACT ---------------------</span>
+app.<span class="fn">UseExceptionHandler</span>(<span class="str">"/error"</span>);            <span class="cmt">// 1. catch-all first</span>
+app.<span class="fn">UseHsts</span>();                                   <span class="cmt">// 2. HSTS header</span>
+app.<span class="fn">UseHttpsRedirection</span>();                       <span class="cmt">// 3. force TLS</span>
+app.<span class="fn">UseRouting</span>();                                <span class="cmt">// 4. match endpoint (radix trie)</span>
+app.<span class="fn">UseCors</span>(<span class="str">"AngularApp"</span>);                       <span class="cmt">// 5. after routing, before auth</span>
+app.<span class="fn">UseAuthentication</span>();                         <span class="cmt">// 6. reads JWT, sets HttpContext.User</span>
+app.<span class="fn">UseAuthorization</span>();                          <span class="cmt">// 7. checks policies</span>
+app.<span class="fn">UseRateLimiter</span>();                            <span class="cmt">// 8. drop 429 if over budget</span>
+
+<span class="cmt">// Custom middleware — sets a request-id that flows across every await</span>
+app.<span class="fn">Use</span>(<span class="kw">async</span> (ctx, next) =&gt;
+{
+    <span class="kw">var</span> id = ctx.Request.Headers[<span class="str">"traceparent"</span>].FirstOrDefault() ?? Guid.<span class="fn">NewGuid</span>().<span class="fn">ToString</span>();
+    RequestContext.Id.<span class="fn">Value</span> = id;                <span class="cmt">// AsyncLocal — flows across awaits</span>
+    ctx.Response.Headers[<span class="str">"X-Request-Id"</span>] = id;
+    <span class="kw">using</span> (app.Logger.<span class="fn">BeginScope</span>(<span class="kw">new</span> { RequestId = id }))
+        <span class="kw">await</span> <span class="fn">next</span>();                          <span class="cmt">// scope disposed after response</span>
+});
+
+app.<span class="fn">MapControllers</span>();
+app.<span class="fn">Run</span>();
+
+<span class="cmt">// AsyncLocal helper — set on thread A, still readable on thread B after await -----</span>
+<span class="kw">public static class</span> <span class="typ">RequestContext</span>
+{
+    <span class="kw">public static readonly</span> <span class="typ">AsyncLocal</span>&lt;<span class="typ">string</span>?&gt; Id = <span class="kw">new</span>();
+}
+
+<span class="cmt">// The endpoint --------------------------------------------------------</span>
+[<span class="typ">ApiController</span>, <span class="fn">Route</span>(<span class="str">"api/orders"</span>)]
+<span class="kw">public class</span> <span class="typ">OrdersController</span>(<span class="typ">IOrderRepository</span> repo, <span class="typ">IHttpContextAccessor</span> httpCtx) : <span class="typ">ControllerBase</span>
+{
+    [<span class="fn">HttpGet</span>(<span class="str">"{id:int}"</span>), <span class="fn">Authorize</span>]
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">ActionResult</span>&lt;<span class="typ">Order</span>&gt;&gt; <span class="fn">Get</span>(<span class="typ">int</span> id, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">var</span> user   = httpCtx.HttpContext!.User;                     <span class="cmt">// ClaimsPrincipal from JWT</span>
+        <span class="kw">var</span> reqId  = RequestContext.Id.Value;                       <span class="cmt">// AsyncLocal survives await</span>
+        <span class="kw">var</span> tid1   = Environment.CurrentManagedThreadId;             <span class="cmt">// thread BEFORE await</span>
+
+        <span class="kw">var</span> order = <span class="kw">await</span> repo.<span class="fn">GetAsync</span>(id, ct);                    <span class="cmt">// I/O → thread returned to pool</span>
+
+        <span class="kw">var</span> tid2   = Environment.CurrentManagedThreadId;             <span class="cmt">// USUALLY different from tid1</span>
+        Console.<span class="fn">WriteLine</span>($<span class="str">"user={user.Identity!.Name} req={reqId} t1={tid1} t2={tid2}"</span>);
+
+        <span class="kw">return</span> order <span class="kw">is null</span> ? <span class="fn">NotFound</span>() : <span class="fn">Ok</span>(order);           <span class="cmt">// scope disposed after this</span>
+    }
+}
+</pre>
+    <p>The <code>t1 ≠ t2</code> print is the money shot for an interview whiteboard: it proves the request hopped threads across the <code>await</code>, while <code>reqId</code> and <code>user</code> still resolve correctly because they flow through <code>ExecutionContext</code>. That is exactly what a senior engineer must be able to explain.</p>
+
+    <h3>The Angular side — interceptor + service</h3>
+<pre><span class="cmt">// auth.interceptor.ts — attach JWT, retry on 401 refresh</span>
+<span class="kw">export const</span> authInterceptor: <span class="typ">HttpInterceptorFn</span> = (req, next) =&gt; {
+  <span class="kw">const</span> auth = <span class="fn">inject</span>(<span class="typ">AuthService</span>);
+  <span class="kw">const</span> cloned = req.<span class="fn">clone</span>({ setHeaders: { Authorization: <span class="str">`Bearer ${auth.token()}`</span> } });
+  <span class="kw">return</span> <span class="fn">next</span>(cloned).<span class="fn">pipe</span>(
+    <span class="fn">catchError</span>(err =&gt; err.status === 401 ? auth.<span class="fn">refresh</span>().<span class="fn">pipe</span>(<span class="fn">switchMap</span>(() =&gt; <span class="fn">next</span>(cloned))) : <span class="fn">throwError</span>(() =&gt; err))
+  );
+};
+
+<span class="cmt">// order.service.ts — typed observable</span>
+@<span class="fn">Injectable</span>({ providedIn: <span class="str">'root'</span> })
+<span class="kw">export class</span> <span class="typ">OrderService</span> {
+  <span class="kw">private</span> http = <span class="fn">inject</span>(<span class="typ">HttpClient</span>);
+  <span class="fn">get</span>(id: <span class="typ">number</span>): <span class="typ">Observable</span>&lt;<span class="typ">Order</span>&gt; { <span class="kw">return</span> <span class="kw">this</span>.http.<span class="fn">get</span>&lt;<span class="typ">Order</span>&gt;(<span class="str">`/api/orders/${id}`</span>); }
+}
+
+<span class="cmt">// order.component.ts — subscribes inside NgZone, change detection is automatic</span>
+@<span class="fn">Component</span>({ /* ... */ changeDetection: <span class="typ">ChangeDetectionStrategy</span>.OnPush })
+<span class="kw">export class</span> <span class="typ">OrderComponent</span> {
+  order = <span class="fn">signal</span>&lt;<span class="typ">Order</span> | <span class="kw">null</span>&gt;(<span class="kw">null</span>);
+  <span class="kw">constructor</span>() {
+    <span class="fn">inject</span>(<span class="typ">OrderService</span>).<span class="fn">get</span>(42).<span class="fn">subscribe</span>(o =&gt; <span class="kw">this</span>.order.<span class="fn">set</span>(o)); <span class="cmt">// signal write → CD scheduled</span>
+  }
+}
+</pre>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Thread-pool starvation — the classic production disaster</h3>
+    <p>The single biggest bug in .NET Core web apps is <strong>sync-over-async</strong>: someone writes <code>var x = FooAsync().Result;</code> inside a controller. Under load, every request that hits that path parks a ThreadPool worker on <code>.Result</code>. The pool starves; new requests can't get a worker; latency explodes to seconds while CPU sits at 15%. The fix is trivial (<code>await</code>) but the debugging is nightmarish — <code>dotnet-counters</code> shows <em>threadpool-thread-count</em> climbing to 30k while requests queue. Interviewer follow-up: "how would you detect this?" — answer: watch <code>ThreadPool.PendingWorkItemCount</code> and set an alert.</p>
+
+    <h3>Async is not multi-threaded; parallel is</h3>
+    <p>An <code>async</code> method may run entirely on one thread if it never truly waits. <code>Task.Run</code> queues to the ThreadPool; <code>Parallel.ForEach</code> uses many threads at once. In an HTTP request, do NOT use <code>Task.Run</code> — you're already on a ThreadPool thread, and offloading just doubles the work. Use <code>Task.Run</code> only for CPU-bound work you explicitly want off the request path.</p>
+
+    <h3>ConfigureAwait(false) — do you need it here?</h3>
+    <p>Answer: <strong>no, not in ASP.NET Core application code</strong>. Because there is no <code>SynchronizationContext</code>, continuations already run on any pool thread. You <em>do</em> want <code>ConfigureAwait(false)</code> in reusable library code, so a caller in WinForms/WPF isn't forced back onto the UI thread.</p>
+
+    <h3>CORS — where it lives</h3>
+    <p>The browser's preflight <code>OPTIONS</code> hits the server before your real request. If <code>UseCors</code> is not registered <em>before</em> your endpoint (and, in fact, before <code>UseAuthentication</code> for the preflight to succeed unauthenticated), your Angular app sees "CORS error" and never gets the real error message. Middleware order matters.</p>
+
+    <h3>HttpClient in .NET — pooled, not thrown away</h3>
+    <p>Never <code>new HttpClient()</code> per request — you'll exhaust sockets. Register <code>IHttpClientFactory</code> once at startup; it pools handlers and rotates them to pick up DNS changes. Same principle as Angular's <code>HttpClient</code> — reuse.</p>
+
+    <h3>Cancellation tokens flow, too</h3>
+    <p>ASP.NET Core hands the controller <code>HttpContext.RequestAborted</code> as a <code>CancellationToken</code>. Pass it into EF Core, into <code>HttpClient.GetAsync</code>, into everything. When the Angular caller navigates away, the browser closes the socket, Kestrel triggers the token, the DB query aborts. Free graceful degradation.</p>
+
+    <h3>Blue/green and connection draining</h3>
+    <p>During deployment, ALB stops routing new connections to the old task; existing keep-alive connections continue for the drain timeout. Kestrel's <code>ShutdownTimeout</code> lets in-flight requests finish. Any request that started but hasn't returned when both timeouts expire is TCP-reset — the Angular retry interceptor should catch this class of error transparently.</p>
+
+    <h3>Likely follow-up questions with crisp answers</h3>
+    <div class="qa"><p class="q">Q: What's the difference between Kestrel I/O threads and ThreadPool workers?</p><p class="a">Kestrel I/O threads (≈1 per core) own sockets and do only accept/read/write — they never execute application code. They hand parsed requests to the ThreadPool, which runs middleware and controllers on separate worker threads.</p></div>
+    <div class="qa"><p class="q">Q: How does HttpContext survive an await if the thread changes?</p><p class="a">Through <code>IHttpContextAccessor</code>, which is backed by <code>AsyncLocal&lt;T&gt;</code>. AsyncLocal flows through <code>ExecutionContext</code>, which is automatically captured and restored around every <code>await</code>. HttpContext itself lives on the heap for the request's lifetime.</p></div>
+    <div class="qa"><p class="q">Q: What happens when Angular sends a request and navigates away?</p><p class="a">The RxJS Observable is unsubscribed → the underlying <code>fetch</code> is aborted → the TCP stream closes → Kestrel triggers <code>HttpContext.RequestAborted</code> → any propagated <code>CancellationToken</code> throws <code>OperationCanceledException</code> in the controller, which the framework maps to a 499 (or just skips the response).</p></div>
+    <div class="qa"><p class="q">Q: Why is IIS in-process faster than out-of-process?</p><p class="a">In-process, IIS's ANCM module hosts Kestrel inside <code>w3wp.exe</code>, so the HTTP hand-off is an in-memory function call. Out-of-process, IIS reverse-proxies to a separate <code>dotnet</code> process over localhost HTTP — extra sockets, extra copies. Roughly 2× throughput difference.</p></div>
+    <div class="qa"><p class="q">Q: Singleton vs Scoped vs Transient — one-line answers?</p><p class="a">Singleton = one for the process lifetime (thread-safe required). Scoped = one per HTTP request (typical for DbContext, repositories). Transient = new every resolution (cheap, stateless helpers).</p></div>
+    <div class="qa"><p class="q">Q: How does zone.js relate to change detection?</p><p class="a">Zone.js patches every browser async primitive so Angular's NgZone knows when async work completes. When the last microtask empties, NgZone triggers <code>ApplicationRef.tick()</code> → change detection walks the component tree. That's why HTTP results update the DOM without you calling anything.</p></div>
+    <div class="qa"><p class="q">Q: In Angular v17+ signals, does this still hold?</p><p class="a">Yes but simplified. With signals + zoneless mode, change detection is triggered by signal writes rather than zone microtask emptying. The server side is unchanged.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "A user click on an Angular component calls <code>HttpClient.get()</code>, which runs through RxJS interceptors inside NgZone, then hands off via <code>fetch</code> to Chrome's networking process, which drives TLS and HTTP/2 to the server. On the server, Kestrel — running in a single <code>dotnet.exe</code> process — accepts the socket on an <em>I/O thread</em>, parses the request, and schedules the middleware pipeline onto a <em>ThreadPool worker</em>. That worker builds an <code>HttpContext</code> and a request-scoped DI container, walks routing → CORS → auth → rate limit → the controller. On the first true <code>await</code> (say, a DB call) the worker is released back to the pool; when the I/O completes, a <em>different</em> worker resumes the continuation. Because ASP.NET Core has no <code>SynchronizationContext</code>, thread hopping is free — and because <code>ExecutionContext</code> flows across awaits, <code>HttpContext</code>, <code>ILogger</code> scopes, and OpenTelemetry <code>Activity</code> all follow. The response is serialized, written to the socket by Kestrel, the scope is disposed, and the bytes travel back. In the browser, the fetch promise resolves inside NgZone, Angular's change detection fires, and the DOM updates. Total: 1 client process, 1 server process, ~4 threads involved, dozens of context switches, ~80 ms end-to-end."</p>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li><strong>"Kestrel I/O threads are not ThreadPool workers"</strong> — knowing this is the marker of someone who has actually operated ASP.NET Core in production.</li>
+      <li><strong>"ASP.NET Core has no SynchronizationContext"</strong> — huge break from the classic .NET Framework model; means no <code>ConfigureAwait(false)</code> needed and no thread pinning.</li>
+      <li><strong>"HttpContext flows via AsyncLocal / ExecutionContext"</strong> — proves you understand thread hopping across <code>await</code>.</li>
+      <li><strong>"Scoped services are per request; DbContext is scoped for a reason"</strong> — connects DI lifetimes to the request envelope.</li>
+      <li><strong>"Sync-over-async is the top production incident"</strong> — mention it before they ask; it's the single most common outage cause.</li>
+    </ul>
+    <h3>Numbers to quote confidently</h3>
+    <ul>
+      <li>Kestrel: ~50k rps on a 4-core box for a trivial endpoint; 10k+ concurrent connections easily.</li>
+      <li>Thread pool: min = #cores, max = 32,767 (configurable).</li>
+      <li>Latency budget: P99 &lt; 200 ms for user-visible requests.</li>
+      <li>TLS 1.3 handshake: 1-RTT cold, 0-RTT on resume.</li>
+      <li>Angular change detection: default O(components), OnPush + signals O(changed sub-tree).</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/">ASP.NET Core Middleware — Microsoft Learn</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/kestrel">Kestrel web server in ASP.NET Core — Microsoft Learn</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/aspnet/core/fundamentals/host/web-host">ASP.NET Core Web Host &amp; hosting models — Microsoft Learn</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.executioncontext">ExecutionContext class — .NET docs</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/dotnet/api/system.threading.asynclocal-1">AsyncLocal&lt;T&gt; — .NET docs</a></li>
+      <li><a href="https://angular.dev/guide/http">Angular HttpClient guide — angular.dev</a></li>
+      <li><a href="https://angular.dev/guide/http/interceptors">Angular HTTP interceptors — angular.dev</a></li>
+      <li><a href="https://angular.dev/guide/zone">Angular NgZone &amp; zone.js — angular.dev</a></li>
+      <li><a href="https://devblogs.microsoft.com/dotnet/system-io-pipelines-high-performance-io-in-net/">System.IO.Pipelines — .NET blog</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

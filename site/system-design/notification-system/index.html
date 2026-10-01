@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Notification System — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #2dc653;
+    --laymen-bg: #ecfdf3;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Notification System</h1>
+    <p>A push/email/SMS delivery pipeline built for reliability at billions of messages a day — with queues, retries, priorities, and idempotency baked in.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>A <strong>Notification System</strong> is the shared platform inside a company that any internal team calls to reach a user through <strong>email, SMS, push notification, in-app banner, or WhatsApp</strong>. When Amazon sends you "your order has shipped," when Uber pings your phone that the driver is 2 minutes away, when Slack emails you a magic-login link, when your bank texts a one-time password — they all funnel through a notification service that <em>looks</em> like a single "send" API to callers but is really a distributed pipeline of queues, workers, retries, rate limiters, and third-party vendor integrations behind it.</p>
+    <p>Every large product needs one because reaching users reliably is <strong>surprisingly hard</strong>. Third-party gateways (Twilio, SendGrid, APNs, FCM) go down. Users disable channels. OTPs must arrive in seconds while a marketing blast can wait an hour. A duplicate push at 3am is a customer-support ticket. And volumes are enormous — LinkedIn sends billions of notifications monthly, Facebook well over 30 billion a day at peak, so the system must absorb massive spikes without dropping a single high-priority message. This is a classic staff-level interview scenario because it hits every core distributed-systems concept: <strong>async processing, at-least-once delivery, deduplication, backpressure, priority queues, rate limiting, and observability</strong>.</p>
+    <p>You'll see the design pattern reused everywhere: <strong>AWS SNS</strong>, <strong>Google Cloud Pub/Sub</strong>, <strong>Twilio</strong>, <strong>OneSignal</strong>, <strong>Braze</strong>, <strong>Airship</strong>, <strong>Amazon Pinpoint</strong>, and every in-house notification platform at Netflix, Uber, LinkedIn, Meta, Airbnb, and Flipkart.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Explained without the jargon</h2>
+    <p>Imagine your bank has <strong>one giant post-office</strong> inside its building. Whenever any department — the credit-card team, the loans team, the fraud team — needs to tell a customer something, they don't run to the customer themselves. They drop a slip of paper into the post-office chute that says <em>"tell Priya her card was charged $45."</em> The post-office does all the messy work of actually reaching Priya — figuring out whether she prefers a text message, an email, or the little bell icon in the bank's app; making sure the message doesn't go out twice; slowing down promotional flyers if the post-office is already busy handling urgent fraud alerts.</p>
+    <p>That's a notification system. Any part of the company can say <em>"tell user X, thing Y"</em> and walk away confident the message will arrive.</p>
+    <p>Here's why it's harder than it sounds. First, <strong>the mailman isn't your employee</strong> — you rely on the phone company for texts and Apple/Google for phone notifications. They sometimes have bad days. Second, <strong>some messages are on fire and some are lukewarm</strong> — a login code you're waiting for right now cannot wait behind five million marketing emails ahead of it in line. Third, <strong>the same slip sometimes gets dropped in the chute twice</strong> because a computer somewhere got nervous and retried — but Priya must not get charged-notice twice. Fourth, <strong>you can't spam anyone</strong> — even if six teams want to ping the same customer in five minutes, the system has to be polite.</p>
+    <p>You've used systems like this every single day. When <strong>WhatsApp buzzes your phone</strong>, when <strong>Uber texts your OTP</strong>, when <strong>Amazon emails your invoice</strong>, when <strong>your bank flashes a low-balance alert</strong> — it all came through a post-office like this. The interesting design work is: how do you build a post-office that handles <strong>ten billion slips a day</strong>, never loses an urgent one, never sends the same slip twice, and gracefully slows down when the phone company is having a bad hour?</p>
+    <p><strong>A tiny example.</strong> At 8:03 AM Priya taps "Login" on her bank app. At 8:03:00.4 the login service drops a slip: <em>"SMS OTP 4821 to Priya, urgent."</em> The post-office puts it in the <strong>express lane</strong>, texts Twilio, and Priya's phone buzzes by 8:03:02. Meanwhile a marketing job dumped <strong>3 million promotional emails</strong> into the <strong>slow lane</strong> at 8:00 AM — those are still calmly draining through in the background, one batch at a time, and Priya's OTP jumped right past them because the express lane never gets stuck.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Accept notification requests from any internal service via a simple <code>POST /notifications</code> API.</li>
+      <li>Support multiple channels: <strong>email, SMS, mobile push (APNs/FCM), in-app, WhatsApp</strong>.</li>
+      <li>Respect per-user <strong>channel preferences</strong> and unsubscribe/opt-out state.</li>
+      <li>Support <strong>priority tiers</strong> — e.g. <em>critical</em> (OTP, security), <em>transactional</em> (order shipped), <em>promotional</em> (marketing blast).</li>
+      <li>Provide a <strong>template engine</strong> with placeholders and localization (i18n).</li>
+      <li>Support <strong>scheduled</strong> and <strong>bulk</strong> notifications.</li>
+      <li>Track delivery status and expose it via an API (queued → sent → delivered → opened).</li>
+    </ul>
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Reliability</strong>: at-least-once delivery for every notification; no silent drops.</li>
+      <li><strong>Idempotency</strong>: same request ID sent twice → user is notified exactly once.</li>
+      <li><strong>Low latency</strong> for critical messages: p99 &lt; 5 s end-to-end for OTP.</li>
+      <li><strong>High throughput</strong>: absorb bulk campaign spikes without slowing down critical traffic.</li>
+      <li><strong>Availability</strong>: 99.99% for the ingest API; degraded delivery is preferable to rejecting requests.</li>
+      <li><strong>Extensibility</strong>: adding a new channel or vendor should not require redesign.</li>
+    </ul>
+    <h3>Back-of-the-envelope</h3>
+    <table>
+      <tr><th>Metric</th><th>Assumption</th><th>Number</th></tr>
+      <tr><td>Total daily notifications (all channels)</td><td>Large B2C product, 500M active users, ~20 msgs/user/day</td><td><strong>10 B / day</strong></td></tr>
+      <tr><td>Average QPS</td><td>10 B / 86 400 s</td><td><strong>~115k / s</strong></td></tr>
+      <tr><td>Peak QPS</td><td>3× average (evening burst, campaigns)</td><td><strong>~350k / s</strong></td></tr>
+      <tr><td>Split by channel</td><td>Push : Email : SMS : In-app</td><td>60% : 25% : 5% : 10%</td></tr>
+      <tr><td>Payload size</td><td>Compact JSON + template ID</td><td>~1 KB in, ~2 KB rendered</td></tr>
+      <tr><td>Storage / year (tracking)</td><td>10 B/day × 500 B row × 365</td><td><strong>~1.8 PB / year</strong> (compressed on Cassandra ~600 TB)</td></tr>
+      <tr><td>Ingress bandwidth</td><td>115k × 1 KB</td><td><strong>~115 MB/s</strong> steady state</td></tr>
+      <tr><td>OTP p99 latency budget</td><td>Ingest → Twilio ack</td><td>&lt; <strong>3 s</strong> (5 s p99.9)</td></tr>
+      <tr><td>Vendor rate limits</td><td>Twilio SMS ~200 msgs/s per number pool, SES 14k/s default</td><td>drives fan-out worker count</td></tr>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The system is a classic <strong>producer → queue → worker → third-party gateway</strong> pipeline, split into three logical planes: an <strong>ingest plane</strong> that validates and normalizes requests, a <strong>routing plane</strong> that sorts by priority and enforces rate limits and user preferences, and a <strong>delivery plane</strong> of channel-specific workers that call the actual gateway (SES, Twilio, FCM, APNs) and handle retries.</p>
+    <p>The flow of one request: a caller service (e.g. the Orders service) calls <code>POST /notifications</code> with a JSON body containing <code>request_id</code>, <code>user_id</code>, <code>template_id</code>, <code>data</code>, and <code>priority</code>. The ingest API validates the schema, deduplicates against a Redis cache keyed by <code>request_id</code>, and drops the message onto one of three <strong>priority-partitioned Kafka topics</strong> (<code>notif.critical</code>, <code>notif.transactional</code>, <code>notif.promo</code>). Downstream, a <strong>Notification Router</strong> service consumes each topic (critical topic has the largest consumer group so it drains fastest), fetches the user's channel preferences from a preferences store, checks per-user and per-tenant <strong>rate limits</strong> in Redis, and expands the request into one message per target channel. Each channel message goes onto its own <strong>channel queue</strong> (SQS or Kafka partition). <strong>Channel workers</strong> read from their queue, render the template, call the third-party gateway with a timeout, and on failure re-enqueue with an exponential-backoff delay. After N retries, the message goes to a <strong>Dead Letter Queue</strong> for later inspection or manual replay.</p>
+    <p>Every message emits a <strong>tracking event</strong> (queued/sent/delivered/failed) to a Kafka topic consumed by an analytics pipeline that lands rows in Cassandra + a Kinesis stream feeding real-time dashboards.</p>
+
+    <div class="diagram">
+    <svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif" font-size="12">
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+        </marker>
+        <marker id="a2" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/>
+        </marker>
+        <marker id="a3" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#f7567c"/>
+        </marker>
+      </defs>
+
+      <!-- clients -->
+      <rect x="20" y="30" width="130" height="46" rx="10" fill="#1c2540" stroke="#4361ee"/>
+      <text x="85" y="50" fill="#c6d0e0" text-anchor="middle" font-weight="700">Caller Services</text>
+      <text x="85" y="66" fill="#7f8aa0" text-anchor="middle">Orders · Auth · Marketing</text>
+
+      <!-- API GW -->
+      <rect x="200" y="30" width="150" height="46" rx="10" fill="#1c2540" stroke="#7fa2ff"/>
+      <text x="275" y="50" fill="#c6d0e0" text-anchor="middle" font-weight="700">Notification API</text>
+      <text x="275" y="66" fill="#7f8aa0" text-anchor="middle">validate · dedup · auth</text>
+
+      <!-- redis dedup -->
+      <rect x="200" y="105" width="150" height="34" rx="8" fill="#3a1e2e" stroke="#f7567c"/>
+      <text x="275" y="127" fill="#f7c1cf" text-anchor="middle" font-weight="700">Redis · Dedup cache</text>
+
+      <!-- Priority queues -->
+      <rect x="400" y="20" width="150" height="30" rx="6" fill="#3a2a1e" stroke="#f4a259"/>
+      <text x="475" y="40" fill="#f7d6b0" text-anchor="middle" font-weight="700">Kafka · critical</text>
+      <rect x="400" y="55" width="150" height="30" rx="6" fill="#3a2a1e" stroke="#f4a259"/>
+      <text x="475" y="75" fill="#f7d6b0" text-anchor="middle" font-weight="700">Kafka · transactional</text>
+      <rect x="400" y="90" width="150" height="30" rx="6" fill="#3a2a1e" stroke="#f4a259"/>
+      <text x="475" y="110" fill="#f7d6b0" text-anchor="middle" font-weight="700">Kafka · promo</text>
+
+      <!-- Router -->
+      <rect x="600" y="30" width="150" height="90" rx="10" fill="#1c2540" stroke="#7fa2ff"/>
+      <text x="675" y="52" fill="#c6d0e0" text-anchor="middle" font-weight="700">Notification Router</text>
+      <text x="675" y="70" fill="#7f8aa0" text-anchor="middle">preferences lookup</text>
+      <text x="675" y="86" fill="#7f8aa0" text-anchor="middle">rate limit check</text>
+      <text x="675" y="102" fill="#7f8aa0" text-anchor="middle">fan-out per channel</text>
+
+      <!-- Prefs + RL -->
+      <rect x="600" y="145" width="70" height="34" rx="8" fill="#1e3a2a" stroke="#2dc653"/>
+      <text x="635" y="167" fill="#b0f7d6" text-anchor="middle" font-weight="700">Prefs DB</text>
+      <rect x="680" y="145" width="70" height="34" rx="8" fill="#3a1e2e" stroke="#f7567c"/>
+      <text x="715" y="167" fill="#f7c1cf" text-anchor="middle" font-weight="700">Redis RL</text>
+
+      <!-- Channel queues -->
+      <rect x="30" y="220" width="130" height="28" rx="6" fill="#3a2a1e" stroke="#f4a259"/>
+      <text x="95" y="239" fill="#f7d6b0" text-anchor="middle" font-weight="700">Q · push</text>
+      <rect x="180" y="220" width="130" height="28" rx="6" fill="#3a2a1e" stroke="#f4a259"/>
+      <text x="245" y="239" fill="#f7d6b0" text-anchor="middle" font-weight="700">Q · email</text>
+      <rect x="330" y="220" width="130" height="28" rx="6" fill="#3a2a1e" stroke="#f4a259"/>
+      <text x="395" y="239" fill="#f7d6b0" text-anchor="middle" font-weight="700">Q · sms</text>
+      <rect x="480" y="220" width="130" height="28" rx="6" fill="#3a2a1e" stroke="#f4a259"/>
+      <text x="545" y="239" fill="#f7d6b0" text-anchor="middle" font-weight="700">Q · in-app</text>
+      <rect x="630" y="220" width="130" height="28" rx="6" fill="#3a2a1e" stroke="#f4a259"/>
+      <text x="695" y="239" fill="#f7d6b0" text-anchor="middle" font-weight="700">Q · WhatsApp</text>
+
+      <!-- Workers -->
+      <rect x="30" y="270" width="130" height="60" rx="10" fill="#1c2540" stroke="#7fa2ff"/>
+      <text x="95" y="291" fill="#c6d0e0" text-anchor="middle" font-weight="700">Push Worker</text>
+      <text x="95" y="309" fill="#7f8aa0" text-anchor="middle">APNs / FCM</text>
+      <rect x="180" y="270" width="130" height="60" rx="10" fill="#1c2540" stroke="#7fa2ff"/>
+      <text x="245" y="291" fill="#c6d0e0" text-anchor="middle" font-weight="700">Email Worker</text>
+      <text x="245" y="309" fill="#7f8aa0" text-anchor="middle">SES · SendGrid</text>
+      <rect x="330" y="270" width="130" height="60" rx="10" fill="#1c2540" stroke="#7fa2ff"/>
+      <text x="395" y="291" fill="#c6d0e0" text-anchor="middle" font-weight="700">SMS Worker</text>
+      <text x="395" y="309" fill="#7f8aa0" text-anchor="middle">Twilio · SNS</text>
+      <rect x="480" y="270" width="130" height="60" rx="10" fill="#1c2540" stroke="#7fa2ff"/>
+      <text x="545" y="291" fill="#c6d0e0" text-anchor="middle" font-weight="700">In-App Worker</text>
+      <text x="545" y="309" fill="#7f8aa0" text-anchor="middle">WebSocket / DB</text>
+      <rect x="630" y="270" width="130" height="60" rx="10" fill="#1c2540" stroke="#7fa2ff"/>
+      <text x="695" y="291" fill="#c6d0e0" text-anchor="middle" font-weight="700">WA Worker</text>
+      <text x="695" y="309" fill="#7f8aa0" text-anchor="middle">WhatsApp Cloud API</text>
+
+      <!-- Gateways -->
+      <rect x="30" y="360" width="730" height="32" rx="8" fill="#1a2e1a" stroke="#2dc653"/>
+      <text x="395" y="380" fill="#b0f7d6" text-anchor="middle" font-weight="700">Third-party gateways · APNs · FCM · SES · SendGrid · Twilio · SNS · WhatsApp Cloud</text>
+
+      <!-- DLQ + tracker -->
+      <rect x="30" y="410" width="200" height="34" rx="8" fill="#4b1a1a" stroke="#f7567c"/>
+      <text x="130" y="431" fill="#f7c1cf" text-anchor="middle" font-weight="700">Dead Letter Queue</text>
+      <rect x="260" y="410" width="230" height="34" rx="8" fill="#1c2540" stroke="#7fa2ff"/>
+      <text x="375" y="431" fill="#c6d0e0" text-anchor="middle" font-weight="700">Tracker (Kafka → Cassandra)</text>
+      <rect x="520" y="410" width="240" height="34" rx="8" fill="#1c2540" stroke="#7fa2ff"/>
+      <text x="640" y="431" fill="#c6d0e0" text-anchor="middle" font-weight="700">Analytics (Kinesis + Dashboards)</text>
+
+      <!-- arrows -->
+      <line x1="150" y1="53" x2="200" y2="53" stroke="#7fa2ff" stroke-width="2" marker-end="url(#a1)"/>
+      <line x1="350" y1="53" x2="400" y2="35" stroke="#f4a259" stroke-width="2" marker-end="url(#a2)"/>
+      <line x1="350" y1="53" x2="400" y2="70" stroke="#f4a259" stroke-width="2" marker-end="url(#a2)"/>
+      <line x1="350" y1="53" x2="400" y2="105" stroke="#f4a259" stroke-width="2" marker-end="url(#a2)"/>
+      <line x1="275" y1="76" x2="275" y2="105" stroke="#f7567c" stroke-width="2" marker-end="url(#a3)"/>
+      <line x1="550" y1="35" x2="600" y2="60" stroke="#7fa2ff" stroke-width="2" marker-end="url(#a1)"/>
+      <line x1="550" y1="70" x2="600" y2="75" stroke="#7fa2ff" stroke-width="2" marker-end="url(#a1)"/>
+      <line x1="550" y1="105" x2="600" y2="95" stroke="#7fa2ff" stroke-width="2" marker-end="url(#a1)"/>
+      <line x1="675" y1="120" x2="635" y2="145" stroke="#2dc653" stroke-width="2" marker-end="url(#a1)"/>
+      <line x1="675" y1="120" x2="715" y2="145" stroke="#f7567c" stroke-width="2" marker-end="url(#a1)"/>
+
+      <line x1="640" y1="120" x2="95" y2="220" stroke="#7fa2ff" stroke-width="1.5" marker-end="url(#a1)"/>
+      <line x1="640" y1="120" x2="245" y2="220" stroke="#7fa2ff" stroke-width="1.5" marker-end="url(#a1)"/>
+      <line x1="660" y1="120" x2="395" y2="220" stroke="#7fa2ff" stroke-width="1.5" marker-end="url(#a1)"/>
+      <line x1="680" y1="120" x2="545" y2="220" stroke="#7fa2ff" stroke-width="1.5" marker-end="url(#a1)"/>
+      <line x1="700" y1="120" x2="695" y2="220" stroke="#7fa2ff" stroke-width="1.5" marker-end="url(#a1)"/>
+
+      <line x1="95"  y1="248" x2="95"  y2="270" stroke="#f4a259" stroke-width="2" marker-end="url(#a2)"/>
+      <line x1="245" y1="248" x2="245" y2="270" stroke="#f4a259" stroke-width="2" marker-end="url(#a2)"/>
+      <line x1="395" y1="248" x2="395" y2="270" stroke="#f4a259" stroke-width="2" marker-end="url(#a2)"/>
+      <line x1="545" y1="248" x2="545" y2="270" stroke="#f4a259" stroke-width="2" marker-end="url(#a2)"/>
+      <line x1="695" y1="248" x2="695" y2="270" stroke="#f4a259" stroke-width="2" marker-end="url(#a2)"/>
+
+      <line x1="95"  y1="330" x2="95"  y2="360" stroke="#2dc653" stroke-width="2" marker-end="url(#a1)"/>
+      <line x1="245" y1="330" x2="245" y2="360" stroke="#2dc653" stroke-width="2" marker-end="url(#a1)"/>
+      <line x1="395" y1="330" x2="395" y2="360" stroke="#2dc653" stroke-width="2" marker-end="url(#a1)"/>
+      <line x1="545" y1="330" x2="545" y2="360" stroke="#2dc653" stroke-width="2" marker-end="url(#a1)"/>
+      <line x1="695" y1="330" x2="695" y2="360" stroke="#2dc653" stroke-width="2" marker-end="url(#a1)"/>
+
+      <line x1="95"  y1="330" x2="130" y2="410" stroke="#f7567c" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#a3)"/>
+      <line x1="245" y1="330" x2="375" y2="410" stroke="#7fa2ff" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#a1)"/>
+    </svg>
+    </div>
+
+    <div class="legend">
+      <span><span class="dot" style="background:#7fa2ff"></span> Control / request path</span>
+      <span><span class="dot" style="background:#f4a259"></span> Message queues</span>
+      <span><span class="dot" style="background:#2dc653"></span> Delivery to gateways</span>
+      <span><span class="dot" style="background:#f7567c"></span> Idempotency / DLQ</span>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch the core mechanic run, step by step</h2>
+    <p>The core mechanic here is the <strong>priority-aware, retry-with-backoff delivery of a single notification</strong>. We follow one OTP from ingest to the user's phone, watch a low-priority marketing message queue up in parallel, see a duplicate get deduplicated, and — for drama — one Twilio call fails and re-tries with exponential backoff before succeeding.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 360" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif" font-size="12">
+        <!-- Stages -->
+        <rect x="20"  y="140" width="130" height="60" rx="10" fill="#1c2540" stroke="#7fa2ff"/>
+        <text x="85" y="165" fill="#c6d0e0" text-anchor="middle" font-weight="700">API Ingest</text>
+        <text x="85" y="182" fill="#7f8aa0" text-anchor="middle">validate + dedup</text>
+
+        <rect x="180" y="80"  width="130" height="40" rx="8" fill="#3a2a1e" stroke="#f4a259" id="q-critical"/>
+        <text x="245" y="105" fill="#f7d6b0" text-anchor="middle" font-weight="700">Q · critical</text>
+
+        <rect x="180" y="140" width="130" height="40" rx="8" fill="#3a2a1e" stroke="#f4a259" opacity=".55"/>
+        <text x="245" y="165" fill="#f7d6b0" text-anchor="middle" font-weight="700">Q · transactional</text>
+
+        <rect x="180" y="200" width="130" height="40" rx="8" fill="#3a2a1e" stroke="#f4a259" id="q-promo"/>
+        <text x="245" y="225" fill="#f7d6b0" text-anchor="middle" font-weight="700">Q · promo</text>
+
+        <rect x="340" y="140" width="130" height="60" rx="10" fill="#1c2540" stroke="#7fa2ff"/>
+        <text x="405" y="165" fill="#c6d0e0" text-anchor="middle" font-weight="700">Router</text>
+        <text x="405" y="182" fill="#7f8aa0" text-anchor="middle">prefs · rate limit</text>
+
+        <rect x="500" y="140" width="130" height="60" rx="10" fill="#1c2540" stroke="#7fa2ff"/>
+        <text x="565" y="165" fill="#c6d0e0" text-anchor="middle" font-weight="700">SMS Worker</text>
+        <text x="565" y="182" fill="#7f8aa0" text-anchor="middle">Twilio client</text>
+
+        <rect x="660" y="140" width="130" height="60" rx="10" fill="#1a2e1a" stroke="#2dc653" id="twilio"/>
+        <text x="725" y="165" fill="#b0f7d6" text-anchor="middle" font-weight="700">Twilio</text>
+        <text x="725" y="182" fill="#7f8aa0" text-anchor="middle">SMS gateway</text>
+
+        <!-- User's phone -->
+        <rect x="820" y="140" width="60" height="60" rx="8" fill="#1c2540" stroke="#7fa2ff"/>
+        <text x="850" y="175" fill="#c6d0e0" text-anchor="middle" font-size="22">📱</text>
+
+        <!-- DLQ + retry bucket -->
+        <rect x="500" y="270" width="130" height="34" rx="8" fill="#4b1a1a" stroke="#f7567c" class="a-hidden" data-anim id="retry-box"/>
+        <text x="565" y="292" fill="#f7c1cf" text-anchor="middle" font-weight="700" class="a-hidden" data-anim id="retry-lbl">retry in 2s ⟳</text>
+
+        <!-- Legend -->
+        <text x="20" y="30" fill="#7fa2ff" font-weight="700">OTP (critical)</text>
+        <circle cx="130" cy="26" r="8" fill="#f7567c"/>
+        <text x="200" y="30" fill="#7fa2ff" font-weight="700">Marketing (promo)</text>
+        <circle cx="325" cy="26" r="8" fill="#f4a259"/>
+        <text x="400" y="30" fill="#7fa2ff" font-weight="700">Duplicate (dedup)</text>
+        <circle cx="530" cy="26" r="8" fill="#7f8aa0"/>
+
+        <!-- Messages -->
+        <g id="msg-otp" class="a-hidden" data-anim>
+          <circle cx="0" cy="0" r="12" fill="#f7567c"/>
+          <text y="4" text-anchor="middle" fill="#fff" font-weight="700" font-size="10">OTP</text>
+        </g>
+        <g id="msg-mkt" class="a-hidden" data-anim>
+          <circle cx="0" cy="0" r="12" fill="#f4a259"/>
+          <text y="4" text-anchor="middle" fill="#0f1420" font-weight="700" font-size="10">MKT</text>
+        </g>
+        <g id="msg-dup" class="a-hidden" data-anim>
+          <circle cx="0" cy="0" r="12" fill="#7f8aa0"/>
+          <text y="4" text-anchor="middle" fill="#0f1420" font-weight="700" font-size="10">DUP</text>
+        </g>
+
+        <!-- caption zone stays in outer panel -->
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        function place(sel, x, y) {
+          const el = root.querySelector(sel);
+          if (!el) return;
+          el.setAttribute('transform', `translate(${x},${y})`);
+        }
+
+        const CFG = {
+          intro: 'One OTP races through the critical lane while a marketing message queues up and a duplicate gets rejected.',
+          interval: 1700,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.remove('a-glow');
+              el.classList.add('a-hidden');
+              if (el.tagName === 'g') el.removeAttribute('transform');
+            });
+            r.querySelector('#q-critical')?.classList.remove('a-glow');
+            r.querySelector('#q-promo')?.classList.remove('a-glow');
+            r.querySelector('#twilio')?.classList.remove('a-glow');
+            r.querySelector('#twilio')?.setAttribute('stroke', '#2dc653');
+          },
+          steps: [
+            { caption: 'Caller service posts an OTP request to the Notification API. Validation and dedup pass — new request_id.',
+              apply: (r, $) => { const m = $('#msg-otp'); m.classList.remove('a-hidden'); place('#msg-otp', 85, 170); } },
+            { caption: 'API routes OTP to the CRITICAL Kafka topic — it jumps ahead of everything else.',
+              apply: (r, $) => { place('#msg-otp', 245, 100); $('#q-critical').classList.add('a-glow'); } },
+            { caption: 'Meanwhile a marketing blast enqueues on the PROMO topic — it will wait behind critical.',
+              apply: (r, $) => { const m = $('#msg-mkt'); m.classList.remove('a-hidden'); place('#msg-mkt', 245, 220); $('#q-promo').classList.add('a-glow'); } },
+            { caption: 'Router pulls the OTP first (priority-aware consumer), fetches prefs and rate-limit budget from Redis.',
+              apply: (r, $) => { place('#msg-otp', 405, 170); $('#q-critical').classList.remove('a-glow'); } },
+            { caption: 'Same request_id retried by the caller — API rejects it as duplicate before it even reaches the queue.',
+              apply: (r, $) => { const d = $('#msg-dup'); d.classList.remove('a-hidden'); place('#msg-dup', 155, 170); d.classList.add('a-glow'); } },
+            { caption: 'OTP fans out into the SMS channel worker.',
+              apply: (r, $) => { place('#msg-otp', 565, 170); } },
+            { caption: 'Worker calls Twilio — first attempt times out (transient failure). Message is re-enqueued with backoff.',
+              apply: (r, $) => { $('#twilio').setAttribute('stroke','#f7567c'); $('#retry-box').classList.remove('a-hidden'); $('#retry-lbl').classList.remove('a-hidden'); place('#msg-otp', 565, 280); } },
+            { caption: 'After 2s backoff the worker retries. Twilio accepts the SMS and returns 202.',
+              apply: (r, $) => { $('#twilio').setAttribute('stroke','#2dc653'); $('#twilio').classList.add('a-glow'); place('#msg-otp', 725, 170); } },
+            { caption: 'Twilio delivers the SMS to the user\'s phone. Tracker records status=delivered.',
+              apply: (r, $) => { place('#msg-otp', 850, 170); $('#msg-otp').classList.add('a-glow'); } },
+            { caption: 'Now the marketing message finally gets picked up — critical never blocked it, but it waited its turn.',
+              apply: (r, $) => { place('#msg-mkt', 405, 170); $('#q-promo').classList.remove('a-glow'); } },
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. Ingest API — the deduplication front door</h3>
+    <p>The Notification API is a thin, stateless service behind an API Gateway. It performs three cheap checks and then returns immediately with a <code>202 Accepted</code>. First, it authenticates the caller (mTLS or short-lived JWT). Second, it validates the schema and rejects malformed requests. Third, and most importantly, it enforces <strong>idempotency</strong> by consulting Redis with the caller-supplied <code>request_id</code>: <code>SET nx:req:{id} 1 EX 86400 NX</code>. If the key already exists, we treat the request as a duplicate and drop it. This is the primary defence against double sends caused by client retries. Fast-path latency stays under 20 ms so callers can call it synchronously with confidence.</p>
+
+    <h3>2. Priority-partitioned queues</h3>
+    <p>A single FIFO queue would let a 5-million-row marketing job block an urgent OTP. Instead we run <strong>separate Kafka topics per priority tier</strong> (or SQS FIFO queues with a priority attribute if you prefer SQS). Consumers on the critical topic get a large consumer group (say, 200 pods), transactional gets 100, promo gets 20. Because Kafka guarantees no head-of-line blocking across topics, the critical lane drains at its own pace irrespective of promo backlog. A common alternative — a <strong>weighted round-robin consumer</strong> — reads from all three but skews 70/25/5 in favor of higher priority.</p>
+
+    <h3>3. Notification Router</h3>
+    <p>Consumes from all priority topics, resolves the user, and fans out to per-channel queues. It hits three stores per message: (a) <strong>User Preferences DB</strong> — which channels the user allows, quiet hours, opt-out flags; (b) <strong>Redis rate-limit</strong> — token bucket per user (say, 20 promo msgs/day) and per tenant; (c) an optional <strong>de-throttle cache</strong> to suppress duplicate content sent within N minutes. If a user opted out of email but allows push, only the push message is emitted. The router is where policy lives.</p>
+
+    <h3>4. Rate limiter</h3>
+    <p>We use a <strong>token-bucket algorithm in Redis</strong> with Lua-atomic decrement — the standard implementation for high-cardinality rate limits. Two dimensions of buckets are enforced simultaneously: <em>per-user</em> (protects the recipient from spam) and <em>per-tenant / per-vendor</em> (protects our vendor quotas — Twilio, SES). When a bucket is empty, the message is deferred back to the topic with a delay, not dropped, so it eventually gets through.</p>
+
+    <h3>5. Channel workers &amp; retry mechanism</h3>
+    <p>Each channel has its own pool of workers matched to the vendor's rate limits. The worker fetches a message, renders the template, and calls the vendor with a strict timeout (email 5 s, SMS 3 s, push 2 s). On any 5xx or timeout it invokes the retry loop: <strong>exponential backoff with jitter</strong>, capped at ~5 attempts. The delay formula is <code>min(cap, base × 2^attempt) + random(0, jitter)</code>. Delayed messages are re-enqueued to a delay queue (SQS delay queue, or Kafka with a scheduled-consumer pattern). After the retry budget is exhausted, the message goes to a <strong>Dead Letter Queue</strong> and an alert fires; operators can inspect and manually replay from the DLQ.</p>
+
+    <h3>6. Idempotency in the delivery worker</h3>
+    <p>Even with front-door dedup, the worker must be idempotent because Kafka guarantees at-least-once. Before calling the vendor the worker checks (and writes) a marker in Redis keyed on the notification's <code>message_id</code>: <code>SET sent:{id} 1 EX 3600 NX</code>. If a duplicate message arrives after the first has already been dispatched, the worker skips the vendor call. For vendors that also accept an idempotency key (Twilio does), we forward it too — belt and braces.</p>
+
+    <h3>7. Notification tracker &amp; analytics</h3>
+    <p>Every state transition (queued, sent, delivered, failed, opened, clicked) emits a small event to a Kafka topic. A stream processor lands them in <strong>Cassandra</strong> partitioned by <code>user_id, day</code> — write-optimized, cheap seeks by user. A parallel branch feeds a real-time dashboard (deliveries/sec, DLQ growth, vendor latencies).</p>
+
+    <h3>8. Template &amp; personalization service</h3>
+    <p>Templates live in an object store with a metadata table (S3 + DynamoDB). The router resolves <code>template_id + locale</code> and hands the worker a rendered payload, or defers rendering to the worker to save router CPU. Personalization tokens (<code>{{first_name}}</code>) get filled in from the request's <code>data</code> field.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Even though this looks like glue code between queues and vendors, the interesting engineering hides in a handful of well-known algorithms — <strong>get these right and the whole system behaves</strong>.</p>
+    <table>
+      <tr><th>Where</th><th>Algorithm / data structure</th><th>Why it's chosen</th><th>Complexity</th></tr>
+      <tr><td>Ingest dedup</td><td>Hash set in Redis with TTL (<code>SET NX EX</code>)</td><td>O(1) lookup at millions of requests/sec; TTL bounds memory</td><td>O(1) per op</td></tr>
+      <tr><td>Rate limiter</td><td>Token bucket (Redis + Lua script)</td><td>Bursty-tolerant, cheap; smoother than fixed windows</td><td>O(1) per check</td></tr>
+      <tr><td>Priority scheduling</td><td>Separate Kafka topics per tier + weighted consumer</td><td>Avoids head-of-line blocking without needing a heap</td><td>O(log n) if using a min-heap in-memory scheduler instead</td></tr>
+      <tr><td>Scheduled &amp; delayed sends</td><td>Sorted set / min-heap keyed on <code>send_at</code></td><td>Efficient "next-due" pop; used for scheduled campaigns and retry backoff</td><td>O(log n) insert &amp; pop</td></tr>
+      <tr><td>Retry backoff</td><td>Exponential backoff with full jitter</td><td>Prevents thundering-herd; smooths recovery after vendor outage</td><td>O(1) per attempt</td></tr>
+      <tr><td>User preference lookup</td><td>Key-value store (DynamoDB / Cassandra) keyed on <code>user_id</code></td><td>Hot-path read, needs single-digit-ms p99</td><td>O(1) point read</td></tr>
+      <tr><td>De-throttling (suppress duplicates within window)</td><td>Bloom filter over recent content hashes</td><td>Space-efficient membership test with tolerable false-positive rate</td><td>O(k) per check</td></tr>
+      <tr><td>Fan-out to N channels</td><td>Simple loop; parallelized per channel</td><td>Each channel is independent — no cross-channel ordering needed</td><td>O(channels)</td></tr>
+      <tr><td>Tracking store partitioning</td><td>Cassandra partitioned by (user_id, day)</td><td>Write-heavy log; cheap per-user queries</td><td>O(1) writes; O(log n) range scan per user</td></tr>
+      <tr><td>Analytics aggregates</td><td>Count-Min Sketch / HyperLogLog on the stream</td><td>Approximate counts of unique opens/clicks in bounded memory</td><td>O(1) per event</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>The whole thing maps naturally onto AWS managed services — you can run this without owning a single VM if you want. The reference choice below leans on <strong>SQS + Lambda</strong> for the fan-out lanes and <strong>MSK (Kafka)</strong> for the priority-partitioned ingest bus; you can swap to Kinesis or all-SQS depending on ordering needs and existing infra.</p>
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Ingest API</td><td>API Gateway + ECS (Fargate) or Lambda</td><td>Auto-scaling, mTLS, usage plans / throttling built-in</td></tr>
+      <tr><td>Idempotency cache</td><td>ElastiCache for Redis (cluster mode)</td><td>Sub-ms SET NX EX, replicates for HA</td></tr>
+      <tr><td>Priority queues</td><td>Amazon MSK (Kafka) — 3 topics × N partitions</td><td>Best throughput + independent consumer groups per priority</td></tr>
+      <tr><td>Channel queues</td><td>Amazon SQS Standard (or SQS FIFO where per-user ordering matters)</td><td>Cheap, at-least-once, delay queue built-in for backoff retries</td></tr>
+      <tr><td>Workers</td><td>Lambda (bursty) or ECS/EKS with KEDA (steady)</td><td>Auto-scale off queue depth; per-channel isolation</td></tr>
+      <tr><td>Email delivery</td><td>Amazon SES</td><td>14k msgs/s default, DKIM/SPF, event feedback via SNS</td></tr>
+      <tr><td>SMS delivery</td><td>Amazon SNS or Twilio via API</td><td>SNS for global SMS; Twilio when regulatory/routing needs matter</td></tr>
+      <tr><td>Push (iOS/Android)</td><td>Amazon SNS Mobile Push (proxies APNs + FCM) or Amazon Pinpoint</td><td>Handles cert rotation, device-token cleanup</td></tr>
+      <tr><td>In-app notifications</td><td>DynamoDB + API Gateway WebSockets</td><td>Fan-out real-time to connected devices; feed offline banner history</td></tr>
+      <tr><td>Preferences DB</td><td>DynamoDB</td><td>Single-digit-ms point reads by <code>user_id</code></td></tr>
+      <tr><td>Rate limiter</td><td>ElastiCache for Redis</td><td>Atomic Lua scripts for token-bucket counters</td></tr>
+      <tr><td>Tracking store</td><td>Amazon Keyspaces (managed Cassandra) or DynamoDB</td><td>Write-heavy event log partitioned by user/day</td></tr>
+      <tr><td>Analytics stream</td><td>Kinesis Data Streams + Firehose → S3 → Athena/QuickSight</td><td>Real-time + long-term retention for BI</td></tr>
+      <tr><td>Dead Letter Queue</td><td>SQS DLQ attached to each channel queue</td><td>Standard pattern; CloudWatch alarms on <code>ApproximateNumberOfMessagesVisible</code></td></tr>
+      <tr><td>Templates</td><td>S3 (bodies) + DynamoDB (metadata)</td><td>Cheap versioned storage; hot cache in CloudFront/Redis</td></tr>
+      <tr><td>Observability</td><td>CloudWatch + X-Ray</td><td>Latency + error rates per channel; traces across queue boundaries</td></tr>
+    </table>
+    <p><strong>Deployment sketch:</strong> Two active AZs behind API Gateway; MSK across 3 AZs with replication factor 3; SQS is multi-AZ by default. Push workers auto-scale on SQS <code>ApproximateNumberOfMessagesVisible</code> using KEDA on EKS. SES event notifications (bounce, complaint, delivery) feed back into the tracker via SNS → SQS → Lambda. For DR you replicate MSK topics to a second region using MirrorMaker 2 and keep the ingest API multi-region active-active with Route 53 latency routing.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>Two of the trickiest bits deserve reference code: the <strong>ingest-time idempotency check</strong> and the <strong>channel worker's retry loop with exponential backoff + jitter</strong>. The snippet below is realistic ASP.NET Core / StackExchange.Redis / Polly — the same libraries you would ship in production.</p>
+
+    <pre><code><span class="cmt">// ------------------------------------------------------------
+// 1. Ingest API — accepts a notification, dedups, publishes to Kafka
+// ------------------------------------------------------------</span>
+<span class="kw">public class</span> <span class="typ">NotificationController</span> : <span class="typ">ControllerBase</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IConnectionMultiplexer</span> _redis;
+    <span class="kw">private readonly</span> <span class="typ">IKafkaProducer</span> _kafka;
+
+    [<span class="typ">HttpPost</span>(<span class="str">"/notifications"</span>)]
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">IActionResult</span>&gt; <span class="fn">Send</span>([<span class="typ">FromBody</span>] <span class="typ">NotificationRequest</span> req)
+    {
+        <span class="cmt">// Fail fast on missing idempotency key — callers must supply one.</span>
+        <span class="kw">if</span> (<span class="kw">string</span>.<span class="fn">IsNullOrWhiteSpace</span>(req.RequestId))
+            <span class="kw">return</span> <span class="fn">BadRequest</span>(<span class="str">"request_id required"</span>);
+
+        <span class="cmt">// SET NX EX — atomic dedup; TTL bounds Redis memory.</span>
+        <span class="kw">var</span> db = _redis.<span class="fn">GetDatabase</span>();
+        <span class="kw">var</span> firstSeen = <span class="kw">await</span> db.<span class="fn">StringSetAsync</span>(
+            key:   $<span class="str">"nx:req:{req.RequestId}"</span>,
+            value: <span class="str">"1"</span>,
+            expiry: <span class="typ">TimeSpan</span>.<span class="fn">FromHours</span>(24),
+            when:  <span class="typ">When</span>.NotExists);
+
+        <span class="kw">if</span> (!firstSeen) <span class="kw">return</span> <span class="fn">Accepted</span>(<span class="kw">new</span> { status = <span class="str">"duplicate"</span> });
+
+        <span class="cmt">// Priority routes to a topic; unknown priority defaults to transactional.</span>
+        <span class="kw">var</span> topic = req.Priority <span class="kw">switch</span>
+        {
+            <span class="typ">Priority</span>.Critical      =&gt; <span class="str">"notif.critical"</span>,
+            <span class="typ">Priority</span>.Promotional   =&gt; <span class="str">"notif.promo"</span>,
+            _                       =&gt; <span class="str">"notif.transactional"</span>
+        };
+
+        <span class="cmt">// key by user_id → same user's msgs land on the same partition (ordering).</span>
+        <span class="kw">await</span> _kafka.<span class="fn">ProduceAsync</span>(topic, key: req.UserId, value: req);
+        <span class="kw">return</span> <span class="fn">Accepted</span>(<span class="kw">new</span> { status = <span class="str">"queued"</span>, req.RequestId });
+    }
+}
+
+<span class="cmt">// ------------------------------------------------------------
+// 2. SMS Channel Worker — retries with exponential backoff + jitter,
+//    idempotency guard, DLQ on exhaustion.
+// ------------------------------------------------------------</span>
+<span class="kw">public class</span> <span class="typ">SmsWorker</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IConnectionMultiplexer</span> _redis;
+    <span class="kw">private readonly</span> <span class="typ">ITwilioClient</span> _twilio;
+    <span class="kw">private readonly</span> <span class="typ">ISqsClient</span> _sqs;
+    <span class="kw">private static readonly</span> <span class="typ">Random</span> Rng = <span class="kw">new</span>();
+
+    <span class="kw">private const int</span>  MaxAttempts = 5;
+    <span class="kw">private const int</span>  BaseMs      = 500;
+    <span class="kw">private const int</span>  CapMs       = 30_000;
+
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">HandleAsync</span>(<span class="typ">SmsMessage</span> msg, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="cmt">// Second-line idempotency: skip if already sent (Kafka may redeliver).</span>
+        <span class="kw">var</span> alreadySent = !<span class="kw">await</span> _redis.<span class="fn">GetDatabase</span>().<span class="fn">StringSetAsync</span>(
+            $<span class="str">"sent:{msg.MessageId}"</span>, <span class="str">"1"</span>, <span class="typ">TimeSpan</span>.<span class="fn">FromHours</span>(1), <span class="typ">When</span>.NotExists);
+        <span class="kw">if</span> (alreadySent) <span class="kw">return</span>;
+
+        <span class="kw">try</span>
+        {
+            <span class="cmt">// Twilio also accepts an idempotency key — belt and braces.</span>
+            <span class="kw">await</span> _twilio.<span class="fn">SendSmsAsync</span>(msg.PhoneNumber, msg.Body,
+                idempotencyKey: msg.MessageId, cancellationToken: ct);
+
+            <span class="cmt">// Emit tracking event (sent) — details omitted.</span>
+        }
+        <span class="kw">catch</span> (<span class="typ">TwilioTransientException</span> ex) <span class="kw">when</span> (msg.Attempt &lt; MaxAttempts)
+        {
+            <span class="kw">var</span> delayMs = <span class="typ">Math</span>.<span class="fn">Min</span>(CapMs, BaseMs * (<span class="kw">int</span>)<span class="typ">Math</span>.<span class="fn">Pow</span>(2, msg.Attempt));
+            <span class="kw">var</span> jittered = Rng.<span class="fn">Next</span>(0, delayMs); <span class="cmt">// full-jitter (AWS blog): random[0, delayMs]</span>
+
+            msg.Attempt++;
+            msg.LastError = ex.Message;
+
+            <span class="cmt">// Re-enqueue with delay so the message becomes visible again after backoff.</span>
+            <span class="kw">await</span> _sqs.<span class="fn">SendAsync</span>(<span class="str">"sms-queue"</span>, msg, delaySeconds: jittered / 1000);
+
+            <span class="cmt">// IMPORTANT: clear the "sent" marker so the retry can proceed.</span>
+            <span class="kw">await</span> _redis.<span class="fn">GetDatabase</span>().<span class="fn">KeyDeleteAsync</span>($<span class="str">"sent:{msg.MessageId}"</span>);
+        }
+        <span class="kw">catch</span> (<span class="typ">Exception</span> ex)
+        {
+            <span class="cmt">// Non-retriable OR budget exhausted → DLQ + alert.</span>
+            <span class="kw">await</span> _sqs.<span class="fn">SendAsync</span>(<span class="str">"sms-queue-dlq"</span>,
+                <span class="kw">new</span> { msg, reason = ex.Message, ts = <span class="typ">DateTime</span>.UtcNow });
+        }
+    }
+}</code></pre>
+
+    <p>Two things worth calling out: (a) the ingest handler is <strong>synchronous but fast</strong> — the caller gets a <code>202 Accepted</code> and moves on, while the actual delivery is async; and (b) the retry loop uses <strong>full jitter</strong> (<code>Random(0, delay)</code>) rather than plain exponential backoff — a small change that meaningfully reduces the thundering-herd after a vendor outage. Alternative stacks: <strong>Java</strong> with Spring + Resilience4j retries, <strong>Go</strong> with <code>backoff/v4</code> + Kafka client, or <strong>Node.js</strong> with BullMQ (Redis) for smaller workloads.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <p>The main tension in a notification system is between <strong>reliability and cost</strong>. At-least-once delivery is easy; exactly-once is not — it requires end-to-end idempotency and monotonic message IDs, and you pay for it with more Redis, more state, more code. Most teams pick <strong>at-least-once + strong idempotency</strong> and call it a day, because a user rarely notices a duplicate SMS as much as they notice a missing OTP. The failure mode you are most likely to interview on is <strong>vendor outage</strong>: SES silently drops your throughput to 1k/s, your queue backs up, DLQ grows, and users see delayed emails. The escape hatch is <strong>multi-vendor fallback</strong> — route to Twilio if SNS SMS is degraded, use SendGrid if SES rate-limits — driven by circuit breakers that observe error rates per vendor.</p>
+    <p>Two other classic gotchas: <strong>hot users</strong> (a celebrity account gets 10,000 events at once — you need per-user rate limiting <em>and</em> partition-aware sharding to avoid one Kafka partition owning all the traffic) and <strong>token invalidation</strong> (an iOS app is uninstalled → APNs returns 410 Gone; the worker must remove that device token from the preferences store, otherwise it wastes vendor calls forever).</p>
+
+    <h3>Likely interview follow-ups</h3>
+
+    <div class="qa">
+      <p class="q">How do you achieve exactly-once delivery?</p>
+      <p class="a">You approximate it with at-least-once + idempotency: ingest-time dedup on <code>request_id</code>, worker-side dedup on <code>message_id</code> before the vendor call, and pass an idempotency key to the vendor when they support it (Twilio, Stripe, some SES flows do). True exactly-once across independent networks is impossible; users won't notice the difference if idempotency is airtight.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">What if the third-party vendor is down for an hour?</p>
+      <p class="a">The circuit breaker opens after N consecutive failures and stops calling the vendor; messages accumulate in the channel queue (harmless — queues are durable) or fan out to a secondary vendor. Once the breaker sees healthy probes it half-opens and drains the backlog. For truly urgent messages you can hot-swap to a fallback provider (SNS ↔ Twilio) on the fly.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">How would you scale to 10× traffic tomorrow?</p>
+      <p class="a">Ingest API and channel workers auto-scale horizontally — Kafka gets more partitions on the critical topic, SQS is elastic by default, Redis moves to cluster mode. The real bottleneck is <strong>vendor quotas</strong>, not us: negotiate higher SES/Twilio limits, buy more phone-number pools for SMS, add device-token sharding for push. Also expect the tracking store to be the next thing to feel it — pre-shard Cassandra with an extra partitioning dimension.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">How do you handle scheduled or time-zone-aware sends?</p>
+      <p class="a">A separate <strong>scheduler service</strong> stores scheduled jobs in a sorted set / min-heap keyed on <code>send_at</code>. A tight loop pops due entries every second and injects them into the priority topics. For time-zone-aware sends, store the user's TZ in preferences and resolve <code>send_at</code> per user at enqueue time.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">How do you prevent notification storms after a bug?</p>
+      <p class="a">Two guardrails. First, a <strong>global kill-switch per tenant/template</strong> — flipping a flag in DynamoDB causes the router to drop matching messages instantly. Second, a <strong>per-user cooldown</strong> maintained in Redis (max N msgs / hour); anything above it gets rejected and logged. In practice: also have an on-call runbook for "purge Kafka topic X" and rehearse it.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Why not just use SNS or SendGrid directly and skip building this?</p>
+      <p class="a">Small startups do exactly that. You start needing this system when: (a) you have &gt;1 channel per user (choice logic), (b) you need per-user preferences and unsubscribes across channels, (c) you need centralized rate-limiting, dedup, and analytics, (d) you have compliance rules (quiet hours, GDPR opt-out) that must be enforced uniformly. Below that scale, SNS/SendGrid is fine.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "I'd build a fan-out pipeline with an idempotent ingest API in front of three priority-partitioned Kafka topics — critical, transactional, promo. A router consumes them, applies user preferences and Redis token-bucket rate limits, then fans out to per-channel SQS queues. Channel workers call the vendor with a 3-attempt exponential-backoff-with-jitter retry, dead-letter after that, and everything emits tracking events to Cassandra. Idempotency is enforced twice — ingest and worker — using Redis SET NX. That gives at-least-once delivery, priority isolation, and no duplicate sends."</p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li><strong>10 B messages/day</strong>, ~115k QPS avg, ~350k peak.</li>
+      <li><strong>60/25/5/10 split</strong> across push / email / SMS / in-app.</li>
+      <li><strong>&lt; 3 s p99</strong> for OTP; &lt; 60 s p99 for transactional; &lt; 1 h for promo.</li>
+      <li><strong>5 retry attempts</strong>, base 500ms, cap 30 s, <strong>full jitter</strong>.</li>
+      <li><strong>SES 14k/s</strong>, <strong>Twilio ~200/s per number pool</strong> — vendor limits drive worker fleet size.</li>
+    </ul>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li>"Priority via <strong>separate topics</strong>, not a heap — avoids head-of-line blocking without an in-memory bottleneck."</li>
+      <li>"Idempotency is <strong>doubled</strong>: ingest Redis dedup on <code>request_id</code>, worker Redis marker on <code>message_id</code>."</li>
+      <li>"Retries use <strong>exponential backoff with full jitter</strong>, not plain backoff — cures thundering-herd."</li>
+      <li>"Bad-vendor day is handled by <strong>circuit breaker + multi-vendor fallback</strong>, not by dropping messages."</li>
+      <li>"Every message emits a tracking event — the tracker is a Kafka → Cassandra log, not a DB update — <strong>writes stay append-only</strong>."</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://www.geeksforgeeks.org/system-design/design-notification-services-system-design/">GeeksforGeeks — Design Notification Services (System Design)</a></li>
+      <li><a href="https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/">AWS Architecture Blog — Exponential Backoff and Jitter</a></li>
+      <li><a href="https://docs.aws.amazon.com/sns/latest/dg/welcome.html">AWS Docs — Amazon SNS</a></li>
+      <li><a href="https://docs.aws.amazon.com/ses/latest/dg/quotas.html">AWS Docs — SES quotas &amp; throughput</a></li>
+      <li><a href="https://www.twilio.com/docs/usage/api">Twilio API docs — idempotency, throughput</a></li>
+      <li><a href="https://firebase.google.com/docs/cloud-messaging">Firebase Cloud Messaging (FCM) docs</a></li>
+      <li><a href="https://developer.apple.com/documentation/usernotifications/setting_up_a_remote_notification_server">Apple Push Notification service (APNs) reference</a></li>
+      <li><a href="https://kafka.apache.org/documentation/">Apache Kafka — priority-topic patterns</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

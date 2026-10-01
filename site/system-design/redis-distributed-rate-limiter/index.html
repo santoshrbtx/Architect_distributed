@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>interview: Redis Distributed Rate Limiter — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c; --scenario-bg: #fff0f4;
+    --reqs: #f4a259;     --reqs-bg: #fff7ed;
+    --arch: #4361ee;     --arch-bg: #eef2ff;
+    --anim: #00b4d8;     --anim-bg: #eef9fc;
+    --dsa: #7048e8;      --dsa-bg: #f3effe;
+    --aws: #ff9900;      --aws-bg: #fff6e6;
+    --laymen: #ffd166;   --laymen-bg: #fff9e6;
+    --code-bg: #1e2430;  --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px;
+    box-shadow: var(--shadow); margin-bottom: 24px;
+  }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p  { margin: 0; font-size: 1.15rem; opacity: .94; }
+  .tagchip {
+    display: inline-block; background: #ffd166; color: #7c5c00; font-weight: 800;
+    font-size: .72rem; padding: 4px 10px; border-radius: 999px; letter-spacing: .06em;
+    text-transform: uppercase; margin-right: 8px; vertical-align: middle;
+  }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5; background: var(--card);
+    border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+    margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: #d69e2e; color: #fff; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre; font-size: .88rem; line-height: 1.5; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { position: relative; padding: 10px 0 10px 46px; margin: 0; border-bottom: 1px dashed var(--line); }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff;
+    border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  /* two-column comparison boxes (fail-open vs fail-closed, gateway vs app vs service) */
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 14px 0; }
+  @media (max-width: 720px) { .twocol { grid-template-columns: 1fr; } }
+  .box { border-radius: 12px; padding: 14px 16px; border: 1px solid var(--line); background: var(--card); }
+  .box.pros { border-left: 4px solid var(--accent); background: #ecfdf5; }
+  .box.cons { border-left: 4px solid #f7567c; background: #fff0f4; }
+  .box h4 { margin: 0 0 6px; }
+  .box ul { margin: 6px 0 0 18px; padding: 0; }
+
+  .callout {
+    background: #fff; border-left: 4px solid var(--arch); padding: 12px 16px;
+    border-radius: 10px; margin: 14px 0; box-shadow: var(--shadow);
+  }
+  .callout.warn { border-left-color: #f7567c; background: #fff5f7; }
+  .callout.good { border-left-color: var(--accent); background: #ecfdf5; }
+
+  /* Animation harness */
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease,
+                fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1><span class="tagchip">interview:</span> Redis Distributed Rate Limiter</h1>
+    <p>Twenty stateless application servers, one shared counter. How Redis + atomic Lua turns "100 requests per minute per user" into a decision every server can trust — with the fixed-window boundary bug, sliding window, token bucket, and the fail-open vs fail-closed decisions that separate a good answer from a great one.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 In laymen terms</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#algos">⚙️ Algorithms</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#amazon">🗣️ Amazon answer</a>
+    <a href="#cheat">✅ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <!-- ============================ SCENARIO ============================ -->
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>The problem an interviewer is really asking</h2>
+    <p>An interviewer draws twenty rectangles labelled <em>App&nbsp;1</em> through <em>App&nbsp;20</em>, a load balancer on top, and says: <strong>"Each user is allowed 100 requests per minute. Any server may see any request. Design the rate limiter."</strong> The trap is subtle. On a single server you would use a hash-map counter and be done in five lines. In a distributed system that same map is <em>twenty independent counters</em> — the load balancer sprays requests across boxes, so a user who has already spent all 100 requests on server&nbsp;A can happily continue on server&nbsp;B and still look "under the limit" on both. Local memory is the wrong place for shared state.</p>
+
+    <p>The classic fix is to move the counter into a shared, in-memory store that every application server can hit with sub-millisecond latency: <strong>Redis</strong>. Redis gives you exactly what a rate limiter needs — atomic operations (<code>INCR</code>, <code>EXPIRE</code>, <code>ZADD</code>, sorted sets), TTL for automatic cleanup, and Lua scripting so a "read, decide, write" sequence executes as one indivisible unit. Once the counter lives in Redis, all twenty servers are agreeing on the same source of truth: one <code>rate-limit:user:101:2026-08-22T10:15</code> key, one atomic increment, one decision.</p>
+
+    <p>Every serious API service you use has this in front of it: <strong>Stripe</strong> runs four layers of token-bucket limiters on Redis and rejects millions of requests a month; <strong>GitHub</strong>, <strong>Twitter</strong>, <strong>Cloudflare</strong>, and <strong>AWS API Gateway</strong> all publish 429s under the same design. It is a top-3 interview question at Amazon, Google, Meta, and Stripe because it touches distributed state, atomicity, algorithm choice, HA trade-offs, and the CAP conversation — all in a single, contained problem.</p>
+
+    <div class="viz">
+Without a shared limiter
+========================
+
+                Client (userId=101)
+                        |
+                        v
+                  Load Balancer
+        +---------------+---------------+
+        |               |               |
+        v               v               v
+     App 1           App 2           App 3     ... App 20
+   local: 30       local: 27       local: 26     each thinks "still fine"
+        |               |               |
+        +-------- 100+27+26+... requests -------> upstream service
+                        |
+                        v
+                    ~2,000 req/min slipping through a "100/min" limit</div>
+  </section>
+
+  <!-- ============================ LAYMEN ============================ -->
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Explained like you've never written code</h2>
+    <p>Imagine a busy coffee shop that has <strong>one loyalty rule</strong> for every customer: <em>"You can order at most 100 coffees between 10:00 and 11:00."</em> Simple enough — one barista could just keep a tally sheet under the counter for each regular. If Priya walks up for her 101st coffee, the barista sees her tally is full and politely says "come back at 11:00."</p>
+
+    <p>Now the shop gets popular and opens <strong>twenty checkout counters</strong>. Priya can walk up to <em>any</em> counter, and no barista knows what the others have already served her. If each counter keeps its own private tally sheet, Priya could get 100 coffees at counter 1, then <em>another</em> 100 at counter 2, and so on. Twenty tally sheets can't enforce one rule. This is exactly the situation for a website with many servers.</p>
+
+    <p>The fix is beautifully simple: <strong>put one shared tally sheet on the wall in the middle of the shop.</strong> Every barista, at every counter, must run to the same wall, put a mark next to Priya's name, and check that she hasn't crossed 100 marks in the current hour. Because the sheet lives in one place, all twenty counters agree on the same count. The "wall" in a real system is a lightning-fast in-memory scratchpad called <strong>Redis</strong>, and the marks are just numbers that get automatically wiped after an hour so the sheet doesn't fill up forever.</p>
+
+    <p>There's a hard part everyone misses on the first try. Two baristas can walk to the wall <em>at the same instant</em>, both read "99", both think "one more is fine", both put a mark, and now Priya has 101 with the wall reading 100. The counters were <strong>not talking to each other</strong>. So we don't ask the wall "what's the count?" and then write — we ask it "<strong>add one and tell me the new number</strong>" as a single unbreakable action. That way even if a thousand baristas rush the wall at the same nanosecond, they each get a unique number: 99, 100, 101, 102… and everyone past 100 is turned away. This "add-then-return" step is the atomic core of the whole idea, and it is why Redis is the go-to answer.</p>
+
+    <p><strong>You've used this every day.</strong> When you refresh WhatsApp too fast and it says "please try again", when Instagram briefly stops loading after you scroll like a maniac, when Gmail says "you're sending too many messages" — you're being politely turned away by a system just like the one above. The whole point is fairness: <strong>no one user gets to hog the shop</strong>, so everyone else can still get their coffee.</p>
+  </section>
+
+  <!-- ============================ REQUIREMENTS ============================ -->
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What we're actually building &mdash; and how big</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Enforce N requests / window</strong> per user (default: 100 per minute).</li>
+      <li>Return <code>HTTP 429 Too Many Requests</code> when the limit is exceeded, with <code>Retry-After</code> and standard <code>RateLimit-*</code> headers.</li>
+      <li>Support <strong>multiple dimensions</strong>: per user, per IP, per API key, per tenant, per endpoint (and combinations like user+endpoint).</li>
+      <li>Support <strong>multiple algorithms</strong>: fixed window (simplest), sliding window (accurate), token bucket (bursty), leaky bucket (smoothing).</li>
+      <li>Configurable limits per route (login gets 5/min, search gets 100/min, profile GET gets 1000/min).</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Low latency</strong>: rate-limit check must add ≤ 1–2&nbsp;ms p99 to every request.</li>
+      <li><strong>Atomic</strong>: no race condition ever produces "counter says 100 but 101 got through".</li>
+      <li><strong>Horizontally scalable</strong>: works with 20 app servers today, 2,000 tomorrow, unchanged.</li>
+      <li><strong>Highly available</strong>: Redis outage should not black-hole the whole product — need an explicit fail policy.</li>
+      <li><strong>Observable</strong>: metrics for allowed / rejected, hot keys, script errors, Redis latency, decision distribution.</li>
+      <li><strong>Automatic cleanup</strong>: no key ever leaks past its window (TTL on every counter).</li>
+    </ul>
+
+    <h3>Back-of-the-envelope math</h3>
+    <table>
+      <tr><th>Number</th><th>Assumption</th><th>Result</th></tr>
+      <tr><td>Total API traffic</td><td>1M requests/sec across the fleet (large service)</td><td>Redis check on every one → <strong>1M ops/sec on Redis</strong></td></tr>
+      <tr><td>Redis capacity</td><td>Single Redis node handles ~100k ops/s of simple commands</td><td>Need <strong>~10 shards</strong> in a Redis cluster; keys hash-partitioned by user</td></tr>
+      <tr><td>Memory per counter</td><td>Fixed-window: ~80&nbsp;B/key. Sliding-log: ~40&nbsp;B × count entries</td><td>10M active users × 1 key × 80B ≈ <strong>~800 MB</strong> — trivial</td></tr>
+      <tr><td>TTL</td><td>Window ≤ 60s, so old keys evict themselves</td><td>Memory stays flat regardless of user churn</td></tr>
+      <tr><td>Latency budget</td><td>Redis RTT ~0.3–0.5ms + Lua exec ~0.1ms in the same AZ</td><td>≤ <strong>1 ms</strong> added to request p99</td></tr>
+      <tr><td>Bandwidth</td><td>~150 B request + ~50 B reply, 1M req/s</td><td>~200 MB/s Redis ingress+egress — inside a single 10 GbE NIC</td></tr>
+    </table>
+
+    <p>These numbers are the volunteering-them-unprompted numbers that separate a strong candidate from an average one. They also drive the architecture choice: at 1M ops/s you need a Redis <em>cluster</em>, not a single node, and you need to keep the algorithm cheap (a Lua script that touches 1–2 keys, not a sorted set with 100 zadds per request).</p>
+  </section>
+
+  <!-- ============================ ARCHITECTURE ============================ -->
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+
+    <p>The request flow is a single Redis round-trip inserted between the load balancer and the business logic. Every app server holds a Redis client with connection pooling, and every rate-limit decision is a single call to a pre-loaded Lua script (<code>EVALSHA</code>) so the network cost is one command per request. The Redis cluster shards keys by their hash slot — <code>rl:user:101:*</code> lives on one shard, <code>rl:user:502:*</code> on another — and each shard is fronted by a primary with one or two async replicas for HA.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+            <path d="M0,0 L10,5 L0,10 Z" fill="#8ea3d6"/>
+          </marker>
+          <marker id="arr-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+            <path d="M0,0 L10,5 L0,10 Z" fill="#2dc653"/>
+          </marker>
+          <marker id="arr-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+            <path d="M0,0 L10,5 L0,10 Z" fill="#f7567c"/>
+          </marker>
+        </defs>
+
+        <!-- Client -->
+        <rect x="380" y="20" width="140" height="46" rx="10" fill="#eef2ff" stroke="#4361ee"/>
+        <text x="450" y="49" text-anchor="middle" font-size="14" font-weight="700" fill="#1b2230">Client</text>
+
+        <!-- LB -->
+        <rect x="360" y="98" width="180" height="46" rx="10" fill="#fff6e6" stroke="#ff9900"/>
+        <text x="450" y="127" text-anchor="middle" font-size="14" font-weight="700" fill="#1b2230">Load Balancer / API Gateway</text>
+
+        <!-- App tier -->
+        <rect x="80"  y="180" width="150" height="60" rx="10" fill="#fff" stroke="#4361ee"/>
+        <text x="155" y="205" text-anchor="middle" font-size="13" font-weight="700">App Server 1</text>
+        <text x="155" y="224" text-anchor="middle" font-size="10.5" fill="#5b6677">Redis client + Lua SHA</text>
+
+        <rect x="260" y="180" width="150" height="60" rx="10" fill="#fff" stroke="#4361ee"/>
+        <text x="335" y="205" text-anchor="middle" font-size="13" font-weight="700">App Server 2</text>
+        <text x="335" y="224" text-anchor="middle" font-size="10.5" fill="#5b6677">Redis client + Lua SHA</text>
+
+        <rect x="440" y="180" width="150" height="60" rx="10" fill="#fff" stroke="#4361ee"/>
+        <text x="515" y="205" text-anchor="middle" font-size="13" font-weight="700">App Server 3</text>
+        <text x="515" y="224" text-anchor="middle" font-size="10.5" fill="#5b6677">Redis client + Lua SHA</text>
+
+        <rect x="620" y="180" width="150" height="60" rx="10" fill="#fff" stroke="#4361ee"/>
+        <text x="695" y="205" text-anchor="middle" font-size="13" font-weight="700">App Server N</text>
+        <text x="695" y="224" text-anchor="middle" font-size="10.5" fill="#5b6677">Redis client + Lua SHA</text>
+
+        <!-- Redis cluster -->
+        <rect x="240" y="310" width="430" height="120" rx="12" fill="#0f1420" stroke="#7048e8"/>
+        <text x="455" y="336" text-anchor="middle" font-size="13" font-weight="800" fill="#ffd166">Redis Cluster (shared rate-limit state)</text>
+
+        <rect x="260" y="352" width="120" height="60" rx="8" fill="#1a2340" stroke="#7048e8"/>
+        <text x="320" y="373" text-anchor="middle" font-size="12" font-weight="700" fill="#e7ecf3">Shard A</text>
+        <text x="320" y="391" text-anchor="middle" font-size="10" fill="#a0aec0">primary + replica</text>
+        <text x="320" y="405" text-anchor="middle" font-size="10" fill="#a0aec0">users 0..k1</text>
+
+        <rect x="395" y="352" width="120" height="60" rx="8" fill="#1a2340" stroke="#7048e8"/>
+        <text x="455" y="373" text-anchor="middle" font-size="12" font-weight="700" fill="#e7ecf3">Shard B</text>
+        <text x="455" y="391" text-anchor="middle" font-size="10" fill="#a0aec0">primary + replica</text>
+        <text x="455" y="405" text-anchor="middle" font-size="10" fill="#a0aec0">users k1..k2</text>
+
+        <rect x="530" y="352" width="120" height="60" rx="8" fill="#1a2340" stroke="#7048e8"/>
+        <text x="590" y="373" text-anchor="middle" font-size="12" font-weight="700" fill="#e7ecf3">Shard C</text>
+        <text x="590" y="391" text-anchor="middle" font-size="10" fill="#a0aec0">primary + replica</text>
+        <text x="590" y="405" text-anchor="middle" font-size="10" fill="#a0aec0">users k2..k3</text>
+
+        <!-- Arrows -->
+        <line x1="450" y1="66"  x2="450" y2="94"  stroke="#8ea3d6" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="410" y1="144" x2="180" y2="178" stroke="#8ea3d6" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="430" y1="144" x2="335" y2="178" stroke="#8ea3d6" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="470" y1="144" x2="515" y2="178" stroke="#8ea3d6" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="490" y1="144" x2="695" y2="178" stroke="#8ea3d6" stroke-width="2" marker-end="url(#arr)"/>
+
+        <line x1="155" y1="240" x2="320" y2="350" stroke="#00b4d8" stroke-width="2.2" marker-end="url(#arr)"/>
+        <line x1="335" y1="240" x2="380" y2="350" stroke="#00b4d8" stroke-width="2.2" marker-end="url(#arr)"/>
+        <line x1="515" y1="240" x2="480" y2="350" stroke="#00b4d8" stroke-width="2.2" marker-end="url(#arr)"/>
+        <line x1="695" y1="240" x2="600" y2="350" stroke="#00b4d8" stroke-width="2.2" marker-end="url(#arr)"/>
+
+        <text x="145" y="290" font-size="10.5" fill="#5b6677">EVALSHA rl_check</text>
+        <text x="580" y="290" font-size="10.5" fill="#5b6677">EVALSHA rl_check</text>
+      </svg>
+    </div>
+
+    <div class="legend">
+      <span><span class="dot" style="background:#4361ee"></span> App tier (stateless)</span>
+      <span><span class="dot" style="background:#7048e8"></span> Redis cluster (shared state)</span>
+      <span><span class="dot" style="background:#00b4d8"></span> Lua atomic script</span>
+      <span><span class="dot" style="background:#ff9900"></span> Ingress (LB/gateway)</span>
+    </div>
+
+    <h3>Request flow (allowed path)</h3>
+    <div class="viz">
+Client
+  |  (userId=101, POST /search)
+  v
+Load Balancer  --hash--> App Server 7 (arbitrary)
+  |
+  v
+Build key:  rl:user:101:2026-08-22T10:15   (userId + current minute)
+  |
+  v
+EVALSHA rl_check  keys=[rl:user:101:2026-08-22T10:15]  args=[limit=100, ttl=60]
+  |     (Lua on Redis, atomic):
+  |         local c = redis.call('INCR', KEYS[1])
+  |         if c == 1 then redis.call('EXPIRE', KEYS[1], ARGV[2]) end
+  |         return {c, tonumber(ARGV[1]) - c}
+  v
+Redis returns  {count=37, remaining=63}
+  |
+  v
+count <= 100  ->  attach RateLimit-* headers, forward to handler, return 200
+count  > 100  ->  return HTTP 429 + Retry-After: <seconds-to-window-end></div>
+
+    <h3>Redis key patterns</h3>
+    <p>Key naming carries the entire rate-limit contract. Include the algorithm prefix, the dimension, the identifier, and (for fixed/sliding windows) the window bucket. This is what an interviewer wants to see on the whiteboard:</p>
+    <div class="viz">
+rl:{algo}:{dim}:{id}:{window}
+==============================
+
+rl:fw:user:101:2026-08-22T10:15         # fixed window, user 101, minute bucket
+rl:fw:ip:203.0.113.44:2026-08-22T10:15  # fixed window per IP
+rl:sw:user:101                          # sliding window log — one sorted set
+rl:tb:user:101                          # token bucket — hash {tokens, last_refill}
+rl:fw:tenant:acme:route:search:...      # tenant + endpoint combo
+
+TTL policy:
+  fixed window        window_size + 1s  (self-cleaning)
+  sliding window log  window_size + 1s
+  token bucket        idle_ttl (e.g. 10 * window_size) — reset every use</div>
+  </section>
+
+  <!-- ============================ ANIMATION ============================ -->
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch the token bucket run, step by step</h2>
+    <p>This animation walks through the <strong>token bucket</strong> — the algorithm most production APIs choose because it allows small bursts while still enforcing an average rate. Tokens drip into the bucket at the refill rate. Every request tries to grab one token; if none are available it gets a 429. Press ▶ Play or step through with the buttons.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 340" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bkt" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stop-color="#4361ee"/>
+            <stop offset="1" stop-color="#7048e8"/>
+          </linearGradient>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+            <path d="M0,0 L10,5 L0,10 Z" fill="#8ea3d6"/>
+          </marker>
+        </defs>
+
+        <!-- Refill faucet -->
+        <rect x="250" y="10" width="110" height="26" rx="6" fill="#1a2340" stroke="#4cc9f0"/>
+        <text x="305" y="28" text-anchor="middle" font-size="12" font-weight="700" fill="#4cc9f0">refill 100/min</text>
+        <line x1="305" y1="36" x2="305" y2="62" stroke="#4cc9f0" stroke-width="2"/>
+
+        <!-- Bucket -->
+        <rect id="bucket" x="220" y="70" width="180" height="200" rx="14" fill="url(#bkt)" opacity="0.14" stroke="#7048e8" stroke-width="2"/>
+        <text x="310" y="100" text-anchor="middle" font-size="12" font-weight="700" fill="#a0aec0">TOKEN BUCKET</text>
+        <text x="310" y="120" text-anchor="middle" font-size="11" fill="#7f8aa0">capacity = 100</text>
+
+        <!-- Tokens (labelled t1..t5 shown as dots; the "count" is the label below) -->
+        <g id="tokens" fill="#ffd166" stroke="#7c5c00" stroke-width="1">
+          <circle id="t1" cx="255" cy="245" r="8"/>
+          <circle id="t2" cx="280" cy="245" r="8"/>
+          <circle id="t3" cx="305" cy="245" r="8"/>
+          <circle id="t4" cx="330" cy="245" r="8"/>
+          <circle id="t5" cx="355" cy="245" r="8"/>
+          <circle id="t6" cx="255" cy="218" r="8" class="a-hidden"/>
+          <circle id="t7" cx="280" cy="218" r="8" class="a-hidden"/>
+        </g>
+        <text id="tokenCount" x="310" y="298" text-anchor="middle" font-size="13" font-weight="800" fill="#e7ecf3">tokens = 5</text>
+
+        <!-- Requests approaching -->
+        <g>
+          <rect id="req1" x="30" y="150" width="86" height="34" rx="8" fill="#eef9fc" stroke="#00b4d8"/>
+          <text x="73" y="171" text-anchor="middle" font-size="12" font-weight="700" fill="#005f73">req A</text>
+
+          <rect id="req2" x="30" y="200" width="86" height="34" rx="8" fill="#eef9fc" stroke="#00b4d8" class="a-hidden"/>
+          <text id="req2-t" x="73" y="221" text-anchor="middle" font-size="12" font-weight="700" fill="#005f73" class="a-hidden">req B</text>
+
+          <rect id="req3" x="30" y="250" width="86" height="34" rx="8" fill="#eef9fc" stroke="#00b4d8" class="a-hidden"/>
+          <text id="req3-t" x="73" y="271" text-anchor="middle" font-size="12" font-weight="700" fill="#005f73" class="a-hidden">req C</text>
+        </g>
+
+        <!-- Path lines -->
+        <line x1="120" y1="167" x2="215" y2="167" stroke="#8ea3d6" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#ar)"/>
+
+        <!-- Redis on the right -->
+        <rect x="600" y="90" width="240" height="150" rx="14" fill="#0f1420" stroke="#7048e8"/>
+        <text x="720" y="118" text-anchor="middle" font-size="13" font-weight="800" fill="#ffd166">Redis (Lua atomic)</text>
+        <text x="720" y="146" text-anchor="middle" font-size="11" fill="#a0aec0">key: rl:tb:user:101</text>
+        <text id="redisTokens" x="720" y="176" text-anchor="middle" font-size="12" font-weight="700" fill="#e7ecf3">tokens: 5</text>
+        <text id="redisLast" x="720" y="196" text-anchor="middle" font-size="11" fill="#a0aec0">last_refill: t=0</text>
+        <text id="redisDec" x="720" y="222" text-anchor="middle" font-size="13" font-weight="800" fill="#2dc653">decision: —</text>
+
+        <line x1="400" y1="167" x2="595" y2="167" stroke="#8ea3d6" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#ar)"/>
+
+        <!-- Response tags -->
+        <rect id="resp200" x="450" y="290" width="120" height="34" rx="8" fill="#ecfdf5" stroke="#2dc653" class="a-hidden"/>
+        <text id="resp200-t" x="510" y="312" text-anchor="middle" font-size="12" font-weight="800" fill="#0f5132" class="a-hidden">200 OK</text>
+
+        <rect id="resp429" x="600" y="290" width="140" height="34" rx="8" fill="#fff0f4" stroke="#f7567c" class="a-hidden"/>
+        <text id="resp429-t" x="670" y="312" text-anchor="middle" font-size="12" font-weight="800" fill="#8f0f2c" class="a-hidden">429 Too Many</text>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'A token bucket with capacity 5 (drawn) and refill 100/min. Watch how three requests interact with it.',
+          interval: 1800,
+          reset: (r) => {
+            // reset token visibility (5 tokens present at start)
+            ['t1','t2','t3','t4','t5'].forEach(id => r.querySelector('#'+id)?.classList.remove('a-hidden','a-dim'));
+            ['t6','t7'].forEach(id => r.querySelector('#'+id)?.classList.add('a-hidden'));
+            r.querySelector('#tokenCount').textContent = 'tokens = 5';
+            r.querySelector('#redisTokens').textContent = 'tokens: 5';
+            r.querySelector('#redisLast').textContent = 'last_refill: t=0';
+            r.querySelector('#redisDec').textContent = 'decision: —';
+            r.querySelector('#redisDec').setAttribute('fill', '#2dc653');
+            // reset requests
+            r.querySelector('#req1').classList.remove('a-glow','a-dim');
+            r.querySelector('#req1').setAttribute('transform','');
+            ['#req2','#req2-t','#req3','#req3-t'].forEach(s => r.querySelector(s)?.classList.add('a-hidden'));
+            ['#resp200','#resp200-t','#resp429','#resp429-t'].forEach(s => r.querySelector(s)?.classList.add('a-hidden'));
+          },
+          steps: [
+            { caption: 'Request A arrives at an app server and calls EVALSHA on Redis.',
+              apply: (r, $) => { $('#req1').classList.add('a-glow'); } },
+            { caption: 'Lua runs atomically: compute elapsed → refill tokens up to capacity → tokens available (5), so consume one.',
+              apply: (r, $) => {
+                $('#redisTokens').textContent = 'tokens: 4';
+                $('#redisLast').textContent = 'last_refill: t=now';
+                $('#redisDec').textContent = 'decision: ALLOW';
+                $('#t5').classList.add('a-dim'); $('#t5').setAttribute('transform','translate(300,-90)');
+              } },
+            { caption: 'Bucket now shows 4 tokens; response 200 goes back with RateLimit-Remaining: 4.',
+              apply: (r, $) => {
+                $('#t5').classList.add('a-hidden'); $('#t5').classList.remove('a-dim'); $('#t5').setAttribute('transform','');
+                $('#tokenCount').textContent = 'tokens = 4';
+                $('#resp200').classList.remove('a-hidden'); $('#resp200-t').classList.remove('a-hidden');
+                $('#req1').classList.remove('a-glow'); $('#req1').classList.add('a-dim');
+              } },
+            { caption: 'Requests B and C arrive back-to-back — a mini burst. Both make it into Redis.',
+              apply: (r, $) => {
+                $('#req2').classList.remove('a-hidden'); $('#req2-t').classList.remove('a-hidden');
+                $('#req3').classList.remove('a-hidden'); $('#req3-t').classList.remove('a-hidden');
+                $('#req2').classList.add('a-glow'); $('#req3').classList.add('a-glow');
+              } },
+            { caption: 'Lua consumes tokens one at a time. tokens 4 → 3 → 2 → 1 → 0 as more traffic follows.',
+              apply: (r, $) => {
+                ['t4','t3','t2','t1'].forEach(id => $('#'+id).classList.add('a-hidden'));
+                $('#tokenCount').textContent = 'tokens = 0';
+                $('#redisTokens').textContent = 'tokens: 0';
+                $('#redisDec').textContent = 'decision: ALLOW ×4';
+              } },
+            { caption: 'A 5th request comes in. Bucket is empty, no refill has accumulated yet — Lua returns REJECT.',
+              apply: (r, $) => {
+                $('#redisDec').textContent = 'decision: REJECT';
+                $('#redisDec').setAttribute('fill', '#f7567c');
+                $('#resp429').classList.remove('a-hidden'); $('#resp429-t').classList.remove('a-hidden');
+                $('#resp200').classList.add('a-hidden'); $('#resp200-t').classList.add('a-hidden');
+              } },
+            { caption: 'Time passes. Faucet drips new tokens back into the bucket at the refill rate.',
+              apply: (r, $) => {
+                ['t1','t2'].forEach(id => { const el = $('#'+id); el.classList.remove('a-hidden'); });
+                $('#tokenCount').textContent = 'tokens = 2';
+                $('#redisTokens').textContent = 'tokens: 2';
+                $('#redisDec').textContent = 'decision: —';
+                $('#redisDec').setAttribute('fill', '#2dc653');
+              } },
+            { caption: 'Next request is allowed again. The bucket smooths bursts while enforcing the average rate.',
+              apply: (r, $) => {
+                $('#t1').classList.add('a-hidden');
+                $('#tokenCount').textContent = 'tokens = 1';
+                $('#redisTokens').textContent = 'tokens: 1';
+                $('#redisDec').textContent = 'decision: ALLOW';
+                $('#resp429').classList.add('a-hidden'); $('#resp429-t').classList.add('a-hidden');
+                $('#resp200').classList.remove('a-hidden'); $('#resp200-t').classList.remove('a-hidden');
+              } }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false; if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play'; return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <!-- ============================ ALGORITHMS ============================ -->
+  <section id="algos" class="card">
+    <h2>⚙️ Algorithm progression — the interview march</h2>
+    <p>Interviewers listen for how you <em>evolve</em> the design, not for the fanciest algorithm dropped on the table. Start simple, name each failure mode, then upgrade. This is the exact ladder:</p>
+
+    <h3>1. Fixed Window Counter (the "obvious" first cut)</h3>
+    <p>For each user, mint a key that includes the current minute. Every request runs an atomic <code>INCR</code>; if the resulting value is ≤ 100, allow it. Set a TTL of 60–61 seconds so old windows evaporate on their own.</p>
+    <pre><code>Key:    rl:fw:user:101:2026-08-22T10:15
+INCR    -> 1, 2, 3, ..., 100, 101
+IF count &lt;= 100  allow
+IF count &gt;  100  return 429</code></pre>
+    <p><strong>Why this works even across 20 app servers.</strong> Redis processes commands one at a time on a single thread per shard, and <code>INCR</code> is a single command — no two concurrent increments can ever produce the same return value. Every server sees a unique, monotonically increasing counter for that user's window. That is the whole distributed-consensus story reduced to one command.</p>
+
+    <div class="callout warn">
+      <strong>The atomicity bug you must call out:</strong> <code>INCR</code> then <code>EXPIRE</code> as separate commands is a subtle bug. If the app crashes or the network drops between the two, the counter has been incremented but has <em>no TTL</em>, so the key lives forever. Do them together in a Lua script (<em>see below</em>) or inside <code>MULTI/EXEC</code>. Also, only set the TTL when the counter is first created (<code>count == 1</code>); do not reset it on every increment or the window will silently slide forward.
+    </div>
+
+    <h3>2. The Fixed-Window Boundary Burst Problem</h3>
+    <p>Fixed window looks tight but has a well-known hole. Suppose the limit is 100/min. A user sends 100 requests in the last second of window 1 (say 10:00:59), then 100 more in the first second of window 2 (10:01:00). Each individual window is at exactly 100 — <em>both under the limit</em> — but the user has effectively done <strong>200 requests in ~2 seconds</strong>. Interviewers love this trap because it feels correct until you look at a two-second slice.</p>
+
+    <div class="viz">
+Fixed-window boundary burst
+===========================
+
+  10:00:00                 10:00:59  |  10:01:00                 10:01:59
+  ------------------------------------|-------------------------------------
+                            100 req   ||   100 req
+                              \      | ||    /
+                               \     | ||   /
+                                \    | ||  /
+                                 v   v vv v
+                              ~200 requests in a 2-second slice
+                              while every window "says 100"</div>
+
+    <p>Fix it by either (a) upgrading to a rolling window (log or counter), or (b) adopting token bucket. The next two algorithms do both.</p>
+
+    <h3>3. Sliding Window Log (accurate but expensive)</h3>
+    <p>Store one <em>Redis Sorted Set</em> per user. Each incoming request adds a member scored by its timestamp (in ms). Before deciding, drop everything older than <code>now − window</code>, then check how many members remain. If &lt; limit, add the current request and allow. All four operations must run inside a single Lua script so no other request can interleave.</p>
+    <pre><code>-- Lua, evaluated atomically on Redis
+local key    = KEYS[1]
+local now    = tonumber(ARGV[1])   -- ms
+local window = tonumber(ARGV[2])   -- ms
+local limit  = tonumber(ARGV[3])
+redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
+local count = redis.call('ZCARD', key)
+if count &lt; limit then
+    redis.call('ZADD', key, now, now .. ':' .. ARGV[4])   -- unique member
+    redis.call('PEXPIRE', key, window + 1000)
+    return {1, limit - count - 1}
+else
+    return {0, 0}
+end</code></pre>
+    <p><strong>Verdict:</strong> perfectly accurate — every "in the last 60 seconds" question is answered exactly. The cost is memory (one sorted-set entry per request) and CPU (log-time inserts + range deletes). Fine at moderate scale, painful at millions of RPS.</p>
+
+    <h3>4. Sliding Window Counter (95% accurate, 5% of the memory)</h3>
+    <p>Keep only two fixed-window counters: the current one and the previous one. Weight the previous by the fraction of the current window still ahead of us.</p>
+    <pre><code>Approx count = previous_count × (1 − elapsed/window) + current_count
+
+Example
+-------
+Limit = 100/min
+previous_count = 80  (10:14:00-10:14:59)
+current_count  = 30  (10:15:00-10:15:14 → 25% elapsed)
+
+Approx = 80 × (1 - 0.25) + 30
+       = 60 + 30 = 90   →  allow (90 &lt; 100)</code></pre>
+    <p><strong>Verdict:</strong> essentially eliminates the boundary burst while using only two integer keys per user. Cloudflare famously runs this in production. Most interviews accept this as "the right general answer" for accuracy-sensitive workloads.</p>
+
+    <h3>5. Token Bucket (bursts allowed, average rate enforced)</h3>
+    <p>Model the user as a bucket that holds up to <em>capacity</em> tokens and refills at a constant rate. Every request costs one token (or more, for expensive endpoints). If the bucket has ≥ cost tokens, deduct them and allow; otherwise reject. State fits in a Redis <em>hash</em> with two fields: <code>tokens</code> and <code>last_refill_ms</code>.</p>
+    <pre><code>-- Token bucket, evaluated atomically
+local key       = KEYS[1]
+local now       = tonumber(ARGV[1])    -- ms
+local capacity  = tonumber(ARGV[2])
+local refillPerMs = tonumber(ARGV[3])  -- e.g. 100/60000 = 0.00167
+local cost      = tonumber(ARGV[4])
+
+local data = redis.call('HMGET', key, 'tokens', 'last')
+local tokens = tonumber(data[1]) or capacity
+local last   = tonumber(data[2]) or now
+
+local delta  = math.max(0, now - last) * refillPerMs
+tokens = math.min(capacity, tokens + delta)
+
+if tokens &gt;= cost then
+    tokens = tokens - cost
+    redis.call('HMSET', key, 'tokens', tokens, 'last', now)
+    redis.call('PEXPIRE', key, math.ceil(capacity / refillPerMs) * 2)
+    return {1, tokens}
+else
+    redis.call('HMSET', key, 'tokens', tokens, 'last', now)
+    redis.call('PEXPIRE', key, math.ceil(capacity / refillPerMs) * 2)
+    return {0, tokens}
+end</code></pre>
+    <p><strong>Verdict:</strong> the general-purpose winner. It permits organic bursts (a real user clicking fast), enforces the average, supports <em>weighted costs</em> (a search costs 5 tokens, a report costs 20), and matches how Stripe, AWS API Gateway, and most cloud APIs actually behave. This is the safe answer to "which one would you pick in production?"</p>
+
+    <h3>6. Leaky Bucket (constant output rate)</h3>
+    <p>Requests are placed into a bounded FIFO queue; a worker drains the queue at a fixed rate. Excess is dropped. Where token bucket allows bursts of size <em>capacity</em>, leaky bucket smooths traffic to an exactly-constant rate. Use it when downstream systems need predictable pacing (video ingest, IoT metric fan-in, downstream call quotas). Rarely the first-choice algorithm for HTTP APIs.</p>
+
+    <h3>Comparison table</h3>
+    <table>
+      <tr><th>Algorithm</th><th>Accuracy</th><th>Redis memory</th><th>Complexity</th><th>Burst handling</th><th>Best use case</th></tr>
+      <tr><td>Fixed Window</td><td>Low (boundary burst)</td><td>1 int / user / window</td><td>Trivial (<code>INCR</code>+TTL)</td><td>Poor</td><td>Internal APIs, coarse protection</td></tr>
+      <tr><td>Sliding Log</td><td>Exact</td><td>O(N) per user (one entry / request)</td><td>Moderate (sorted set + Lua)</td><td>Excellent</td><td>Low-QPS but must-be-accurate (auth, billing)</td></tr>
+      <tr><td>Sliding Counter</td><td>~95% (weighted 2-window)</td><td>2 ints / user</td><td>Simple</td><td>Very good</td><td>General purpose accurate limits (Cloudflare)</td></tr>
+      <tr><td>Token Bucket</td><td>Excellent for avg</td><td>2 fields / user (hash)</td><td>Moderate (Lua math)</td><td>Controlled bursts</td><td><strong>Default choice</strong>: Stripe, API Gateway</td></tr>
+      <tr><td>Leaky Bucket</td><td>Excellent smoothing</td><td>List / metadata</td><td>Moderate</td><td>Smooths, no bursts</td><td>Downstream pacing, metric ingest</td></tr>
+    </table>
+  </section>
+
+  <!-- ============================ DEEP-DIVE ============================ -->
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>Why the app-side "GET then SET" pattern is a bug</h3>
+    <p>The single most common mistake candidates make is to read the counter, decide, then write. On distributed servers this is a race waiting to happen. Two servers see 99, both allow, both write 100 — 101 requests slip through while Redis still says 100.</p>
+    <div class="viz">
+Server A                  Server B                    Redis
+   |                         |                          |
+   |  GET rl:user:101 -----> |                          |
+   |  &lt;-- 99                 |                          |
+   |                         |  GET rl:user:101 ------> |
+   |                         |  &lt;-- 99                  |
+   |  decide: allow          |  decide: allow           |
+   |  SET rl:user:101 100 -&gt; |                          |
+   |                         |  SET rl:user:101 100 -&gt;  |
+   |                         |                          |
+       Both requests admitted, counter shows 100.  Real total: 101.</div>
+    <p>The fix is to never let the application make the decision — let Redis make it atomically. <code>INCR</code> is atomic. Better yet, wrap the entire "increment + expire + limit-check + return remaining" flow in a Lua script and call it via <code>EVALSHA</code>. Redis executes the whole script under its single-threaded event loop; nothing can interleave.</p>
+
+    <h3>Race conditions and atomic Lua</h3>
+    <p>Redis Lua is the interview <em>power move</em>. Every serious rate-limit implementation you'll read (Stripe, Cloudflare, Envoy, AWS SDK) ships a Lua script and calls it with <code>EVALSHA &lt;sha1&gt;</code> so the script bytecode is cached in Redis and only the args cross the wire. Because Redis is single-threaded per shard, the whole script is one atomic step: no other client can see an intermediate state, and no other command can slip in.</p>
+
+    <h3>Multiple, layered rate limits</h3>
+    <p>Real APIs need more than one rule at a time. A single request may need to pass a per-IP limit, a per-user limit, a per-tenant limit, and a per-endpoint limit. Naïvely that is four round-trips. The production pattern is a single Lua script that accepts an array of (key, limit, algo) tuples, evaluates them in order, and short-circuits on the first violation — <em>one</em> Redis call, all-or-nothing.</p>
+    <div class="viz">
+Layered check order (short-circuit on reject):
+
+  Global      500,000 rps        ->  protect the site
+  Per-tenant  10,000 rpm         ->  fairness across customers
+  Per-user    100    rpm         ->  the problem statement
+  Per-endpt   /login 5 rpm       ->  security-critical routes
+  Per-IP      500    rpm         ->  bot protection
+
+Single EVALSHA batches all of them, returns first-fail.</div>
+
+    <h3>Redis HA and what happens during failover</h3>
+    <p>Redis replication is asynchronous. If a primary crashes with a few writes not yet on the replica, and the replica is promoted, those in-flight increments are lost — a promoted replica may report <em>fewer</em> requests than actually happened. For a bank this would be a disaster; for a rate limiter it means a user briefly gets a handful of extra requests during failover. That is a trade-off almost every production system accepts, because rate limits are advisory, not correctness-critical.</p>
+    <p>If you genuinely need strict correctness across a failover, options are: (a) <strong>Redis WAIT</strong> to block until a replica ACKs (adds latency), (b) run <strong>Redis with AOF fsync=always</strong> (heavy write cost), or (c) use a stronger primitive like Redlock or a CP KV store. In an interview, explicitly name the trade-off — do not pretend Redis gives you strong consistency.</p>
+
+    <h3>Hot keys and sharding</h3>
+    <p>Redis Cluster distributes 16,384 hash slots across shards, and a key's slot is <code>CRC16(key) mod 16384</code>. Most rate-limit keys are per-user or per-IP, so traffic spreads naturally. But a <strong>global</strong> limit (<code>rl:fw:global</code>) becomes a single hot key — all traffic funnels to one shard. Options: shard the global counter across N sub-keys (<code>rl:fw:global:{shardId}</code>) and sum on read, or move the global limit up to an edge tier that pre-aggregates.</p>
+
+    <h3>HTTP semantics — the response contract</h3>
+    <p>Return <code>HTTP 429 Too Many Requests</code>. Attach these headers on every response (allowed or not), so clients can back off gracefully:</p>
+    <table>
+      <tr><th>Header</th><th>Meaning</th></tr>
+      <tr><td><code>RateLimit-Limit: 100</code></td><td>Total requests permitted in the window.</td></tr>
+      <tr><td><code>RateLimit-Remaining: 37</code></td><td>How many still available.</td></tr>
+      <tr><td><code>RateLimit-Reset: 42</code></td><td>Seconds until the window resets (or Unix timestamp).</td></tr>
+      <tr><td><code>Retry-After: 42</code></td><td>Standard header on 429/503. Seconds or HTTP-date.</td></tr>
+    </table>
+    <p>For load-shedding (as opposed to per-user rate limiting), Stripe returns <code>HTTP 503</code> instead of 429, because 503 signals "server is overloaded" rather than "you personally are over your quota".</p>
+
+    <h3>Fail-open vs fail-closed — the design conversation that wins the interview</h3>
+    <p>What should the app do if Redis is unreachable? This is not a bug — it is a <strong>policy</strong> decision.</p>
+    <div class="twocol">
+      <div class="box pros">
+        <h4>Fail open (allow the request)</h4>
+        <p><strong>When Redis breaks, the API still serves.</strong> Availability wins.</p>
+        <ul>
+          <li>✅ Product doesn't go down because Redis has a hiccup.</li>
+          <li>❌ Attackers can DoS Redis to bypass rate limiting.</li>
+          <li>Use for: public read APIs, browsing, low-risk endpoints, and Stripe's own default (they explicitly say limiter failure must not block the API).</li>
+        </ul>
+      </div>
+      <div class="box cons">
+        <h4>Fail closed (reject the request)</h4>
+        <p><strong>When Redis breaks, requests are refused.</strong> Safety wins.</p>
+        <ul>
+          <li>✅ Protection is never lifted — good for auth and abuse-prone endpoints.</li>
+          <li>❌ Redis is now on the critical availability path for the product.</li>
+          <li>Use for: login (brute-force protection), password reset, expensive/paid operations, security-sensitive writes.</li>
+        </ul>
+      </div>
+    </div>
+    <p>The correct interview answer is <strong>"it depends on the endpoint, and I would set the policy per route in configuration."</strong> A login endpoint fails closed; a public listing endpoint fails open. Volunteering this nuance is what an interviewer waits to hear.</p>
+
+    <h3>Where should the limiter live? Gateway vs app vs dedicated service</h3>
+    <div class="twocol">
+      <div class="box">
+        <h4>API Gateway (e.g., AWS API Gateway, Envoy, Kong)</h4>
+        <ul>
+          <li>👍 One layer above the app fleet — cheap, uniform, no code in each service.</li>
+          <li>👍 Blocks abuse before it reaches your compute; protects downstream systems.</li>
+          <li>👎 Coarse: usually per-key/IP; less business context (user tier, endpoint cost).</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h4>Application middleware</h4>
+        <ul>
+          <li>👍 Rich context — knows user tier, tenant, request cost.</li>
+          <li>👍 Simple to reason about: same code path as auth and logging.</li>
+          <li>👎 Every service must implement it; drift risk.</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h4>Dedicated rate-limit service (Envoy RLS pattern)</h4>
+        <ul>
+          <li>👍 One team owns policy; used by many apps + the gateway.</li>
+          <li>👍 Central place for observability, dashboards, kill switches.</li>
+          <li>👎 Extra hop (though usually &lt; 1 ms in-region).</li>
+        </ul>
+      </div>
+      <div class="box">
+        <h4>Hybrid (the real answer)</h4>
+        <ul>
+          <li>Gateway does coarse global/IP throttling.</li>
+          <li>Dedicated service (or shared library) enforces user/tenant/endpoint policies backed by Redis.</li>
+          <li>Individual apps can still short-circuit with a local cache for hot allow-lists.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ DSA ============================ -->
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms actually used</h2>
+
+    <table>
+      <tr><th>Piece</th><th>Data structure</th><th>Redis command(s)</th><th>Why it fits</th></tr>
+      <tr><td>Fixed / sliding-counter</td><td>Integer counter</td><td><code>INCR</code>, <code>EXPIRE</code></td><td>Atomic increment; O(1) memory per window.</td></tr>
+      <tr><td>Sliding window log</td><td>Sorted set (skip-list)</td><td><code>ZADD</code>, <code>ZREMRANGEBYSCORE</code>, <code>ZCARD</code></td><td>Range queries by timestamp; O(log N) per op.</td></tr>
+      <tr><td>Token bucket state</td><td>Hash (<code>tokens</code>, <code>last_refill</code>)</td><td><code>HMGET</code>, <code>HMSET</code></td><td>Two related fields; single-key atomicity.</td></tr>
+      <tr><td>Leaky bucket queue</td><td>List</td><td><code>LPUSH</code>, <code>LLEN</code>, <code>LTRIM</code></td><td>Bounded FIFO; drain at fixed rate.</td></tr>
+      <tr><td>Atomic decision</td><td>Lua script</td><td><code>EVAL</code> / <code>EVALSHA</code></td><td>Single-threaded execution → race-free.</td></tr>
+      <tr><td>Cluster placement</td><td>CRC16 hash slots</td><td>Redis Cluster (16,384 slots)</td><td>Keys distribute across shards automatically.</td></tr>
+    </table>
+
+    <h3>Complexity of each algorithm</h3>
+    <table>
+      <tr><th>Algorithm</th><th>Redis ops / request</th><th>Time complexity</th><th>Memory / active user</th></tr>
+      <tr><td>Fixed window</td><td>1 (Lua: INCR + optional EXPIRE)</td><td>O(1)</td><td>~80 B</td></tr>
+      <tr><td>Sliding log</td><td>1 Lua (ZREMRANGEBYSCORE + ZCARD + ZADD)</td><td>O(log N + K) where K = expired entries</td><td>~40 B × requests-in-window</td></tr>
+      <tr><td>Sliding counter</td><td>1 Lua (2 GETs + weighted math + INCR)</td><td>O(1)</td><td>~160 B (two counters)</td></tr>
+      <tr><td>Token bucket</td><td>1 Lua (HMGET + math + HMSET)</td><td>O(1)</td><td>~120 B</td></tr>
+      <tr><td>Leaky bucket</td><td>1 Lua (LLEN + LPUSH/LTRIM)</td><td>O(1) amortised</td><td>Bounded by queue depth</td></tr>
+    </table>
+
+    <p>Everything above is O(1) per request except the sliding log, whose cost scales with the volume of requests <em>within the current window</em>. That's precisely why the sliding log is niche: it's exact, but expensive if the same user is hammering.</p>
+  </section>
+
+  <!-- ============================ AWS ============================ -->
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Public entry point</td><td>Route 53 → CloudFront → ALB / API Gateway</td><td>Edge caching + coarse throttling at API Gateway (token bucket per method + per API key) filters obvious abuse before Redis.</td></tr>
+      <tr><td>Application tier</td><td>ECS / EKS / Lambda</td><td>Stateless fleet; each container/function includes a rate-limit middleware.</td></tr>
+      <tr><td>Rate-limit store</td><td><strong>Amazon ElastiCache for Redis (Cluster mode)</strong></td><td>Managed Redis, multi-AZ replicas, automatic failover; supports Lua and clustering out of the box. Sized for target ops/sec (e.g., cache.r7g.large × N shards).</td></tr>
+      <tr><td>Alt: serverless option</td><td>MemoryDB for Redis</td><td>Durable, multi-AZ Redis with strong consistency on writes — useful if fail-closed correctness matters more than latency.</td></tr>
+      <tr><td>Config &amp; policies</td><td>DynamoDB / Parameter Store / AppConfig</td><td>Per-route rate-limit policies (algorithm, limit, dimension, failure policy) live outside the counter store so operators can flip them without touching Redis.</td></tr>
+      <tr><td>Observability</td><td>CloudWatch + X-Ray + Managed Prometheus</td><td>Ship <code>rate_limit_allowed_total</code>, <code>rate_limit_rejected_total</code>, <code>redis_latency_p99</code>, <code>fail_open_total</code>. Alarm on abnormal 429 spikes and on Redis errors.</td></tr>
+      <tr><td>Kill switch</td><td>AppConfig feature flag</td><td>Every limiter has a per-route flag to disable enforcement instantly during an incident (Stripe's practice).</td></tr>
+      <tr><td>Optional edge tier</td><td>AWS WAF + rate-based rules</td><td>Coarse IP-based rate limits at CloudFront, offloading the naive abuse traffic from your Redis entirely.</td></tr>
+    </table>
+
+    <p>The realistic AWS deployment is API Gateway (or an ALB behind CloudFront) doing coarse per-API-key throttling, a stateless app fleet on ECS/Fargate, an ElastiCache Redis Cluster in Cluster mode with multi-AZ replicas as the shared limiter store, and AppConfig holding the per-route policies. Metrics ship to CloudWatch; alarms fire on Redis latency, script errors, and unusual 429 rates. If Redis is unreachable, the middleware consults the policy: fail-open for read endpoints, fail-closed for login and payment.</p>
+  </section>
+
+  <!-- ============================ C# CODE ============================ -->
+  <section id="code" class="card">
+    <h2>💻 C# implementation — atomic Lua on Redis via StackExchange.Redis</h2>
+
+    <p>This is the reference implementation an interviewer expects to see: a single Lua script loaded once, executed via <code>EVALSHA</code> on every request, with a fail-open policy toggle and structured metadata returned to the caller. The script bakes in the classic "INCR then EXPIRE only if fresh" atomic pattern.</p>
+
+    <pre><code><span class="cmt">// -------- FixedWindowRateLimiter.cs --------</span>
+<span class="kw">using</span> StackExchange.Redis;
+
+<span class="kw">public sealed record</span> <span class="typ">RateLimitDecision</span>(
+    <span class="kw">bool</span> Allowed,
+    <span class="kw">long</span> Count,
+    <span class="kw">long</span> Remaining,
+    <span class="kw">int</span> RetryAfterSeconds,
+    <span class="kw">bool</span> FailedOpen);
+
+<span class="kw">public sealed class</span> <span class="typ">FixedWindowRateLimiter</span>
+{
+    <span class="cmt">// Atomic on Redis: INCR + set TTL on first hit. Returns {count, remaining}.</span>
+    <span class="kw">private const string</span> Script = @"
+        local c = redis.call('INCR', KEYS[1])
+        if c == 1 then
+            redis.call('EXPIRE', KEYS[1], ARGV[2])
+        end
+        local limit = tonumber(ARGV[1])
+        return { c, math.max(0, limit - c) }
+    ";
+
+    <span class="kw">private readonly</span> IDatabase _db;
+    <span class="kw">private readonly</span> LoadedLuaScript _script;
+    <span class="kw">private readonly</span> ILogger&lt;FixedWindowRateLimiter&gt; _log;
+    <span class="kw">private readonly bool</span> _failOpen;
+
+    <span class="kw">public</span> <span class="fn">FixedWindowRateLimiter</span>(
+        IConnectionMultiplexer mux, ILogger&lt;FixedWindowRateLimiter&gt; log, <span class="kw">bool</span> failOpen)
+    {
+        _db  = mux.GetDatabase();
+        _log = log;
+        _failOpen = failOpen;
+        <span class="kw">var</span> server = mux.GetServer(mux.GetEndPoints()[0]);
+        _script = LuaScript.Prepare(Script).Load(server);   <span class="cmt">// upload once, cached by SHA1</span>
+    }
+
+    <span class="kw">public async</span> Task&lt;RateLimitDecision&gt; <span class="fn">CheckAsync</span>(
+        <span class="kw">string</span> dimension, <span class="kw">string</span> id, <span class="kw">int</span> limit, TimeSpan window)
+    {
+        <span class="kw">var</span> nowMinute = DateTimeOffset.UtcNow.ToUnixTimeSeconds() / (<span class="kw">long</span>)window.TotalSeconds;
+        <span class="kw">var</span> key = <span class="kw">new</span> RedisKey($"rl:fw:{dimension}:{id}:{nowMinute}");
+        <span class="kw">var</span> ttl = (<span class="kw">int</span>)Math.Ceiling(window.TotalSeconds) + 1;
+
+        <span class="kw">try</span>
+        {
+            <span class="kw">var</span> res  = (RedisResult[])<span class="kw">await</span> _script.EvaluateAsync(_db,
+                <span class="kw">new</span> { key, limit, ttl })!;
+            <span class="kw">long</span> count = (<span class="kw">long</span>)res[0];
+            <span class="kw">long</span> remaining = (<span class="kw">long</span>)res[1];
+
+            <span class="kw">if</span> (count &lt;= limit)
+                <span class="kw">return new</span> RateLimitDecision(<span class="kw">true</span>, count, remaining, 0, <span class="kw">false</span>);
+
+            <span class="cmt">// how many seconds until the current window ends</span>
+            <span class="kw">var</span> retry = (<span class="kw">int</span>)(window.TotalSeconds -
+                (DateTimeOffset.UtcNow.ToUnixTimeSeconds() % (<span class="kw">long</span>)window.TotalSeconds));
+            <span class="kw">return new</span> RateLimitDecision(<span class="kw">false</span>, count, 0, retry, <span class="kw">false</span>);
+        }
+        <span class="kw">catch</span> (RedisException ex)
+        {
+            _log.LogError(ex, <span class="str">"Rate-limit Redis call failed for {Dim}:{Id}"</span>, dimension, id);
+            <span class="kw">if</span> (_failOpen) <span class="kw">return new</span> RateLimitDecision(<span class="kw">true</span>, 0, limit, 0, <span class="kw">true</span>);
+            <span class="kw">throw</span>;   <span class="cmt">// let middleware translate to 503</span>
+        }
+    }
+}</code></pre>
+
+    <p>And the ASP.NET middleware that wires it into the request pipeline. Note the emitted headers, the 429 body, and the metrics hook:</p>
+
+    <pre><code><span class="cmt">// -------- RateLimitMiddleware.cs --------</span>
+<span class="kw">public sealed class</span> <span class="typ">RateLimitMiddleware</span>(
+    RequestDelegate next,
+    FixedWindowRateLimiter limiter,
+    IMetrics metrics)
+{
+    <span class="kw">public async</span> Task <span class="fn">InvokeAsync</span>(HttpContext ctx)
+    {
+        <span class="kw">var</span> userId = ctx.User.FindFirst(<span class="str">"sub"</span>)?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? <span class="str">"anon"</span>;
+
+        <span class="kw">var</span> d = <span class="kw">await</span> limiter.CheckAsync(<span class="str">"user"</span>, userId, limit: 100, TimeSpan.FromMinutes(1));
+
+        ctx.Response.Headers[<span class="str">"RateLimit-Limit"</span>] = <span class="str">"100"</span>;
+        ctx.Response.Headers[<span class="str">"RateLimit-Remaining"</span>] = d.Remaining.ToString();
+        ctx.Response.Headers[<span class="str">"RateLimit-Reset"</span>] = d.RetryAfterSeconds.ToString();
+
+        <span class="kw">if</span> (!d.Allowed)
+        {
+            metrics.Increment(<span class="str">"rate_limit_rejected_total"</span>, (<span class="str">"route"</span>, ctx.Request.Path));
+            ctx.Response.StatusCode = 429;
+            ctx.Response.Headers[<span class="str">"Retry-After"</span>] = d.RetryAfterSeconds.ToString();
+            <span class="kw">await</span> ctx.Response.WriteAsJsonAsync(<span class="kw">new</span> { error = <span class="str">"rate_limited"</span>, retryAfter = d.RetryAfterSeconds });
+            <span class="kw">return</span>;
+        }
+        <span class="kw">if</span> (d.FailedOpen) metrics.Increment(<span class="str">"rate_limit_fail_open_total"</span>);
+        metrics.Increment(<span class="str">"rate_limit_allowed_total"</span>);
+        <span class="kw">await</span> next(ctx);
+    }
+}</code></pre>
+
+    <p><strong>Alternative language notes.</strong> The Lua script is portable — it runs unchanged on any Redis client. In Java, this is <code>redisTemplate.execute(RedisScript.of(SCRIPT), keys, args)</code>; in Go, <code>rdb.EvalSha(ctx, sha, keys, args)</code>; in Python, <code>redis.evalsha(sha, 1, key, limit, ttl)</code>. The middleware structure is identical everywhere.</p>
+  </section>
+
+  <!-- ============================ TRADEOFFS ============================ -->
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <div class="qa">
+      <p class="q">Q. Why not just do it in-process on each application server?</p>
+      <p class="a">A. Because a user's requests can be load-balanced to any of the N servers. Each local counter only sees a fraction of the traffic, so 100 rpm easily becomes 100 × N rpm in aggregate. Shared state is not a nice-to-have here; it's required.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q. Why Redis specifically?</p>
+      <p class="a">A. Four properties in one package: sub-millisecond latency, atomic single-command primitives (<code>INCR</code>, <code>ZADD</code>), first-class TTL for automatic cleanup, and Lua for multi-op atomicity. Add horizontal scaling via Cluster and multi-AZ HA via ElastiCache — you rarely find that combination elsewhere.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q. Is Redis <code>INCR</code> really atomic across a cluster?</p>
+      <p class="a">A. Atomic within a shard — which is where the key lives. Redis is single-threaded per shard; each command runs to completion before the next starts. Two clients incrementing the same key can never observe the same return value.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q. What if the INCR succeeds and the EXPIRE fails?</p>
+      <p class="a">A. The counter has no TTL and lives forever, leaking memory. The fix is to combine the two into a single Lua script (or <code>MULTI/EXEC</code>), and only set the TTL when the counter was freshly created (<code>if count == 1</code>). Don't refresh the TTL on every increment — that would slide the window forward indefinitely.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q. When would you pick sliding window over token bucket?</p>
+      <p class="a">A. When you need <em>strict</em> rolling-window enforcement — e.g., "at most 5 login attempts in any 60-second sliding window." Token bucket allows short bursts by design, which is undesirable for auth. For "at most 100 req/min on average with small bursts okay", token bucket wins.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q. How do you handle a Redis failover during traffic?</p>
+      <p class="a">A. Async replication means a few writes may be lost on promotion, so a user may briefly get a handful of extra requests. That's acceptable for rate limiting (advisory, not correctness-critical). If strict correctness is needed, use <code>WAIT</code> for replica ACK (adds latency) or move to MemoryDB / a CP store — but call the trade-off out explicitly.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q. How do you keep global limits from becoming a hot key?</p>
+      <p class="a">A. Shard the global counter across N sub-keys (<code>rl:global:{0..N-1}</code>), route randomly, and check the aggregate — or push global throttling up to the API Gateway / WAF layer where it doesn't touch Redis at all. Never let all traffic pin one shard.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q. What's the worst-case blast radius if this component fails?</p>
+      <p class="a">A. Depends on the failure policy. Fail-open: rate limits are temporarily lifted, product stays up, abuse is possible. Fail-closed: legitimate users are rejected, product may as well be down. Almost all high-availability APIs default to fail-open with per-endpoint overrides for auth/payment.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q. How do you support "different limits for different endpoints"?</p>
+      <p class="a">A. Externalise policies. Store <code>(route → algo, limit, dimension, failurePolicy)</code> in AppConfig or a config table. The middleware looks up the policy by route and calls the appropriate Lua script. Operators change limits without redeploying code.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q. Bottlenecks?</p>
+      <p class="a">A. (1) Redis network round-trip — mitigate with connection pooling and colocated Redis (same VPC/AZ). (2) Hot keys — shard global counters. (3) Lua script errors — pre-load via <code>SCRIPT LOAD</code> and alert on <code>NOSCRIPT</code> misses. (4) Serialisation cost of headers — cheap, but real at 1M rps.</p>
+    </div>
+  </section>
+
+  <!-- ============================ AMAZON ANSWER ============================ -->
+  <section id="amazon" class="card" style="border-left:6px solid #ff9900; background:#fff8ee;">
+    <span class="badge" style="background:#ff9900;">🗣️ How I'd explain this in an Amazon interview</span>
+    <h2>The 2–3 minute verbal walkthrough</h2>
+    <p>Here's the mental script — the exact sentences to say out loud, in order, when the whiteboard is empty and the interviewer says "design a rate limiter across our 20 app servers."</p>
+
+    <ol class="steps">
+      <li><strong>Frame the problem.</strong> "The application is horizontally scaled, so requests for the same user can hit any of the 20 servers. Local counters can't enforce a global limit, so the rate-limit state has to be shared."</li>
+      <li><strong>Pick the store.</strong> "I'd keep that shared state in Redis — in-memory, atomic operations, sub-millisecond latency, TTL for automatic cleanup, and Lua for multi-op atomicity."</li>
+      <li><strong>Simplest working design.</strong> "For fixed-window, mint a key per user per minute — <code>rl:fw:user:101:2026-08-22T10:15</code> — and run <code>INCR</code>. If the return is ≤ 100 allow; otherwise return HTTP 429."</li>
+      <li><strong>TTL and atomicity.</strong> "Set a TTL of 60 seconds so windows self-clean. Wrap <code>INCR</code> + <code>EXPIRE</code> in a Lua script so if the app crashes between them we don't leak a TTL-less counter."</li>
+      <li><strong>Name the fixed-window bug.</strong> "Fixed window has a boundary-burst problem: 100 requests at 10:00:59 plus 100 at 10:01:00 is 200 in two seconds. So for accurate enforcement I'd upgrade to sliding window (Redis sorted set) or the two-window sliding counter approximation."</li>
+      <li><strong>Production pick.</strong> "In production I'd default to token bucket — same Redis + Lua pattern, but state is <code>{tokens, last_refill}</code> in a hash. It permits organic bursts and supports weighted costs, which is what Stripe and API Gateway use."</li>
+      <li><strong>Race-safety statement.</strong> "The whole decision runs inside one Lua script via <code>EVALSHA</code>, so Redis single-threading guarantees no interleaving even across all 20 servers hitting the same key."</li>
+      <li><strong>HA behaviour.</strong> "For availability I'd run Redis Cluster with multi-AZ replicas. Async replication means a handful of extra requests may slip through during failover — that's fine for a rate limiter because it's advisory, not a bank ledger."</li>
+      <li><strong>Failure policy.</strong> "I'd make fail-open vs fail-closed a per-endpoint config. Public reads fail open so a Redis blip doesn't take the API down; login and payment fail closed so brute-force protection stays on."</li>
+      <li><strong>Scale.</strong> "At 1M rps I'd shard Redis by user hash; hot global keys get split across N sub-keys. Total memory is trivial because TTL keeps only active windows alive."</li>
+      <li><strong>Observability.</strong> "Emit <code>allowed_total</code>, <code>rejected_total</code>, <code>redis_p99_latency</code>, <code>fail_open_total</code>. Alarm on unusual 429 spikes and Redis error rate. Every limiter is behind a kill-switch flag."</li>
+      <li><strong>Placement.</strong> "Coarse throttling at the API Gateway or WAF (per-IP), business-aware limits at the application middleware (per-user, per-tenant, per-endpoint), all backed by the same Redis cluster."</li>
+    </ol>
+
+    <div class="callout good">
+      <strong>Close with the one-liner:</strong> "Redis gives us shared state and atomicity for distributed rate limiting, but the real design decisions are the algorithm choice, atomic expiry handling, the failure policy, and the accuracy-versus-cost trade-off — all of which I'd tune per endpoint."
+    </div>
+  </section>
+
+  <!-- ============================ CHEAT SHEET ============================ -->
+  <section id="cheat" class="cheat">
+    <h2>✅ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "Shared counter in Redis, atomic via Lua. Fixed window is simple but bursts on boundaries; sliding-window or token-bucket for accuracy; token bucket for controlled bursts. Fail-open for reads, fail-closed for auth. Redis Cluster for scale. Every limit is per-route configuration."</p>
+
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Redis single-shard: <strong>~100k ops/s</strong> of simple commands, <strong>~1 ms p99</strong> including RTT.</li>
+      <li>Memory: <strong>~80–120 B per active user</strong> for fixed window / token bucket.</li>
+      <li>Cluster: <strong>16,384 hash slots</strong>, sharded by <code>CRC16(key) mod 16384</code>.</li>
+      <li>HTTP: <strong>429</strong> for per-user rate limits, <strong>503</strong> for global load shedding.</li>
+    </ul>
+
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li><strong>Atomicity</strong>: Lua script + <code>EVALSHA</code>, never GET-then-SET.</li>
+      <li><strong>Boundary burst</strong>: name the fixed-window bug before the interviewer asks.</li>
+      <li><strong>Token bucket = production default</strong>: bursts + weighted costs + Stripe-style tiers.</li>
+      <li><strong>Fail-open vs fail-closed is a policy, not a bug</strong>: set it per route.</li>
+      <li><strong>Rate limiting is advisory</strong>: async replication trade-offs are acceptable.</li>
+    </ul>
+
+    <h3>Progression to draw on the board</h3>
+    <div class="viz" style="background:rgba(0,0,0,.2);">
+Local counter (broken)
+     |
+     v
+Redis + INCR + TTL
+     |
+     v
+Atomic INCR + EXPIRE (Lua)
+     |
+     v
+Fixed window  --boundary burst-->  Sliding window / Token bucket
+     |
+     v
+Multi-dim policies (user/IP/tenant/route)
+     |
+     v
+Redis Cluster + HA + fail-open/closed + observability</div>
+  </section>
+
+  <!-- ============================ FAQ ============================ -->
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <!-- ============================ SOURCES ============================ -->
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://redis.io/glossary/rate-limiting/" target="_blank" rel="noopener">Redis — Rate Limiting best practices (INCR + EXPIRE, algorithm overview)</a></li>
+      <li><a href="https://stripe.com/blog/rate-limiters" target="_blank" rel="noopener">Stripe Engineering — Scaling your API with rate limiters (four-tier token bucket)</a></li>
+      <li><a href="https://redis.io/commands/incr/" target="_blank" rel="noopener">Redis command reference — INCR (atomicity guarantees)</a></li>
+      <li><a href="https://redis.io/docs/latest/develop/interact/programmability/eval-intro/" target="_blank" rel="noopener">Redis Lua scripting introduction — EVAL / EVALSHA</a></li>
+      <li><a href="https://blog.cloudflare.com/counting-things-a-lot-of-different-things/" target="_blank" rel="noopener">Cloudflare — Sliding window rate limiter (two-counter approximation)</a></li>
+      <li><a href="https://www.rfc-editor.org/rfc/rfc6585.html" target="_blank" rel="noopener">RFC 6585 — HTTP 429 Too Many Requests</a></li>
+      <li><a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-request-throttling.html" target="_blank" rel="noopener">AWS API Gateway — Request throttling (token bucket at the edge)</a></li>
+      <li><a href="https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/other_features/global_rate_limiting" target="_blank" rel="noopener">Envoy — Global rate-limit service architecture</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+
+<script src="../../nav.js"></script>
+</body>
+</html>

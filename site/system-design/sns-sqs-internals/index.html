@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How SNS &amp; SQS Work Internally — System Design</title>
+<style>
+  :root {
+    --bg:#f5f7fb; --card:#ffffff; --ink:#1b2230; --muted:#5b6677; --line:#e6eaf0;
+    --scenario:#f7567c; --scenario-bg:#fff0f4;
+    --reqs:#f4a259; --reqs-bg:#fff7ed;
+    --arch:#4361ee; --arch-bg:#eef2ff;
+    --anim:#00b4d8; --anim-bg:#eef9fc;
+    --dsa:#7048e8; --dsa-bg:#f3effe;
+    --aws:#ff9900; --aws-bg:#fff6e6;
+    --laymen:#ffd166; --laymen-bg:#fffbe6;
+    --code-bg:#1e2430; --code-ink:#e7ecf3;
+    --accent:#2dc653;
+    --shadow:0 6px 24px rgba(27,34,48,.08); --radius:16px;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--ink); line-height:1.65; }
+  .wrap { max-width:960px; margin:0 auto; padding:32px 20px 80px; }
+  header.hero { background:linear-gradient(135deg,#ff9900 0%,#7048e8 55%,#4361ee 100%); color:#fff; border-radius:var(--radius); padding:44px 38px; box-shadow:var(--shadow); margin-bottom:24px; }
+  header.hero .kicker { text-transform:uppercase; letter-spacing:.14em; font-size:.75rem; font-weight:700; opacity:.85; margin-bottom:10px; }
+  header.hero h1 { margin:0 0 10px; font-size:2.2rem; letter-spacing:-.5px; }
+  header.hero p { margin:0; font-size:1.15rem; opacity:.94; }
+  nav.toc { position:sticky; top:12px; z-index:5; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:26px; box-shadow:var(--shadow); display:flex; gap:6px; flex-wrap:wrap; }
+  nav.toc a { text-decoration:none; color:var(--muted); font-size:.85rem; padding:6px 11px; border-radius:999px; transition:.15s; white-space:nowrap; }
+  nav.toc a:hover { background:var(--bg); color:var(--ink); }
+  section.card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:28px 32px; margin-bottom:22px; box-shadow:var(--shadow); }
+  section.scenario { border-left:6px solid var(--scenario); background:var(--scenario-bg); }
+  section.laymen   { border-left:6px solid var(--laymen);  background:var(--laymen-bg); }
+  section.reqs     { border-left:6px solid var(--reqs);     background:var(--reqs-bg); }
+  section.arch     { border-left:6px solid var(--arch);     background:var(--arch-bg); }
+  section.anim-sec { border-left:6px solid var(--anim);     background:var(--anim-bg); }
+  section.dsa      { border-left:6px solid var(--dsa);      background:var(--dsa-bg); }
+  section.aws      { border-left:6px solid var(--aws);      background:var(--aws-bg); }
+  .badge { display:inline-block; font-size:.76rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; padding:4px 12px; border-radius:999px; margin-bottom:14px; color:#fff; }
+  .scenario .badge { background:var(--scenario); }
+  .laymen .badge   { background:#c99500; }
+  .reqs .badge     { background:var(--reqs); }
+  .arch .badge     { background:var(--arch); }
+  .anim-sec .badge { background:var(--anim); }
+  .dsa .badge      { background:var(--dsa); }
+  .aws .badge      { background:var(--aws); }
+  h2 { margin:0 0 14px; font-size:1.5rem; letter-spacing:-.3px; }
+  h3 { margin:22px 0 8px; font-size:1.12rem; }
+  h4 { margin:16px 0 6px; font-size:1rem; color:var(--arch); }
+  p, li { color:var(--ink); }
+  table { width:100%; border-collapse:collapse; margin:14px 0; font-size:.94rem; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:rgba(67,97,238,.08); font-weight:700; }
+  code:not(pre code) { background:#eef1f6; padding:2px 6px; border-radius:6px; font-family:"SF Mono",Consolas,Menlo,monospace; font-size:.9em; }
+  pre { background:var(--code-bg); color:var(--code-ink); padding:18px 20px; border-radius:12px; overflow-x:auto; font-family:"SF Mono",Consolas,Menlo,monospace; font-size:.88rem; line-height:1.55; }
+  pre .cmt { color:#7f8aa0; font-style:italic; }
+  pre .kw  { color:#ff9e64; }
+  pre .str { color:#9ece6a; }
+  pre .fn  { color:#7aa2f7; }
+  pre .typ { color:#2ac3de; }
+  .diagram { background:#0f1420; border-radius:14px; padding:22px; margin:18px 0; overflow-x:auto; box-shadow:inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display:block; margin:0 auto; max-width:100%; height:auto; }
+  .legend { display:flex; gap:18px; flex-wrap:wrap; margin-top:12px; font-size:.85rem; color:var(--muted); }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .dot { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .qa { border-left:3px solid var(--arch); padding:4px 0 4px 16px; margin:16px 0; }
+  .qa .q { font-weight:700; }
+  .qa .a { color:var(--muted); }
+  section.faq { border-left:6px solid #00b4d8; background:#eef9fc; }
+  section.faq .badge { background:#00b4d8; }
+  .faq-item { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 18px; margin:12px 0; }
+  .faq-item .q { font-weight:700; display:flex; gap:8px; align-items:baseline; }
+  .faq-item .q::before { content:"Q"; color:#00b4d8; font-weight:800; }
+  .faq-item .a { margin:6px 0 0; }
+  .faq-item .a::before { content:"A "; color:var(--accent); font-weight:800; }
+  .cheat { background:linear-gradient(135deg,#2dc653 0%,#208b3a 100%); color:#fff; border-radius:var(--radius); padding:26px 32px; box-shadow:var(--shadow); margin-bottom:22px; }
+  .cheat h2 { color:#fff; }
+  .cheat ul { margin:0; padding-left:20px; }
+  .cheat .pitch { background:rgba(255,255,255,.15); border-radius:12px; padding:14px 18px; margin:0 0 16px; font-size:1.05rem; }
+  .sources { font-size:.9rem; }
+  .sources a { color:var(--arch); }
+  footer { text-align:center; color:var(--muted); font-size:.85rem; margin-top:30px; }
+  .anim-frame { background:#0f1420; border-radius:14px; padding:22px 22px 0; box-shadow:inset 0 0 0 1px rgba(255,255,255,.05); margin:14px 0; }
+  .anim-frame svg { display:block; margin:0 auto; max-width:100%; height:auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] { transition:transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease; transform-box:fill-box; }
+  .anim-frame svg .a-hidden { opacity:0; }
+  .anim-frame svg .a-glow   { filter:drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity:.35; }
+  .anim-controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:14px 4px 22px; margin-top:14px; border-top:1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background:#4361ee; color:#fff; border:0; border-radius:8px; padding:8px 16px; font:700 .88rem/1 inherit; cursor:pointer; transition:filter .15s,transform .1s; }
+  .anim-controls button:hover { filter:brightness(1.15); }
+  .anim-controls button:active { transform:scale(.96); }
+  .anim-controls button.secondary { background:#2a3652; }
+  .anim-step-label { color:#7fa2ff; font-weight:700; font-size:.82rem; letter-spacing:.04em; text-transform:uppercase; min-width:88px; }
+  .anim-step-caption { color:#c6d0e0; font-size:.95rem; flex:1 1 260px; line-height:1.4; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0; }
+  @media (max-width:720px){ .grid2 { grid-template-columns:1fr; } }
+  .callout { background:var(--card); border:1px solid var(--line); border-left:4px solid var(--arch); border-radius:10px; padding:14px 18px; margin:14px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · AWS Messaging Internals</div>
+    <h1>How SNS &amp; SQS Work Internally</h1>
+    <p>The distributed pub/sub topic and the polled queue that power almost every event-driven AWS system — architecture, message lifecycle, visibility timeout, FIFO dedup, fanout, and the numbers to quote in an interview.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#matrix">📋 SNS vs SQS</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#sqs">📦 SQS internals</a>
+    <a href="#sns">📣 SNS internals</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#fanout">🔀 Fanout pattern</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#code">💻 Code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>Two of the most-used services in AWS — and almost nobody knows how they work inside</h2>
+    <p>Every serverless architecture, every event-driven microservice mesh on AWS, every "an order was placed" fan-out you've ever seen is built on <strong>Amazon SNS</strong> (Simple Notification Service — pub/sub topics), <strong>Amazon SQS</strong> (Simple Queue Service — polled queues), or both together. They are the ambient plumbing of the AWS platform: Lambda uses SQS for its event source polling; S3 events go out via SNS or EventBridge; DynamoDB Streams → Lambda → SNS; every "customer signed up → send email + credit points + refresh cache" flow uses one of them. Combined, they process <em>trillions</em> of messages a day globally.</p>
+    <p>Interview-wise, "how does SQS work internally?" is a favourite architect question — because a strong answer requires you to reason about <strong>durability across AZs</strong>, <strong>at-least-once delivery</strong>, <strong>visibility timeouts</strong>, <strong>long polling</strong>, <strong>FIFO deduplication</strong>, <strong>in-flight limits</strong>, and <strong>dead-letter queues</strong>. Then "how does SNS deliver to five subscribers?" tests <strong>fanout, retry policy, and filter subscriptions</strong>. And the two together form the canonical <strong>SNS-SQS fanout pattern</strong> — one topic, N queues, each with its own consumer scaling independently.</p>
+    <p>This page opens the box and shows exactly how each service is built, with a system-design diagram you can whiteboard, a step-by-step animation of the message lifecycle, real numbers (30 s default visibility timeout, 4-day retention, 120k in-flight, 5-min dedup window, 300 TPS FIFO, 3000 TPS FIFO-batch, 70 k TPS high-throughput FIFO), and the C# code for a producer and consumer.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In plain English</span>
+    <h2>The story, told without jargon</h2>
+    <p>Imagine a busy office again. Two rooms sit in the middle of the building.</p>
+    <p><strong>SQS is the mail tray.</strong> When someone writes a memo ("please pay invoice #42"), they drop it into the tray. The tray is durable — even if the office building loses power on one side, the memo survives because <em>three identical trays</em> in three separate rooms hold a copy. When a colleague walks by, they pick up ONE memo, take it to their desk, and start working on it. Crucially, the mail tray <em>hides</em> the memo from everyone else for the next 30 seconds — so nobody else picks up the same memo. Once the colleague is done, they walk back and tear the memo up. If they don't come back in 30 seconds (they got sick, walked out, computer crashed), the memo <em>reappears</em> in the tray for someone else to try. Simple, safe, no lost work.</p>
+    <p><strong>SNS is the office PA system.</strong> When someone says "an order was placed", they announce it over the loudspeaker. Everyone who has <em>subscribed</em> to the "orders" channel hears it — the warehouse guy, the email department, the loyalty desk, the analytics team. SNS doesn't <em>store</em> the memo the way the tray does; it just broadcasts, once, to whoever is listening. If a listener is deaf that moment (their service is offline), that message is lost <em>to them</em> — unless we told SNS to leave a copy in their personal mail tray (SQS). That combination — announce over PA, drop a copy in each listener's tray — is called <strong>fanout</strong>, and it's the single most common pattern on AWS.</p>
+    <p>Two products, two ideas: <strong>SQS = one-to-one durable queue</strong>. <strong>SNS = one-to-many broadcast</strong>. Put them together and you get resilient, decoupled, event-driven systems where the producer doesn't know or care who's listening, and each listener processes at its own pace.</p>
+  </section>
+
+  <section id="matrix" class="card reqs">
+    <span class="badge">📋 SNS vs SQS at a glance</span>
+    <h2>The comparison an architect must know cold</h2>
+    <table>
+      <thead><tr><th>Dimension</th><th>SNS</th><th>SQS</th></tr></thead>
+      <tbody>
+        <tr><td>Model</td><td>Pub/sub topic — push to subscribers</td><td>Polled queue — pull by consumers</td></tr>
+        <tr><td>Producers</td><td>One or many publishers</td><td>One or many senders</td></tr>
+        <tr><td>Consumers</td><td>Many subscribers per topic (fan-out)</td><td>Typically one consumer group; one message → one worker</td></tr>
+        <tr><td>Message storage</td><td>Best-effort, transient (delivered then gone)</td><td>Durable across multiple AZs; retained up to 14 days</td></tr>
+        <tr><td>Delivery model</td><td>Push (SNS calls the subscriber's endpoint)</td><td>Pull (consumer calls <code>ReceiveMessage</code>)</td></tr>
+        <tr><td>Delivery guarantee</td><td>At-least-once (standard); exactly-once (FIFO topic)</td><td>At-least-once (standard); exactly-once (FIFO queue)</td></tr>
+        <tr><td>Ordering</td><td>Best-effort (standard) or strict FIFO by MessageGroupId (FIFO)</td><td>Best-effort (standard) or strict FIFO per MessageGroupId (FIFO)</td></tr>
+        <tr><td>Throughput</td><td>Unlimited standard; 300 TPS FIFO (up to 70k+ with high-throughput mode)</td><td>Unlimited standard; 300–70k+ FIFO</td></tr>
+        <tr><td>Message size</td><td>Up to 256 KB (2 GB via S3 extended library)</td><td>Up to 256 KB (2 GB via S3 extended library)</td></tr>
+        <tr><td>Filtering</td><td>Subscription filter policy (JSON attributes)</td><td>No — every consumer reads every message on the queue</td></tr>
+        <tr><td>Retries</td><td>Managed retry policy per subscriber</td><td>Consumer retries by not deleting; DLQ after maxReceiveCount</td></tr>
+        <tr><td>Subscription targets</td><td>SQS · Lambda · HTTP(S) · Email · SMS · Mobile push · Firehose · Datadog/Splunk/MongoDB</td><td>Any consumer speaking the SQS API (EC2, ECS, EKS, Lambda, on-prem, SDK)</td></tr>
+        <tr><td>Cross-region</td><td>Cross-region topic subscriptions supported</td><td>Same-region; move across via CDR</td></tr>
+        <tr><td>Common role in architecture</td><td>Broadcast events to N systems (fanout)</td><td>Buffer work between a fast producer and a slow consumer</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Rule of thumb:</strong> use <strong>SNS when N subscribers care about the same event</strong>. Use <strong>SQS when a producer needs to hand work to a worker fleet at its own pace</strong>. Combine them (SNS → N SQS queues) when you want both fanout <em>and</em> per-subscriber durability. This is the canonical AWS event-driven pattern.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ Reference architecture — the fanout pattern</span>
+    <h2>The design that appears in almost every AWS system</h2>
+    <p>An <strong>Order Service</strong> publishes <code>OrderPlaced</code> once to an SNS topic. Four subscribers care: <em>Warehouse</em>, <em>Email</em>, <em>Loyalty</em>, and <em>Analytics</em>. Each has its own SQS queue subscribed to the topic. Each queue's consumer polls independently, processes at its own rate, retries on failure, and after N failures the poison message lands in that queue's dead-letter queue. Add a fifth subscriber next quarter? Just create another queue and subscribe it — the producer never changes.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 940 500" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ar-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/>
+          </marker>
+          <marker id="ar-c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="ar-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f7567c"/>
+          </marker>
+        </defs>
+
+        <!-- Producer -->
+        <rect x="30" y="220" width="160" height="60" rx="10" fill="#4361ee"/>
+        <text x="110" y="250" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Order Service</text>
+        <text x="110" y="266" text-anchor="middle" fill="#fff" font-size="10">publishes OrderPlaced</text>
+
+        <!-- SNS -->
+        <rect x="220" y="200" width="200" height="100" rx="12" fill="#ff9900"/>
+        <text x="320" y="230" text-anchor="middle" fill="#0f1420" font-weight="800" font-size="14">SNS Topic</text>
+        <text x="320" y="250" text-anchor="middle" fill="#0f1420" font-size="11">orders-events.fifo</text>
+        <text x="320" y="270" text-anchor="middle" fill="#0f1420" font-size="10">router · filter policies</text>
+        <text x="320" y="288" text-anchor="middle" fill="#0f1420" font-size="10">delivered across AZs</text>
+
+        <!-- SQS Queues (4) -->
+        <rect x="460" y="30"  width="200" height="60" rx="10" fill="#7048e8"/>
+        <text x="560" y="55" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">SQS: warehouse-q</text>
+        <text x="560" y="72" text-anchor="middle" fill="#fff" font-size="10">durable · 3-AZ replicated</text>
+
+        <rect x="460" y="130" width="200" height="60" rx="10" fill="#7048e8"/>
+        <text x="560" y="155" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">SQS: email-q</text>
+        <text x="560" y="172" text-anchor="middle" fill="#fff" font-size="10">filter: country=US</text>
+
+        <rect x="460" y="230" width="200" height="60" rx="10" fill="#7048e8"/>
+        <text x="560" y="255" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">SQS: loyalty-q</text>
+        <text x="560" y="272" text-anchor="middle" fill="#fff" font-size="10">visibility 30 s</text>
+
+        <rect x="460" y="330" width="200" height="60" rx="10" fill="#7048e8"/>
+        <text x="560" y="355" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">SQS: analytics-q</text>
+        <text x="560" y="372" text-anchor="middle" fill="#fff" font-size="10">retention 4 d</text>
+
+        <!-- Consumers -->
+        <rect x="690" y="30"  width="180" height="60" rx="10" fill="#2a3652" stroke="#00b4d8"/>
+        <text x="780" y="55" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Warehouse Lambda</text>
+        <text x="780" y="72" text-anchor="middle" fill="#c6d0e0" font-size="10">SQS event source</text>
+
+        <rect x="690" y="130" width="180" height="60" rx="10" fill="#2a3652" stroke="#00b4d8"/>
+        <text x="780" y="155" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Email Worker (ECS)</text>
+        <text x="780" y="172" text-anchor="middle" fill="#c6d0e0" font-size="10">long-poll · 20 s</text>
+
+        <rect x="690" y="230" width="180" height="60" rx="10" fill="#2a3652" stroke="#00b4d8"/>
+        <text x="780" y="255" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Loyalty Service</text>
+        <text x="780" y="272" text-anchor="middle" fill="#c6d0e0" font-size="10">idempotent DB write</text>
+
+        <rect x="690" y="330" width="180" height="60" rx="10" fill="#2a3652" stroke="#00b4d8"/>
+        <text x="780" y="355" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Kinesis Firehose</text>
+        <text x="780" y="372" text-anchor="middle" fill="#c6d0e0" font-size="10">→ Redshift / S3</text>
+
+        <!-- DLQ -->
+        <rect x="460" y="420" width="200" height="50" rx="10" fill="#0f1a30" stroke="#f7567c"/>
+        <text x="560" y="443" text-anchor="middle" fill="#f7567c" font-weight="700" font-size="12">Dead-Letter Queue</text>
+        <text x="560" y="460" text-anchor="middle" fill="#c6d0e0" font-size="10">after maxReceiveCount = 5</text>
+
+        <!-- Arrows: producer to SNS -->
+        <line x1="190" y1="250" x2="220" y2="250" stroke="#f4a259" stroke-width="2.5" marker-end="url(#ar-a)"/>
+
+        <!-- SNS fanout -->
+        <line x1="420" y1="230" x2="460" y2="60"  stroke="#f4a259" stroke-width="2" marker-end="url(#ar-a)"/>
+        <line x1="420" y1="240" x2="460" y2="160" stroke="#f4a259" stroke-width="2" marker-end="url(#ar-a)"/>
+        <line x1="420" y1="260" x2="460" y2="260" stroke="#f4a259" stroke-width="2" marker-end="url(#ar-a)"/>
+        <line x1="420" y1="280" x2="460" y2="360" stroke="#f4a259" stroke-width="2" marker-end="url(#ar-a)"/>
+
+        <!-- Consumers polling -->
+        <line x1="660" y1="60"  x2="690" y2="60"  stroke="#7fa2ff" stroke-width="2" marker-end="url(#ar-c)"/>
+        <line x1="660" y1="160" x2="690" y2="160" stroke="#7fa2ff" stroke-width="2" marker-end="url(#ar-c)"/>
+        <line x1="660" y1="260" x2="690" y2="260" stroke="#7fa2ff" stroke-width="2" marker-end="url(#ar-c)"/>
+        <line x1="660" y1="360" x2="690" y2="360" stroke="#7fa2ff" stroke-width="2" marker-end="url(#ar-c)"/>
+
+        <!-- DLQ arrow (from any queue) -->
+        <line x1="560" y1="390" x2="560" y2="420" stroke="#f7567c" stroke-width="2" marker-end="url(#ar-d)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#ff9900"></span> SNS topic</span>
+        <span><span class="dot" style="background:#7048e8"></span> SQS queue</span>
+        <span><span class="dot" style="background:#f4a259"></span> Fanout (push)</span>
+        <span><span class="dot" style="background:#7fa2ff"></span> Long-polling (pull)</span>
+        <span><span class="dot" style="background:#f7567c"></span> Dead-letter</span>
+      </div>
+    </div>
+    <p><strong>Why this design is genius:</strong> the producer publishes once; the topic <em>replicates</em> to each subscribed queue (SNS delivers, then SQS durably stores); each queue is <em>independent</em>, so a slow email worker never blocks warehouse pick-and-pack; each consumer scales independently; failures are isolated per-queue and each queue has its own DLQ; adding a new subscriber next quarter is a one-liner. This decoupling is <strong>the</strong> reason event-driven architectures on AWS work at scale.</p>
+  </section>
+
+  <section id="sqs" class="card">
+    <h2>📦 SQS internals — how a queue is actually built</h2>
+
+    <h3>Storage: replicated across multiple AZs</h3>
+    <p>When you call <code>SendMessage</code>, SQS <strong>redundantly stores</strong> the message on <em>multiple servers across multiple Availability Zones</em> before it returns a <code>MessageId</code>. There is no single point of failure — an entire AZ outage doesn't lose a single message. Each AWS Region is a self-contained shard fabric; SQS is not natively cross-region (though you can bridge with cross-region SNS or DR replication tools).</p>
+
+    <h3>The message lifecycle — three stages</h3>
+    <ol>
+      <li><strong>Send.</strong> Producer calls <code>SendMessage</code>. SQS assigns a <code>MessageId</code>, replicates across AZs, and returns.</li>
+      <li><strong>Receive.</strong> Consumer calls <code>ReceiveMessage</code>. SQS returns one or more messages and a <code>ReceiptHandle</code> — but does <em>not</em> delete them. Instead the message enters an <strong>in-flight state</strong> hidden from other consumers.</li>
+      <li><strong>Delete.</strong> After processing succeeds, the consumer calls <code>DeleteMessage</code> with the <code>ReceiptHandle</code>. The message is permanently removed. If the consumer never calls delete (crash, timeout, bug), the visibility timeout expires and the message re-appears for another try — this is <strong>at-least-once delivery</strong>.</li>
+    </ol>
+
+    <h3>Visibility timeout — the safety net</h3>
+    <p>Default 30 seconds, configurable 0 s to 12 h. Its purpose: prevent duplicate work while one consumer is processing. If your handler is slow, call <code>ChangeMessageVisibility</code> to extend it. Setting it too short = duplicate processing; too long = slow recovery from consumer crashes. Rule of thumb: <em>visibility timeout = P99 handler duration × 2</em>.</p>
+
+    <h3>Long polling vs short polling</h3>
+    <ul>
+      <li><strong>Short polling</strong> (<code>WaitTimeSeconds=0</code>, default) — samples a <em>subset</em> of storage servers and returns immediately, even if empty. Result: empty responses cost you money. Almost never the right choice.</li>
+      <li><strong>Long polling</strong> (<code>WaitTimeSeconds=1..20</code>) — queries <em>all</em> servers and waits until a message appears or the timeout expires. Fewer API calls, lower cost, faster message pickup. Set to 20 s for almost every consumer.</li>
+    </ul>
+
+    <h3>Standard vs FIFO queues</h3>
+    <table>
+      <thead><tr><th>Feature</th><th>Standard</th><th>FIFO</th></tr></thead>
+      <tbody>
+        <tr><td>Throughput</td><td>~unlimited TPS</td><td>300 TPS · 3,000 with batching · 70,000+ with high-throughput mode</td></tr>
+        <tr><td>Ordering</td><td>Best-effort (usually in order)</td><td>Strict FIFO <em>per MessageGroupId</em></td></tr>
+        <tr><td>Delivery</td><td>At-least-once — duplicates possible</td><td>Exactly-once within the 5-min dedup window</td></tr>
+        <tr><td>Name</td><td>any</td><td>must end in <code>.fifo</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>FIFO specifics — MessageGroupId, DeduplicationId, ReceiveRequestAttemptId</h3>
+    <ul>
+      <li><strong>MessageGroupId</strong> — every message in a FIFO queue belongs to a group. Ordering is preserved <em>within</em> a group but not across groups. Choose group IDs carefully to control parallelism (all-one-group = strict serial; many groups = parallel throughput).</li>
+      <li><strong>MessageDeduplicationId</strong> — within a 5-min dedup interval, duplicates with the same ID are silently discarded. Enable <em>content-based deduplication</em> to auto-hash the body.</li>
+      <li><strong>ReceiveRequestAttemptId</strong> — used to retry <code>ReceiveMessage</code> idempotently after a network glitch, returning the same batch.</li>
+    </ul>
+
+    <h3>In-flight limits</h3>
+    <p>SQS bounds how many messages can be simultaneously in the <em>invisible/processing</em> state:</p>
+    <ul>
+      <li>Standard: ~120,000 in-flight per queue.</li>
+      <li>FIFO: 20,000 in-flight per queue.</li>
+    </ul>
+    <p>Exceed and you get <code>OverLimit</code>. If you hit it, consumers aren't deleting fast enough — either scale out, extend the timeout, or check for stuck messages.</p>
+
+    <h3>Dead-Letter Queues (DLQ) — the poison-pill catcher</h3>
+    <p>Attach a second queue as the <strong>DLQ</strong> and set <code>maxReceiveCount</code> (typically 3–5). If a message is received that many times without being deleted, SQS moves it to the DLQ. Now you can inspect it, fix the bug, and either replay or discard. FIFO source needs FIFO DLQ; Standard needs Standard. Always add a CloudWatch alarm on DLQ message count.</p>
+
+    <h3>Message retention &amp; delay</h3>
+    <ul>
+      <li><strong>Retention</strong> — default 4 days, configurable 60 s to 14 days. Undelivered messages auto-delete after retention expires.</li>
+      <li><strong>Delivery delay</strong> — up to 15 min; makes new messages invisible for the delay period.</li>
+      <li><strong>Message timers</strong> — same as delay, but per-message rather than queue-wide.</li>
+    </ul>
+  </section>
+
+  <section id="sns" class="card">
+    <h2>📣 SNS internals — how a topic fans out</h2>
+
+    <h3>Topic = logical multiplexer</h3>
+    <p>An SNS <strong>topic</strong> is a named endpoint that publishers write to and subscribers subscribe to. It has no visible storage — SNS's job is to <em>deliver</em>, not to durably retain. When you publish, SNS's routing layer copies the message into the delivery pipeline for <em>every</em> confirmed subscription, then invokes the appropriate delivery protocol for each (HTTP POST for HTTP subscribers, SQS SendMessage for SQS subscribers, Lambda Invoke for Lambda subscribers, SES send for email, SMS gateway for text, APNs/FCM for mobile push).</p>
+
+    <h3>Subscription types</h3>
+    <ul>
+      <li><strong>A2A (Application-to-Application):</strong> SQS, Lambda, HTTP(S), Kinesis Data Firehose, EventBridge, Datadog / Splunk / MongoDB partner endpoints.</li>
+      <li><strong>A2P (Application-to-Person):</strong> Email, SMS, mobile push notifications (iOS, Android, Windows).</li>
+    </ul>
+
+    <h3>Filter policies — per-subscriber routing</h3>
+    <p>Each subscription can carry a JSON <strong>filter policy</strong> that inspects the message's attributes and decides whether to deliver. This is how you fan out to <em>subsets</em> — e.g. "email service only wants orders where <code>country = US</code>". The topic itself is unchanged; filtering happens at the subscription. Filters use exact match, anything-but, numeric range, prefix, exists — expressive enough for most routing needs without a separate service.</p>
+
+    <h3>Delivery retries</h3>
+    <p>SNS has a <strong>delivery retry policy</strong> per protocol. HTTP endpoints get exponential backoff for hours before a message is discarded. SQS subscribers get infinite retries (the delivery is a normal <code>SendMessage</code>, so eventually it lands or SNS gives up after ~1 hour). Failed messages can be routed to an <strong>SNS DLQ</strong> (an SQS queue) so no delivery is silently lost.</p>
+
+    <h3>Standard vs FIFO topics</h3>
+    <ul>
+      <li><strong>Standard topic:</strong> best-effort ordering, at-least-once, unlimited throughput.</li>
+      <li><strong>FIFO topic:</strong> strict ordering per MessageGroupId, exactly-once within a 5-min dedup window, 300 TPS (up to 3,000 with batching). Only subscribes to FIFO SQS queues and other FIFO endpoints.</li>
+    </ul>
+
+    <h3>Cross-region &amp; cross-account subscriptions</h3>
+    <p>An SNS topic in <code>us-east-1</code> can have a subscriber (SQS queue, Lambda, HTTP endpoint) in <code>eu-west-1</code>. This is one of the cleanest ways to do cross-region event replication — publish once, land in queues in every region.</p>
+
+    <h3>Message archiving &amp; replay (2023+)</h3>
+    <p>FIFO topics support <strong>message archive</strong> — SNS keeps a durable copy of every message for up to 365 days and lets you <strong>replay</strong> them into new subscribers. This is huge for onboarding new services or debugging: you can replay yesterday's events into a fresh consumer without touching the producer.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a message travel — from publisher through SNS to SQS, and through the SQS lifecycle</h2>
+    <p>The animation plays a single "OrderPlaced" event: published to SNS, fanned out to two SQS queues, then one queue's consumer picks it up, times out, retries, and finally succeeds and deletes.</p>
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="a-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <!-- Producer -->
+        <rect id="a-prod" x="20" y="180" width="150" height="60" rx="10" fill="#2a3652" stroke="#4361ee" data-anim/>
+        <text x="95" y="210" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Order Service</text>
+        <text x="95" y="228" text-anchor="middle" fill="#c6d0e0" font-size="10">publisher</text>
+
+        <!-- SNS -->
+        <rect id="a-sns" x="200" y="180" width="150" height="60" rx="10" fill="#2a3652" stroke="#ff9900" data-anim/>
+        <text x="275" y="210" text-anchor="middle" fill="#ff9900" font-weight="700" font-size="13">SNS Topic</text>
+        <text x="275" y="228" text-anchor="middle" fill="#c6d0e0" font-size="10">router · filter</text>
+
+        <!-- SQS Queues (2) -->
+        <rect id="a-q1" x="380" y="80"  width="180" height="60" rx="10" fill="#2a3652" stroke="#7048e8" data-anim/>
+        <text x="470" y="105" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">SQS: warehouse-q</text>
+        <text id="a-q1-msgs" x="470" y="122" text-anchor="middle" fill="#c6d0e0" font-size="10">0 messages</text>
+        <text id="a-q1-inv" x="470" y="138" text-anchor="middle" fill="#f4a259" font-size="10"></text>
+
+        <rect id="a-q2" x="380" y="280" width="180" height="60" rx="10" fill="#2a3652" stroke="#7048e8" data-anim/>
+        <text x="470" y="305" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">SQS: email-q</text>
+        <text id="a-q2-msgs" x="470" y="322" text-anchor="middle" fill="#c6d0e0" font-size="10">0 messages</text>
+
+        <!-- Consumer -->
+        <rect id="a-cons" x="600" y="80"  width="180" height="60" rx="10" fill="#2a3652" stroke="#00b4d8" data-anim/>
+        <text x="690" y="105" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Warehouse Worker</text>
+        <text id="a-cons-status" x="690" y="125" text-anchor="middle" fill="#7fa2ff" font-size="10">long-polling</text>
+
+        <!-- DLQ -->
+        <rect id="a-dlq" x="600" y="280" width="180" height="60" rx="10" fill="#0f1a30" stroke="#f7567c" data-anim/>
+        <text x="690" y="305" text-anchor="middle" fill="#f7567c" font-weight="700" font-size="12">DLQ</text>
+        <text id="a-dlq-msgs" x="690" y="322" text-anchor="middle" fill="#c6d0e0" font-size="10">0 messages</text>
+
+        <!-- Ribbon -->
+        <rect x="20" y="410" width="860" height="30" rx="8" fill="#0f1a30" stroke="#2a3652"/>
+        <text x="35" y="429" fill="#7f8aa0" font-size="11" font-weight="700">STATE:</text>
+        <text id="a-state" x="105" y="429" fill="#c6d0e0" font-size="11">idle</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next" class="secondary">Step →</button>
+        <button data-act="prev" class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+    <script>
+      (function(){
+        const root = document.getElementById('anim1'); if(!root) return;
+        const $=(s)=>root.querySelector(s);
+        const label=$('.anim-step-label'); const cap=$('.anim-step-caption');
+        const btnPlay=root.querySelector('[data-act="play"]');
+        const btnNext=root.querySelector('[data-act="next"]');
+        const btnPrev=root.querySelector('[data-act="prev"]');
+        const btnReset=root.querySelector('[data-act="reset"]');
+        function glow(id){ $('#'+id).classList.add('a-glow'); }
+        function txt(id,t,color){ const el=$('#'+id); el.textContent=t; if(color) el.setAttribute('fill',color); }
+        function state(t){ $('#a-state').textContent=t; }
+
+        const CFG = {
+          intro: 'One OrderPlaced event → SNS fanout → two SQS queues → consumer processes with visibility timeout, retry, DLQ.',
+          interval: 1700,
+          reset:(r)=>{
+            r.querySelectorAll('[data-anim]').forEach(el => el.classList.remove('a-glow'));
+            txt('a-q1-msgs','0 messages'); txt('a-q1-inv',''); txt('a-q2-msgs','0 messages');
+            txt('a-cons-status','long-polling','#7fa2ff'); txt('a-dlq-msgs','0 messages');
+            state('idle');
+          },
+          steps: [
+            { caption: 'Order Service commits + publishes OrderPlaced to the SNS topic.',
+              apply:()=>{ glow('a-prod'); state('publish → SNS'); } },
+            { caption: 'SNS routes the message to every subscription. Filter policies decide who gets it.',
+              apply:()=>{ glow('a-sns'); state('SNS fanout'); } },
+            { caption: 'SQS receives from SNS on each queue. Message replicated across 3 AZs before ack.',
+              apply:()=>{ glow('a-q1'); glow('a-q2'); txt('a-q1-msgs','1 message · replicated'); txt('a-q2-msgs','1 message · replicated'); state('durable on SQS'); } },
+            { caption: 'Warehouse worker long-polls (WaitTimeSeconds=20). Gets the message + ReceiptHandle. Message now IN-FLIGHT.',
+              apply:()=>{ glow('a-cons'); txt('a-cons-status','processing…','#f4a259'); txt('a-q1-msgs','0 visible · 1 in-flight'); txt('a-q1-inv','🔒 visibility 30 s','#f4a259'); state('receive → in-flight'); } },
+            { caption: 'Worker crashes before deleting. 30 s pass — visibility timeout expires. Message reappears.',
+              apply:()=>{ txt('a-cons-status','CRASHED · no delete','#f7567c'); txt('a-q1-msgs','1 visible again'); txt('a-q1-inv',''); state('timeout → redelivery'); } },
+            { caption: 'A new worker picks it up. Processing succeeds. Calls DeleteMessage with the ReceiptHandle.',
+              apply:()=>{ txt('a-cons-status','delete OK','#2dc653'); txt('a-q1-msgs','0 messages'); state('processed + deleted'); } },
+            { caption: 'A different message keeps failing. After maxReceiveCount = 5, SQS moves it to the DLQ.',
+              apply:()=>{ glow('a-dlq'); txt('a-dlq-msgs','1 message (poison pill)','#f7567c'); state('DLQ isolates the bad message'); } }
+          ]
+        };
+        let idx=-1, playing=false, timer=null;
+        function goto(i){ if(i<0||i>=CFG.steps.length) return; CFG.reset(root); for(let k=0;k<=i;k++) CFG.steps[k].apply(); idx=i; label.textContent=`Step ${i+1}/${CFG.steps.length}`; cap.textContent=CFG.steps[i].caption; }
+        function reset(){ idx=-1; playing=false; if(timer){clearTimeout(timer); timer=null;} CFG.reset(root); label.textContent='Ready'; cap.textContent=CFG.intro; btnPlay.textContent='▶ Play'; }
+        function play(){ if(playing){ playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play'; return; } if(idx>=CFG.steps.length-1) reset(); playing=true; btnPlay.textContent='⏸ Pause'; function tick(){ if(!playing) return; if(idx+1<CFG.steps.length) goto(idx+1); if(idx<CFG.steps.length-1) timer=setTimeout(tick,CFG.interval); else{playing=false; btnPlay.textContent='▶ Replay';} } timer=setTimeout(tick,400); }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx+1); });
+        btnPrev && btnPrev.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx-1); });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="fanout" class="card">
+    <h2>🔀 The canonical SNS-SQS fanout pattern</h2>
+    <p>The most important AWS architecture insight is that <strong>SNS alone is not durable per subscriber</strong>. If a subscriber's endpoint is offline when SNS publishes, and there's no DLQ, that subscriber missed the event. The fix is to subscribe an <em>SQS queue</em> for each subscriber, then have each subscriber's compute (Lambda, ECS, EC2) poll its own queue. This gives you:</p>
+    <ul>
+      <li><strong>Broadcast semantics</strong> from SNS (one publish → N destinations).</li>
+      <li><strong>Durable buffering</strong> from SQS (each destination has its own retention, retries, DLQ).</li>
+      <li><strong>Independent scaling</strong> — the analytics consumer can be slow without affecting the warehouse consumer.</li>
+      <li><strong>Independent failure handling</strong> — each queue has its own DLQ; each consumer has its own metrics and alarms.</li>
+      <li><strong>Add subscribers freely</strong> — no producer change needed.</li>
+    </ul>
+
+    <h3>When to use just SNS (no SQS)</h3>
+    <ul>
+      <li>Subscriber is <strong>Lambda</strong> and you're OK with SNS's built-in retry + DLQ (SNS-managed).</li>
+      <li>Subscriber is a <strong>webhook</strong> to an idempotent HTTP endpoint you own.</li>
+      <li>Subscriber is <strong>SMS / email / push</strong> — the endpoint is a human, no queue makes sense.</li>
+    </ul>
+
+    <h3>When to use just SQS (no SNS)</h3>
+    <ul>
+      <li>Single producer, single consumer group — you're just buffering work, not fanning out.</li>
+      <li>You need FIFO with strict order and only one consumer will process each message.</li>
+      <li>The producer already knows exactly which queue to write to; broadcast is not needed.</li>
+    </ul>
+
+    <h3>Common pitfalls</h3>
+    <ul>
+      <li><strong>Filter policy typos</strong> silently drop messages. Test filters with the SNS console's "Test message" feature.</li>
+      <li><strong>SNS → SQS access policy</strong> must allow the topic to send to the queue (AWS scripts this if you subscribe via the console; if you use Terraform, don't forget the queue policy).</li>
+      <li><strong>Not enabling raw message delivery</strong> means SNS wraps your message in a JSON envelope — every consumer must unwrap. Turn on <em>Raw Message Delivery</em> for cleaner code.</li>
+      <li><strong>Sync <code>SendMessage</code> before response</strong>: if you send the event <em>then</em> commit the DB, one may succeed and the other fail. Use the <em>Transactional Outbox</em> pattern to atomically write and publish.</li>
+      <li><strong>Confusing visibility timeout with retention</strong>: visibility hides an in-flight message; retention is when unprocessed messages die.</li>
+    </ul>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 DSA — internals</span>
+    <h2>Data structures behind SNS &amp; SQS</h2>
+    <table>
+      <thead><tr><th>Concept</th><th>Structure / algorithm</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Message storage</td><td><strong>Multi-AZ distributed log</strong> with consensus write; per-partition sharded</td><td>Durability + horizontal write scale.</td></tr>
+        <tr><td>Visibility state</td><td><strong>Per-message flag + timer</strong> keyed by ReceiptHandle</td><td>Prevents duplicate delivery while a consumer holds a message.</td></tr>
+        <tr><td>Standard delivery</td><td><strong>Randomised sampling</strong> across storage shards</td><td>Explains why short polling can miss messages — it queries a subset.</td></tr>
+        <tr><td>FIFO ordering</td><td><strong>Per-group sequence numbers</strong> + consumer session pinning</td><td>Order preserved within group, parallel across groups.</td></tr>
+        <tr><td>Deduplication</td><td><strong>Hash set with TTL</strong> keyed by DeduplicationId; 5-min window</td><td>Idempotent producer semantics.</td></tr>
+        <tr><td>ReceiveRequestAttemptId</td><td><strong>Idempotency cache</strong> mapping attempt-id → returned batch</td><td>Safe retry of ReceiveMessage after network glitch.</td></tr>
+        <tr><td>DLQ redirect</td><td><strong>Counter on receive</strong> — after N, mv to DLQ</td><td>Isolates poison messages.</td></tr>
+        <tr><td>SNS fanout</td><td><strong>Adjacency list</strong> topic → subscriptions; per-protocol delivery workers</td><td>Publish once, deliver N times, each with its own retry.</td></tr>
+        <tr><td>SNS filter policy</td><td><strong>JSON pattern matcher</strong> compiled to predicate tree</td><td>Constant-time subscription filtering at the router.</td></tr>
+        <tr><td>Long polling</td><td><strong>Coordination barrier</strong> across all storage servers with wake-up on send</td><td>Zero-cost wait until any message lands.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 Code — producer and consumer in C#</h2>
+
+    <h4>Producer — publish to SNS with FIFO deduplication</h4>
+<pre><span class="kw">using</span> Amazon.SimpleNotificationService;
+<span class="kw">using</span> Amazon.SimpleNotificationService.Model;
+
+<span class="kw">var</span> sns = <span class="kw">new</span> <span class="typ">AmazonSimpleNotificationServiceClient</span>();
+<span class="kw">await</span> sns.<span class="fn">PublishAsync</span>(<span class="kw">new</span> <span class="typ">PublishRequest</span> {
+    TopicArn = <span class="str">"arn:aws:sns:us-east-1:123:orders.fifo"</span>,
+    Message  = JsonSerializer.<span class="fn">Serialize</span>(<span class="kw">new</span> { OrderId = 42, Total = 299 }),
+    MessageGroupId = <span class="str">"tenant-alpha"</span>,           <span class="cmt">// order within tenant</span>
+    MessageDeduplicationId = order.Id.<span class="fn">ToString</span>() <span class="cmt">// idempotent publish</span>
+});
+</pre>
+
+    <h4>Consumer — long-polling loop with retries and DLQ handling</h4>
+<pre><span class="kw">using</span> Amazon.SQS;
+<span class="kw">using</span> Amazon.SQS.Model;
+
+<span class="kw">var</span> sqs = <span class="kw">new</span> <span class="typ">AmazonSQSClient</span>();
+<span class="kw">var</span> queueUrl = <span class="str">"https://sqs.us-east-1.amazonaws.com/123/warehouse-q"</span>;
+
+<span class="kw">while</span> (!ct.IsCancellationRequested)
+{
+    <span class="kw">var</span> resp = <span class="kw">await</span> sqs.<span class="fn">ReceiveMessageAsync</span>(<span class="kw">new</span> <span class="typ">ReceiveMessageRequest</span> {
+        QueueUrl = queueUrl,
+        MaxNumberOfMessages = 10,
+        WaitTimeSeconds = 20,             <span class="cmt">// long poll</span>
+        VisibilityTimeout = 60,           <span class="cmt">// double your P99 handler</span>
+        AttributeNames = { <span class="str">"ApproximateReceiveCount"</span> }
+    }, ct);
+
+    <span class="kw">foreach</span> (<span class="kw">var</span> msg <span class="kw">in</span> resp.Messages ?? <span class="kw">new</span>())
+    {
+        <span class="kw">try</span>
+        {
+            <span class="kw">var</span> receiveCount = <span class="kw">int</span>.<span class="fn">Parse</span>(msg.Attributes[<span class="str">"ApproximateReceiveCount"</span>]);
+            <span class="fn">Process</span>(msg.Body, receiveCount);                       <span class="cmt">// idempotent handler</span>
+
+            <span class="kw">await</span> sqs.<span class="fn">DeleteMessageAsync</span>(queueUrl, msg.ReceiptHandle);
+        }
+        <span class="kw">catch</span> (<span class="typ">TransientException</span>)
+        {
+            <span class="cmt">// don't delete — SQS will redeliver after visibility timeout</span>
+            <span class="cmt">// extend timeout if we know we need more time</span>
+            <span class="kw">await</span> sqs.<span class="fn">ChangeMessageVisibilityAsync</span>(queueUrl, msg.ReceiptHandle, 300);
+        }
+        <span class="cmt">// permanent errors → let receive-count climb → DLQ takes it after maxReceiveCount</span>
+    }
+}
+</pre>
+    <p>Two things to notice: <strong>idempotency is the consumer's job</strong>, not SQS's. Even Standard queues can (rarely) deliver duplicates. Store a de-dup key (message-id or business key) in your DB and short-circuit on replay. <strong>Never</strong> assume "at-least-once" means "exactly-once" in your handler.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, gotchas, and likely follow-up interview questions</h2>
+
+    <h3>The three biggest gotchas in production</h3>
+    <ul>
+      <li><strong>Visibility timeout &lt; handler time</strong> = duplicate processing storm. Set visibility to <em>P99 handler × 2</em>.</li>
+      <li><strong>No DLQ + poison message</strong> = infinite retry, throughput collapse. Always attach a DLQ and alarm on it.</li>
+      <li><strong>Publish-then-commit</strong> = phantom events on DB failure. Use the Transactional Outbox pattern.</li>
+    </ul>
+
+    <h3>Likely interview follow-ups</h3>
+    <div class="qa"><p class="q">Q: How does SQS guarantee durability?</p><p class="a">Every <code>SendMessage</code> is replicated across multiple servers in multiple AZs before returning. A single-AZ outage never loses a message. Within a region, SQS is effectively 3-AZ replicated.</p></div>
+    <div class="qa"><p class="q">Q: What's the difference between short and long polling?</p><p class="a">Short polling samples a subset of storage servers and returns immediately, often empty. Long polling (<code>WaitTimeSeconds=1..20</code>) queries all servers and waits until a message lands. Long polling is nearly always the right choice — fewer empty responses, lower cost, faster pickup.</p></div>
+    <div class="qa"><p class="q">Q: Why can SQS deliver duplicates on a Standard queue?</p><p class="a">The distributed store may replicate a message to two shards in a rare partition, and both may serve it. Consumers must be idempotent. FIFO removes this via DeduplicationId within a 5-minute window.</p></div>
+    <div class="qa"><p class="q">Q: How does FIFO achieve ordering with parallelism?</p><p class="a">Ordering is only guaranteed <em>within</em> a MessageGroupId. Different group IDs process in parallel. Choose group ID = user-id or tenant-id to keep per-user order without serialising the whole queue.</p></div>
+    <div class="qa"><p class="q">Q: What happens if a consumer crashes mid-processing?</p><p class="a">The message is invisible only until the visibility timeout expires (default 30 s). Once it expires, another consumer receives it. That's why every handler must be idempotent.</p></div>
+    <div class="qa"><p class="q">Q: How do you replay events into a new subscriber?</p><p class="a">FIFO SNS topics have message archive/replay (up to 365 days). Or replay from a Kinesis-based log if you built one alongside. Standard SNS/SQS have no built-in replay.</p></div>
+    <div class="qa"><p class="q">Q: SNS or EventBridge?</p><p class="a">EventBridge for content-based routing across services/accounts and integration with SaaS providers. SNS for simple, cheap, low-latency fanout to SQS/Lambda. Same idea, different sweet spots.</p></div>
+    <div class="qa"><p class="q">Q: SQS or Kafka (MSK)?</p><p class="a">SQS = simple, fully managed, unordered, one-consumer-per-message. Kafka = ordered per-partition, multi-consumer replay, unlimited retention. SQS is better for classic task queues; Kafka for event sourcing and streaming analytics.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "SNS is a pub/sub <em>topic</em>: a publisher writes once, SNS fans out to N subscribers — SQS queues, Lambda, HTTP, email, SMS, mobile push, Firehose. It's delivery-focused, not durability-focused. SQS is a durable, distributed <em>queue</em>: messages are replicated across multiple AZs, consumers long-poll and receive a ReceiptHandle plus a visibility timeout (default 30 s) that hides the message from other consumers until they delete it. If a consumer never deletes, the message reappears — <em>at-least-once</em> delivery. FIFO queues add strict ordering per MessageGroupId, deduplication within a 5-minute window, and exactly-once semantics — at the cost of 300 TPS (or 70k+ with high-throughput mode). The canonical AWS event-driven pattern is SNS-SQS fanout: publish to a topic, subscribe an SQS queue per consumer, each queue's DLQ isolates failures, and consumers scale independently."</p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Visibility timeout: 30 s default, 0 – 12 h configurable.</li>
+      <li>Retention: 4 days default, 60 s – 14 days configurable.</li>
+      <li>In-flight: ~120k Standard, 20k FIFO.</li>
+      <li>Dedup window: 5 minutes.</li>
+      <li>FIFO throughput: 300 TPS, 3,000 with batching, 70,000+ with high-throughput mode.</li>
+      <li>Message size: 256 KB (2 GB via S3 extended library).</li>
+      <li>SNS filter policies evaluate in constant time per subscription.</li>
+      <li>FIFO SNS topics support up to 365 days of archive/replay.</li>
+    </ul>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li><strong>"SNS delivers; SQS stores. Combine for durable fanout."</strong></li>
+      <li><strong>"At-least-once means idempotent consumers, always."</strong></li>
+      <li><strong>"Visibility timeout hides — DeleteMessage removes."</strong></li>
+      <li><strong>"FIFO uses MessageGroupId for ordering, DeduplicationId for exactly-once in a 5-min window."</strong></li>
+      <li><strong>"Every SQS queue needs a DLQ with a CloudWatch alarm."</strong></li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-basic-architecture.html">SQS basic architecture — AWS docs</a></li>
+      <li><a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html">SQS visibility timeout — AWS docs</a></li>
+      <li><a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html">SQS dead-letter queues — AWS docs</a></li>
+      <li><a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html">SQS FIFO queues — AWS docs</a></li>
+      <li><a href="https://docs.aws.amazon.com/sns/latest/dg/welcome.html">What is Amazon SNS? — AWS docs</a></li>
+      <li><a href="https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html">SNS message filtering — AWS docs</a></li>
+      <li><a href="https://docs.aws.amazon.com/sns/latest/dg/sns-fifo-topics.html">SNS FIFO topics — AWS docs</a></li>
+      <li><a href="https://aws.amazon.com/blogs/compute/event-driven-computing-with-amazon-sns-compute-storage-database-and-networking-services/">Event-driven computing with Amazon SNS — AWS blog</a></li>
+      <li><a href="https://aws.amazon.com/sqs/features/">SQS features — AWS</a></li>
+      <li><a href="https://aws.amazon.com/sns/features/">SNS features — AWS</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

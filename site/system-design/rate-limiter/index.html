@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rate Limiter — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg [data-anim] {
+    transition: transform .8s cubic-bezier(.4,0,.2,1),
+                opacity .45s ease, fill .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.15); }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Rate Limiter</h1>
+    <p>Protecting a service from abuse, runaway scripts &amp; traffic spikes — the algorithms (token bucket, sliding window), the distributed Redis design, and how Stripe does it in production.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>A <strong>rate limiter</strong> controls how many requests a client may make to a service in a given window of time, rejecting or delaying the excess. It's the bouncer at the door of an API: it protects the service from being overwhelmed — whether by a malicious flood (DoS/brute-force), a buggy client stuck in a retry loop, a scraper, or just an unexpected traffic spike — and it enforces fair usage so one noisy tenant can't starve everyone else.</p>
+    <p>It's one of the most common system-design interview questions precisely because it's everywhere and it forces you to reason about <strong>algorithms, state, concurrency, and distributed coordination</strong> in a small space. Real examples: <strong>Stripe</strong> rate-limits its payments API and says its request limiter alone "has rejected millions of requests this month" — largely runaway test-mode scripts. <strong>Twitter/X</strong> caps tweets (e.g. 300 per 3 hours); the <strong>Google Docs API</strong> allows ~300 read requests per user per 60 seconds; <strong>GitHub</strong>, <strong>Cloudflare</strong>, and every major cloud API do the same. The universal signal for "you've been limited" is HTTP <strong>429 Too Many Requests</strong> (and <strong>503</strong> when the server itself is shedding load).</p>
+    <p>Why companies invest in it: without a limiter, a single client can degrade or take down a shared service, drive up infrastructure cost, and ruin the experience for everyone. A good limiter is also a <em>graceful-degradation</em> tool — under overload you shed the least-important traffic first and keep the critical paths (like "create a charge") alive.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The bouncer with a bucket of tokens</h2>
+    <p>Imagine a very popular club with a strict bouncer. The rule of the night is simple: <strong>"You get 100 free drink tokens. Come back when you run out."</strong> Every time you order a drink, the bouncer takes one token out of your hand. When your fist is empty, he smiles politely and says "come back in 30 seconds." Slowly — say, one token per second — the bouncer quietly slips new tokens back into your hand, so you're never permanently cut off. That's it. That's a <strong>rate limiter</strong>.</p>
+    <p>Now, why does <em>every</em> big website need this bouncer? Picture what happens on <strong>IRCTC at 10 AM</strong> when Tatkal train tickets open. Twenty million people mash the "Book Now" button at the same instant. If the website tried to serve everyone at once, it would keel over and <strong>nobody</strong> gets a ticket. Worse: one person could write a small robot to click the button <strong>a thousand times a second</strong> and hog every seat. The bouncer's job is to say, "Sorry — you personally get 5 clicks per second, no matter how fancy your script is."</p>
+    <p>The bucket analogy also handles bursts nicely. Say you're a well-behaved app and you haven't made any requests for 30 seconds. Your bucket has quietly filled back up to 100 tokens. Now you suddenly need to send 20 requests at once — maybe a page just loaded. No problem! You have plenty of tokens saved up. This is why real websites use the "bucket of tokens" idea instead of a rigid "no more than 5 per second, ever" rule — it lets honest users burst when they need to, but stops abusers cold.</p>
+    <p>There's a <strong>tricky part</strong> though. A website like <strong>Stripe</strong> or <strong>GitHub</strong> doesn't run on one computer — it runs on <em>thousands</em>. If each computer keeps its own bucket, a clever attacker could hit computer A with 100 requests, then computer B with 100 more, then C, and effectively cheat. So all the bouncers have to <strong>share one central scoreboard</strong> (usually a super-fast in-memory store called <strong>Redis</strong>) so everyone agrees on how many tokens you have left. That shared scoreboard has to answer in <em>less than a millisecond</em> or the bouncer becomes the bottleneck. That's the whole engineering challenge in one sentence: <strong>a bouncer fast enough to never slow down the party.</strong></p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Limit requests per client identity (API key, user id, or IP) to <strong>N per time window</strong>.</li>
+      <li>Return <strong>HTTP 429</strong> when the limit is exceeded, ideally with a <code>Retry-After</code> and rate-limit headers (<code>X-RateLimit-Remaining</code>, <code>-Reset</code>).</li>
+      <li>Support <strong>different rules per endpoint / tier</strong> (a free user vs. an enterprise user; a cheap GET vs. an expensive POST).</li>
+      <li>Allow controlled <strong>bursts</strong> above the steady rate (flash-sale traffic) without permanently raising the limit.</li>
+    </ul>
+
+    <h3>Non-functional requirements (the ones that shape the design)</h3>
+    <ul>
+      <li><strong>Low latency</strong> — the check sits in front of every request, so it must add well under ~1 ms.</li>
+      <li><strong>Distributed correctness</strong> — the limit must hold across a fleet of servers, not per-instance.</li>
+      <li><strong>High availability &amp; fail-open</strong> — if the limiter's datastore is down, legitimate traffic should still flow (Stripe explicitly catches exceptions so a Redis outage doesn't block traffic).</li>
+      <li><strong>Memory efficiency</strong> — millions of distinct clients ⇒ per-client state must be tiny.</li>
+      <li><strong>Accuracy</strong> — avoid the boundary-burst problem where 2× the limit slips through at a window edge.</li>
+    </ul>
+
+    <h3>Capacity estimation (a mid-size API gateway)</h3>
+    <table>
+      <tr><th>Quantity</th><th>Estimate</th><th>Reasoning</th></tr>
+      <tr><td>Peak throughput</td><td>~100,000 req/s</td><td>Every request does one limiter check ⇒ 100k limiter ops/s.</td></tr>
+      <tr><td>Distinct clients</td><td>~10 million keys</td><td>API keys + user ids + IPs being tracked.</td></tr>
+      <tr><td>State per client (token bucket)</td><td>~20–40 bytes</td><td>Just <code>{tokens, last_refill_timestamp}</code> — a few numbers.</td></tr>
+      <tr><td>Total limiter memory</td><td>~200–400 MB</td><td>10M × ~30 B — easily fits one Redis node's RAM.</td></tr>
+      <tr><td>Redis op cost</td><td>1 atomic Lua call/req</td><td>Redis does ~100k+ ops/s per node; shard by key if beyond that.</td></tr>
+      <tr><td>Added latency budget</td><td>&lt; 1 ms</td><td>In-region Redis round-trip; co-locate to stay sub-ms.</td></tr>
+    </table>
+    <p><strong>The number to volunteer:</strong> "Token-bucket state is just two numbers per client — tokens left and last refill time — so 10 million clients is only a few hundred MB. That's why the whole limiter fits in one Redis node's RAM and each check is a single atomic operation."</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The rate limiter is a <strong>middleware check</strong> that runs before your business logic — usually in the API gateway or a thin filter in front of the app servers. The critical design decision is <em>where the counter lives</em>. Per-instance in-memory counters are fast but wrong in a fleet (10 servers × limit N = 10N allowed). So the counter state moves to a <strong>shared, fast datastore — almost always Redis</strong> — and the check must be a single <strong>atomic</strong> operation (a Lua script or <code>INCR</code>+<code>EXPIRE</code>) so concurrent requests across many servers can't race past the limit.</p>
+    <p>The flow: a request arrives, the gateway extracts the client identity, and asks the limiter "is this client under its limit?" The limiter atomically updates the client's bucket/counter in Redis and returns allow/deny. On <em>allow</em>, the request proceeds; on <em>deny</em>, the gateway short-circuits with <strong>429</strong> and a <code>Retry-After</code>. If Redis is unreachable, the design <strong>fails open</strong> — allow the request rather than take down the whole API.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 860 430" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <defs>
+          <marker id="fwd" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#2dc653"/>
+          </marker>
+          <marker id="chk" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#4cc9f0"/>
+          </marker>
+          <marker id="rej" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#f7567c"/>
+          </marker>
+        </defs>
+
+        <!-- Clients -->
+        <rect x="25" y="150" width="120" height="60" rx="12" fill="#4361ee"/>
+        <text x="85" y="176" fill="#fff" font-size="14" font-weight="700" text-anchor="middle">Clients</text>
+        <text x="85" y="195" fill="#dfe6ff" font-size="10.5" text-anchor="middle">API keys / IPs</text>
+
+        <!-- Gateway + limiter middleware -->
+        <rect x="240" y="110" width="200" height="140" rx="12" fill="#22304d" stroke="#4361ee"/>
+        <text x="340" y="135" fill="#dfe6ff" font-size="13.5" font-weight="700" text-anchor="middle">API Gateway</text>
+        <rect x="262" y="150" width="156" height="80" rx="10" fill="#4361ee"/>
+        <text x="340" y="176" fill="#fff" font-size="12.5" font-weight="700" text-anchor="middle">Rate-limit</text>
+        <text x="340" y="193" fill="#fff" font-size="12.5" font-weight="700" text-anchor="middle">middleware</text>
+        <text x="340" y="214" fill="#cdd8f5" font-size="10" text-anchor="middle">atomic check</text>
+
+        <!-- Redis -->
+        <rect x="530" y="60" width="170" height="90" rx="12" fill="#0f7a48"/>
+        <text x="615" y="90" fill="#fff" font-size="13.5" font-weight="700" text-anchor="middle">Redis</text>
+        <text x="615" y="110" fill="#d6ffe8" font-size="10.5" text-anchor="middle">token buckets /</text>
+        <text x="615" y="126" fill="#d6ffe8" font-size="10.5" text-anchor="middle">counters · Lua</text>
+
+        <!-- App servers -->
+        <rect x="530" y="210" width="170" height="90" rx="12" fill="#7048e8"/>
+        <text x="615" y="240" fill="#fff" font-size="13.5" font-weight="700" text-anchor="middle">App servers</text>
+        <text x="615" y="260" fill="#e3d9ff" font-size="10.5" text-anchor="middle">business logic</text>
+        <text x="615" y="276" fill="#e3d9ff" font-size="10.5" text-anchor="middle">(only if allowed)</text>
+
+        <!-- Arrows -->
+        <path d="M145 180 L 238 180" fill="none" stroke="#2dc653" stroke-width="2.6" marker-end="url(#fwd)"/>
+        <text x="150" y="170" fill="#2dc653" font-size="10.5">request</text>
+
+        <path d="M440 165 Q 490 130 528 118" fill="none" stroke="#4cc9f0" stroke-width="2.4" marker-end="url(#chk)"/>
+        <text x="452" y="128" fill="#4cc9f0" font-size="10">allow?</text>
+        <path d="M528 132 Q 490 150 442 172" fill="none" stroke="#4cc9f0" stroke-width="2.4" marker-end="url(#chk)" stroke-dasharray="4 3"/>
+
+        <path d="M440 210 Q 490 245 528 250" fill="none" stroke="#2dc653" stroke-width="2.6" marker-end="url(#fwd)"/>
+        <text x="452" y="245" fill="#2dc653" font-size="10">allowed →</text>
+
+        <!-- 429 reject -->
+        <path d="M300 250 Q 250 320 150 320 L 110 250" fill="none" stroke="#f7567c" stroke-width="2.4" marker-end="url(#rej)"/>
+        <text x="150" y="345" fill="#f7567c" font-size="11" font-weight="700">429 Too Many Requests (denied)</text>
+
+        <text x="615" y="175" fill="#7fd7a3" font-size="9.5" text-anchor="middle">fail-open if Redis down</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#2dc653"></span>Allowed request flow</span>
+        <span><span class="dot" style="background:#4cc9f0"></span>Atomic limiter check</span>
+        <span><span class="dot" style="background:#f7567c"></span>Rejected → 429</span>
+      </div>
+    </div>
+
+    <h3>The request path</h3>
+    <ol class="steps">
+      <li>Request hits the gateway; middleware derives the client key (API key / user id / IP) and the applicable rule.</li>
+      <li>Middleware runs <strong>one atomic op</strong> in Redis (Lua script): refill the bucket by elapsed time, try to take a token.</li>
+      <li><strong>Token available</strong> → decrement, return <em>allow</em>; request proceeds to app servers.</li>
+      <li><strong>Bucket empty</strong> → return <em>deny</em>; gateway responds <strong>429</strong> with <code>Retry-After</code> and rate-limit headers.</li>
+      <li>If Redis errors/timeouts → <strong>fail open</strong> (allow) so the limiter never becomes the outage.</li>
+    </ol>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch the token bucket work, step by step</h2>
+    <p>The token-bucket algorithm is the industry-default rate limiter — Stripe, AWS API Gateway, and countless others use it. This animation shows exactly how it behaves: tokens dripping in at a steady rate up to a capacity, requests consuming a token to be allowed, and requests bouncing off with a <code>429</code> when the bucket runs dry. Use <em>Play</em> to watch the sequence, or <em>Step →</em> / <em>← Back</em> to inspect each frame.</p>
+
+    <div class="anim-frame" id="tb-anim">
+      <svg viewBox="0 0 700 340" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <!-- Refill spigot -->
+        <text x="70" y="34" fill="#7fd7a3" font-size="12" font-weight="700" text-anchor="middle">Refill rate r</text>
+        <text x="70" y="50" fill="#7fd7a3" font-size="10.5" text-anchor="middle">(1 token / interval)</text>
+        <path d="M70 60 L 70 105" stroke="#2dc653" stroke-width="3"/>
+        <path d="M65 105 L 75 105 L 70 118 Z" fill="#2dc653"/>
+
+        <!-- Falling tokens (start hidden above spigot, fall into bucket) -->
+        <circle id="drip1" data-anim cx="70" cy="80" r="7" fill="#2dc653" class="a-hidden"/>
+        <circle id="drip2" data-anim cx="70" cy="80" r="7" fill="#2dc653" class="a-hidden"/>
+
+        <!-- The bucket: capacity b = 4 slots -->
+        <g>
+          <text x="180" y="34" fill="#c6d0e0" font-size="13" font-weight="700" text-anchor="middle">Token bucket · capacity b = 4</text>
+          <!-- Bucket outline -->
+          <path d="M110 140 L 250 140 L 240 260 L 120 260 Z" fill="none" stroke="#4cc9f0" stroke-width="2.5" stroke-linejoin="round"/>
+          <!-- Token slots (start dim = empty) -->
+          <circle id="tok1" data-anim cx="140" cy="245" r="12" fill="#2dc653" opacity=".22"/>
+          <circle id="tok2" data-anim cx="170" cy="245" r="12" fill="#2dc653" opacity=".22"/>
+          <circle id="tok3" data-anim cx="200" cy="245" r="12" fill="#2dc653" opacity=".22"/>
+          <circle id="tok4" data-anim cx="230" cy="245" r="12" fill="#2dc653" opacity=".22"/>
+          <text id="tok-count" data-anim x="180" y="290" fill="#c6d0e0" font-size="13" font-weight="700" text-anchor="middle">tokens: 0 / 4</text>
+        </g>
+
+        <!-- Client requests queue (right side) -->
+        <text x="500" y="34" fill="#c6d0e0" font-size="13" font-weight="700" text-anchor="middle">Incoming requests</text>
+        <g id="req1" data-anim transform="translate(0,0)">
+          <rect x="480" y="80" width="60" height="34" rx="8" fill="#4361ee"/>
+          <text x="510" y="102" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">req 1</text>
+        </g>
+        <g id="req2" data-anim transform="translate(0,0)">
+          <rect x="480" y="130" width="60" height="34" rx="8" fill="#4361ee"/>
+          <text x="510" y="152" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">req 2</text>
+        </g>
+        <g id="req3" data-anim transform="translate(0,0)">
+          <rect x="480" y="180" width="60" height="34" rx="8" fill="#4361ee"/>
+          <text x="510" y="202" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">req 3</text>
+        </g>
+        <g id="req4" data-anim transform="translate(0,0)">
+          <rect x="480" y="230" width="60" height="34" rx="8" fill="#4361ee"/>
+          <text x="510" y="252" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">req 4</text>
+        </g>
+
+        <!-- Verdict badges appear on right after processing -->
+        <g id="verdict1" data-anim class="a-hidden">
+          <rect x="600" y="80" width="80" height="34" rx="8" fill="#2dc653"/>
+          <text x="640" y="102" fill="#04140b" font-size="11" font-weight="700" text-anchor="middle">200 OK</text>
+        </g>
+        <g id="verdict2" data-anim class="a-hidden">
+          <rect x="600" y="130" width="80" height="34" rx="8" fill="#2dc653"/>
+          <text x="640" y="152" fill="#04140b" font-size="11" font-weight="700" text-anchor="middle">200 OK</text>
+        </g>
+        <g id="verdict3" data-anim class="a-hidden">
+          <rect x="600" y="180" width="80" height="34" rx="8" fill="#f7567c"/>
+          <text x="640" y="202" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">429</text>
+        </g>
+        <g id="verdict4" data-anim class="a-hidden">
+          <rect x="600" y="230" width="80" height="34" rx="8" fill="#2dc653"/>
+          <text x="640" y="252" fill="#04140b" font-size="11" font-weight="700" text-anchor="middle">200 OK</text>
+        </g>
+
+        <!-- Bucket status label -->
+        <text id="status" data-anim x="180" y="315" fill="#7fd7a3" font-size="11" text-anchor="middle" class="a-hidden">bucket empty!</text>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to watch the token bucket in action.</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('tb-anim');
+        if (!root) return;
+        const $ = (s) => root.querySelector(s);
+        const label = root.querySelector('.anim-step-label');
+        const cap   = root.querySelector('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        // Filling a token: change opacity 0.22 → 1 (full green).
+        const fill = (id) => $(id).setAttribute('opacity', '1');
+        const empty = (id) => $(id).setAttribute('opacity', '.22');
+        const setCount = (n) => $('#tok-count').textContent = `tokens: ${n} / 4`;
+
+        // A step-based scene mutation. Each step is a snapshot of world state.
+        const steps = [
+          { c: 'The bucket starts empty. A token drips in from the refill spigot at rate r.',
+            a: () => {
+              $('#drip1').classList.remove('a-hidden');
+              $('#drip1').setAttribute('transform', 'translate(0,60)'); // fall to bucket rim
+              setTimeout(() => { fill('#tok1'); setCount(1); $('#drip1').classList.add('a-hidden'); }, 700);
+            }},
+          { c: 'A second token drips in — bucket now has 2 of its 4 capacity.',
+            a: () => {
+              $('#drip2').classList.remove('a-hidden');
+              $('#drip2').setAttribute('transform', 'translate(0,60)');
+              setTimeout(() => { fill('#tok2'); setCount(2); $('#drip2').classList.add('a-hidden'); }, 700);
+            }},
+          { c: 'Request 1 arrives, consumes 1 token, and is ALLOWED (200 OK). Bucket drops to 1.',
+            a: () => {
+              $('#req1').setAttribute('transform', 'translate(-400,0)');
+              setTimeout(() => {
+                empty('#tok2'); setCount(1);
+                $('#verdict1').classList.remove('a-hidden');
+                $('#req1').classList.add('a-hidden');
+              }, 700);
+            }},
+          { c: 'Request 2 arrives, consumes the last token, ALLOWED (200 OK). Bucket now empty.',
+            a: () => {
+              $('#req2').setAttribute('transform', 'translate(-400,0)');
+              setTimeout(() => {
+                empty('#tok1'); setCount(0);
+                $('#verdict2').classList.remove('a-hidden');
+                $('#req2').classList.add('a-hidden');
+                $('#status').classList.remove('a-hidden');
+              }, 700);
+            }},
+          { c: 'Request 3 arrives — but the bucket is empty. REJECTED with HTTP 429 Too Many Requests.',
+            a: () => {
+              $('#req3').setAttribute('transform', 'translate(-160,0)');
+              setTimeout(() => {
+                $('#req3').setAttribute('transform', 'translate(0,0)');
+                $('#req3').classList.add('a-glow');
+                $('#req3 rect').setAttribute('fill', '#f7567c');
+                $('#verdict3').classList.remove('a-hidden');
+              }, 700);
+            }},
+          { c: 'Time passes — a new token drips in from the refill spigot.',
+            a: () => {
+              $('#status').classList.add('a-hidden');
+              $('#drip1').classList.remove('a-hidden');
+              $('#drip1').setAttribute('transform', 'translate(0,60)');
+              setTimeout(() => { fill('#tok1'); setCount(1); $('#drip1').classList.add('a-hidden'); }, 700);
+            }},
+          { c: 'Request 4 arrives, consumes the newly refilled token, ALLOWED. That is the token-bucket rhythm: average capped at r, bursts absorbed up to b.',
+            a: () => {
+              $('#req4').setAttribute('transform', 'translate(-400,0)');
+              setTimeout(() => {
+                empty('#tok1'); setCount(0);
+                $('#verdict4').classList.remove('a-hidden');
+                $('#req4').classList.add('a-hidden');
+              }, 700);
+            }}
+        ];
+
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          // Restore initial state
+          ['#tok1','#tok2','#tok3','#tok4'].forEach(empty);
+          setCount(0);
+          ['#req1','#req2','#req3','#req4'].forEach(id => {
+            const g = $(id);
+            g.classList.remove('a-hidden','a-glow');
+            g.setAttribute('transform', 'translate(0,0)');
+            const rect = g.querySelector('rect');
+            if (rect) rect.setAttribute('fill', '#4361ee');
+          });
+          ['#verdict1','#verdict2','#verdict3','#verdict4'].forEach(id => $(id).classList.add('a-hidden'));
+          $('#drip1').classList.add('a-hidden');
+          $('#drip1').setAttribute('transform', 'translate(0,0)');
+          $('#drip2').classList.add('a-hidden');
+          $('#drip2').setAttribute('transform', 'translate(0,0)');
+          $('#status').classList.add('a-hidden');
+          label.textContent = 'Ready';
+          cap.textContent = 'Press ▶ Play to watch the token bucket in action.';
+          btnPlay.textContent = '▶ Play';
+        }
+
+        // Apply from scratch to step i (idempotent).
+        function goto(i) {
+          if (i < 0 || i >= steps.length) return;
+          reset();
+          for (let k = 0; k <= i; k++) steps[k].a();
+          idx = i;
+          label.textContent = `Step ${i + 1}/${steps.length}`;
+          cap.textContent = steps[i].c;
+        }
+
+        let idx = -1, playing = false, timer = null;
+
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < steps.length) {
+              idx++;
+              steps[idx].a();
+              label.textContent = `Step ${idx + 1}/${steps.length}`;
+              cap.textContent = steps[idx].c;
+            }
+            if (idx < steps.length - 1) timer = setTimeout(tick, 2200);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 300);
+        }
+
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive: the five algorithms</h2>
+    <p>The heart of this interview is knowing the algorithms cold — how each works, its memory cost, and its burst behavior. Here they are, weakest to strongest.</p>
+
+    <h3>1. Fixed Window Counter</h3>
+    <p>Split time into fixed windows (say, 1-second buckets). Keep one counter per client per window; increment on each request; reject once it exceeds the limit, then reset at the next window. <strong>Pros:</strong> trivially simple, one integer of memory, easy in Redis (<code>INCR</code> + <code>EXPIRE</code>). <strong>Con — the boundary burst:</strong> a client can send the full limit at the very end of one window and again at the start of the next, pushing <em>2× the limit</em> through in a fraction of a second. Good enough for coarse quotas, dangerous for tight protection.</p>
+
+    <h3>2. Sliding Window Log</h3>
+    <p>Store a <strong>timestamp for every request</strong> in a sorted set; to decide, drop timestamps older than the window and count what remains. <strong>Pros:</strong> perfectly accurate, no boundary burst. <strong>Con:</strong> memory grows with request volume — you store every single request timestamp — so it's expensive for high-traffic clients. Great accuracy, poor scalability.</p>
+
+    <h3>3. Sliding Window Counter (the sweet spot)</h3>
+    <p>A hybrid: keep the current and previous fixed-window counts and <strong>weight the previous window by how much of it still overlaps</strong> the sliding window. Estimated count = <code>curr + prev × (overlap fraction)</code>. <strong>Pros:</strong> smooths the boundary burst almost as well as the log, but with <em>fixed, tiny memory</em> (two counters). This is the algorithm most production systems reach for when they want accuracy without the log's cost.</p>
+
+    <h3>4. Token Bucket (the industry favorite)</h3>
+    <p>A bucket holds up to <strong>b</strong> tokens and refills at rate <strong>r</strong> (one token every 1/r seconds; overflow is discarded). Each request removes one token; if the bucket is empty, the request is <em>non-conformant</em> (rejected or queued). The genius is <strong>controlled bursts</strong>: a client that's been quiet accumulates up to <em>b</em> tokens and can spend them in a burst (a flash sale), but the long-run average is still capped at <em>r</em>. Memory is just <code>{tokens, last_refill}</code>. This is what <strong>Stripe uses</strong> — they note clients "can always spread out their requests a bit more," and they layer a burst allowance on top for real-time spikes. It's the default answer to "which algorithm?".</p>
+
+    <h3>5. Leaky Bucket</h3>
+    <p>Requests enter a queue and are processed ("leak out") at a <strong>constant rate</strong>. Overflowing the queue drops requests. <strong>Pros:</strong> perfectly smooth, jitter-free output — ideal for traffic <em>shaping</em> a downstream that needs steady load. <strong>Con:</strong> it doesn't allow bursts and adds queueing latency; it's a shaper, not really a burst-friendly limiter. Token bucket is its "mirror image" and is usually preferred for APIs.</p>
+
+    <h3>Making it distributed &amp; atomic</h3>
+    <p>The single hardest part in a fleet is the <strong>race condition</strong>: two servers read "1 token left" simultaneously and both allow. The fix is to make the read-modify-write <strong>atomic</strong>. In Redis this means a <strong>Lua script</strong> (executed atomically on the server) that does refill-and-take in one shot, or <code>INCR</code>+<code>EXPIRE</code> for fixed windows. You also decide between <strong>centralized</strong> (one Redis, exact but a round-trip per request) and <strong>local-token / sticky</strong> approaches (each node gets a slice of the budget for lower latency, at the cost of some accuracy). Stripe runs it on Redis (self-hosted or ElastiCache) and explicitly designs to <strong>fail open</strong>, ships <strong>kill switches</strong>, and <strong>dark-launches</strong> new limiters to see what <em>would</em> be blocked before enforcing.</p>
+
+    <h3>Stripe's four-layer production model (worth quoting)</h3>
+    <ul>
+      <li><strong>Request rate limiter</strong> — caps requests/sec per user; the primary defense. Rejects millions/month, mostly runaway scripts.</li>
+      <li><strong>Concurrent requests limiter</strong> — caps in-flight requests (e.g. 20 at once) to protect CPU-heavy endpoints from retry storms.</li>
+      <li><strong>Fleet usage load shedder</strong> — reserves a % of the fleet for <em>critical</em> methods; sheds non-critical traffic with 503 when it exceeds its allocation.</li>
+      <li><strong>Worker utilization load shedder</strong> — last line of defense in incidents: sheds by priority tier (test mode → GETs → POSTs → critical).</li>
+    </ul>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Under the hood these are small, elegant data-structure choices, and the interviewer wants to hear the memory/accuracy trade-off for each. The token bucket is just arithmetic on two numbers; the sliding window log is a sorted set; the sliding window counter is a clever weighted estimate.</p>
+    <table>
+      <tr><th>Algorithm</th><th>Data structure</th><th>Memory / client</th><th>Burst behavior &amp; notes</th></tr>
+      <tr><td>Fixed window</td><td>1 integer counter (+TTL)</td><td>O(1) — tiny</td><td>Allows 2× at boundary; simplest.</td></tr>
+      <tr><td>Sliding window log</td><td>Sorted set of timestamps</td><td>O(requests in window)</td><td>Exact, no burst; memory-heavy.</td></tr>
+      <tr><td>Sliding window counter</td><td>2 integer counters</td><td>O(1) — tiny</td><td>Smooths boundary burst; best accuracy-per-byte.</td></tr>
+      <tr><td>Token bucket</td><td><code>{tokens, last_refill_ts}</code></td><td>O(1) — ~2 numbers</td><td>Controlled bursts up to <em>b</em>; avg capped at <em>r</em>. Industry default.</td></tr>
+      <tr><td>Leaky bucket</td><td>FIFO queue + drain timer</td><td>O(queue size)</td><td>Smooth output, no burst, adds latency; a shaper.</td></tr>
+    </table>
+    <h3>The token-bucket math</h3>
+    <p>With refill rate <strong>r</strong> tokens/sec and capacity <strong>b</strong>: the long-run average request rate is bounded by <strong>r</strong>, while the maximum burst is governed by bucket depth <strong>b</strong>. Formally, if <em>M</em> is the peak arrival rate, the max burst duration is <code>T_max = b / (M − r)</code> (for <em>M</em> &gt; <em>r</em>) and max burst size <code>B_max = T_max × M</code>. The elegant trick: you don't run a timer to add tokens — you <strong>lazily compute</strong> refill on each request as <code>tokens = min(b, tokens + (now − last_refill) × r)</code>. That's why the check is O(1) and needs no background job.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>On AWS you can get a rate limiter three ways: fully managed at the edge, managed at the API layer, or self-built on Redis for full control (the Stripe approach). Pick by how much customization you need.</p>
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Edge / L7 rate limiting</td><td><strong>AWS WAF</strong> (rate-based rules) + <strong>CloudFront</strong></td><td>Block floods by IP/header <em>before</em> they reach your origin — cheapest DDoS-style protection.</td></tr>
+      <tr><td>Per-API-key throttling</td><td><strong>API Gateway</strong> usage plans + throttling</td><td>Built-in token-bucket throttling (rate + burst) per API key; zero code for standard quotas.</td></tr>
+      <tr><td>Custom distributed limiter</td><td><strong>ElastiCache for Redis</strong> + Lua</td><td>The Stripe-style token bucket when you need per-endpoint/per-tier rules and burst logic. Atomic Lua = no races.</td></tr>
+      <tr><td>Limiter logic host</td><td><strong>Lambda authorizer</strong> or <strong>ECS/EKS</strong> middleware</td><td>Run the check in a Lambda authorizer on API Gateway, or as filter middleware in your service.</td></tr>
+      <tr><td>Serverless counter store</td><td><strong>DynamoDB</strong> (atomic counters, TTL)</td><td>Alternative to Redis when you want no cache cluster to manage; conditional writes give atomicity, TTL auto-expires windows.</td></tr>
+      <tr><td>Overload / load shedding</td><td><strong>ALB</strong> + <strong>Auto Scaling</strong> + priority queues (<strong>SQS</strong>)</td><td>Shed low-priority traffic (503) and scale out; mirrors Stripe's fleet/worker shedders.</td></tr>
+      <tr><td>Metrics &amp; tuning</td><td><strong>CloudWatch</strong></td><td>Dark-launch: log what <em>would</em> be blocked, tune thresholds before enforcing.</td></tr>
+    </table>
+    <p><strong>Deployment story to tell:</strong> "For coarse abuse protection I'd start with <strong>AWS WAF rate-based rules</strong> at CloudFront and <strong>API Gateway</strong> usage-plan throttling — no code, token-bucket built in. When I need per-tier rules and burst allowances like Stripe, I'd build a token bucket in <strong>ElastiCache Redis</strong> driven by an atomic <strong>Lua</strong> script, invoked from a <strong>Lambda authorizer</strong> or service middleware, and I'd <strong>fail open</strong> if Redis is unreachable. I'd <strong>dark-launch</strong> via CloudWatch to tune thresholds, and keep the WAF/load-shedder layer as the last line of defense during incidents."</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>Here's a correct, idiomatic <strong>token bucket</strong> in C# — first the single-node version showing the lazy-refill math, then the crucial note on making it atomic in a distributed fleet with Redis + Lua.</p>
+    <pre><span class="cmt">// Thread-safe, single-node token bucket. State is just two numbers per client.</span>
+<span class="kw">public sealed class</span> <span class="typ">TokenBucket</span>
+{
+    <span class="kw">private readonly double</span> _capacity;     <span class="cmt">// b: max tokens (burst size)</span>
+    <span class="kw">private readonly double</span> _refillPerSec;  <span class="cmt">// r: tokens added per second</span>
+    <span class="kw">private double</span> _tokens;                 <span class="cmt">// current tokens</span>
+    <span class="kw">private long</span>   _lastRefillTicks;        <span class="cmt">// last update (Stopwatch ticks)</span>
+    <span class="kw">private readonly object</span> _gate = <span class="kw">new</span>();
+
+    <span class="kw">public</span> <span class="fn">TokenBucket</span>(<span class="typ">double</span> capacity, <span class="typ">double</span> refillPerSec)
+    {
+        _capacity = capacity;
+        _refillPerSec = refillPerSec;
+        _tokens = capacity;                  <span class="cmt">// start full ⇒ allow an initial burst</span>
+        _lastRefillTicks = <span class="typ">Stopwatch</span>.<span class="fn">GetTimestamp</span>();
+    }
+
+    <span class="cmt">// Returns true = allowed (a token was taken); false = rejected (429).</span>
+    <span class="kw">public bool</span> <span class="fn">TryConsume</span>(<span class="typ">double</span> cost = 1.0)
+    {
+        <span class="kw">lock</span> (_gate)
+        {
+            <span class="kw">long</span> now = <span class="typ">Stopwatch</span>.<span class="fn">GetTimestamp</span>();
+            <span class="kw">double</span> elapsed = (now - _lastRefillTicks) / (<span class="kw">double</span>)<span class="typ">Stopwatch</span>.Frequency;
+            _lastRefillTicks = now;
+
+            <span class="cmt">// LAZY refill: add tokens for the elapsed time, capped at capacity.</span>
+            _tokens = <span class="typ">Math</span>.<span class="fn">Min</span>(_capacity, _tokens + elapsed * _refillPerSec);
+
+            <span class="kw">if</span> (_tokens &gt;= cost)
+            {
+                _tokens -= cost;             <span class="cmt">// conformant: take the token(s)</span>
+                <span class="kw">return true</span>;
+            }
+            <span class="kw">return false</span>;                     <span class="cmt">// non-conformant: no tokens left</span>
+        }
+    }
+}
+
+<span class="cmt">// ---- Distributed: the check MUST be atomic across the fleet. ----</span>
+<span class="cmt">// A per-instance lock is NOT enough — 10 servers would allow 10x.</span>
+<span class="cmt">// Run this Lua on Redis; it does refill+take in ONE atomic step, keyed by client.</span>
+<span class="kw">private const string</span> TokenBucketLua = <span class="str">@"
+local key      = KEYS[1]
+local rate     = tonumber(ARGV[1])   -- tokens per second (r)
+local capacity = tonumber(ARGV[2])   -- bucket size (b)
+local now      = tonumber(ARGV[3])   -- current time (seconds, from caller)
+local cost     = tonumber(ARGV[4])
+
+local b = redis.call('HMGET', key, 'tokens', 'ts')
+local tokens = tonumber(b[1]) or capacity
+local ts     = tonumber(b[2]) or now
+
+tokens = math.min(capacity, tokens + (now - ts) * rate)  -- lazy refill
+local allowed = tokens >= cost
+if allowed then tokens = tokens - cost end
+
+redis.call('HMSET', key, 'tokens', tokens, 'ts', now)
+redis.call('EXPIRE', key, math.ceil(capacity / rate) + 1) -- reclaim idle keys
+return allowed and 1 or 0
+"</span>;
+
+<span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">bool</span>&gt; <span class="fn">TryConsumeDistributedAsync</span>(<span class="typ">IDatabase</span> redis, <span class="typ">string</span> clientKey)
+{
+    <span class="kw">try</span>
+    {
+        <span class="kw">var</span> res = (<span class="kw">long</span>)<span class="kw">await</span> redis.<span class="fn">ScriptEvaluateAsync</span>(TokenBucketLua,
+            new <span class="typ">RedisKey</span>[] { $<span class="str">"rl:{clientKey}"</span> },
+            new <span class="typ">RedisValue</span>[] { 50, 100, <span class="typ">DateTimeOffset</span>.UtcNow.ToUnixTimeSeconds(), 1 });
+        <span class="kw">return</span> res == 1;
+    }
+    <span class="kw">catch</span> (<span class="typ">RedisException</span>)
+    {
+        <span class="kw">return true</span>;   <span class="cmt">// FAIL OPEN: never let the limiter cause the outage (Stripe's rule)</span>
+    }
+}</pre>
+    <p>The two takeaways an interviewer wants: (1) the <strong>lazy refill</strong> (<code>min(capacity, tokens + elapsed × rate)</code>) means no background timer — the bucket is recomputed on demand in O(1); and (2) in a distributed setting the read-modify-write <strong>must be atomic</strong>, which the <strong>Redis Lua script</strong> guarantees because Redis runs it single-threaded to completion. Note the <code>catch → return true</code>: failing open is a deliberate availability choice. .NET's built-in <code>System.Threading.RateLimiting</code> (with <code>TokenBucketRateLimiter</code>) is the production library for the single-node case.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <p><strong>Accuracy vs. cost.</strong> Sliding window log is exact but memory-hungry; fixed window is cheap but allows boundary bursts; sliding window counter and token bucket are the pragmatic middle. State the trade-off explicitly and recommend token bucket (bursts) or sliding window counter (strict smoothing) as your default.</p>
+    <p><strong>Centralized vs. distributed accuracy.</strong> One Redis is exact but adds a network round-trip and is a potential bottleneck/SPOF; per-node local budgets are fast but approximate (each node allows its slice). The usual answer: centralized Redis with atomic Lua, sharded by client key if you outgrow one node, with local caching only if latency demands it.</p>
+    <p><strong>The race condition</strong> is the classic follow-up. Two servers checking "1 token left" concurrently must not both succeed — hence atomic Lua / <code>INCR</code>, not read-then-write in app code.</p>
+    <p><strong>Fail-open vs. fail-closed.</strong> If the limiter store dies, do you block everything (safe for the backend, terrible for users) or allow everything (Stripe's choice — the limiter must never be the outage)? For most APIs, fail open. For protecting a fragile downstream, you might fail closed on specific critical paths.</p>
+    <p><strong>Clock skew &amp; what key to limit on.</strong> Distributed nodes have skewed clocks — pass a single authoritative time (or use Redis's clock in the script). And choose the identity carefully: IP is easy but punishes users behind NAT/proxies and is spoofable; API key/user id is fairer but requires auth to happen first.</p>
+
+    <div class="qa">
+      <p class="q">Q: Which algorithm would you choose and why?</p>
+      <p class="a">Token bucket by default — O(1) memory (two numbers), it allows controlled bursts (good for flash sales), and its average is cleanly capped at the refill rate. If I need to strictly smooth traffic with tiny memory and no bursts, sliding window counter. Stripe uses token bucket.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: How do you enforce one global limit across 50 servers?</p>
+      <p class="a">Move the counter to a shared store (Redis) and make the check a single atomic operation — a Lua script that refills and takes a token in one step, keyed by client. Per-instance counters would multiply the effective limit by the server count.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: What happens when Redis goes down?</p>
+      <p class="a">Fail open — catch the error and allow the request, so the limiter never becomes the point of failure (Stripe does exactly this). Optionally degrade to a coarse per-node local limit as a backstop.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: How do you avoid the fixed-window boundary burst?</p>
+      <p class="a">Use sliding window counter (weight the previous window by its overlap) or token bucket — both spread the limit continuously instead of resetting hard at a window edge, so a client can't push 2× through the boundary.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "A rate limiter is middleware in the gateway that caps requests per client per window and returns 429 on excess. The five algorithms are fixed window (cheap, boundary-burst bug), sliding window log (exact, memory-heavy), sliding window counter (cheap + accurate), token bucket (allows controlled bursts — the industry default, what Stripe uses), and leaky bucket (smooth shaper). In a fleet the counter lives in Redis and the check is a single atomic Lua script so concurrent servers can't race past the limit. State is just two numbers per client, so millions of clients fit in one Redis node. And it fails open — the limiter must never be the outage."</div>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Token-bucket state ≈ <strong>2 numbers</strong> (~30 B) per client ⇒ 10M clients ≈ few hundred MB.</li>
+      <li>Reject signal: <strong>HTTP 429</strong> (client limited) / <strong>503</strong> (server shedding).</li>
+      <li>Fixed window flaw: up to <strong>2× the limit</strong> at the boundary.</li>
+      <li>Stripe: request limiter rejects <strong>millions/month</strong>; concurrent limiter set to e.g. <strong>20 in-flight</strong>.</li>
+      <li>Real limits: Twitter <strong>300 tweets/3h</strong>, Google Docs API <strong>~300 reads/user/60s</strong>.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li><strong>Token bucket</strong> — controlled bursts, O(1) state, lazy refill; the default pick.</li>
+      <li><strong>Atomicity</strong> — Redis Lua kills the race condition across the fleet.</li>
+      <li><strong>Boundary burst</strong> — name it as the fixed-window flaw; fix with sliding window counter.</li>
+      <li><strong>Fail open</strong> — availability over strictness; the limiter can't be the SPOF.</li>
+      <li><strong>Layered defense</strong> — Stripe's 4 tiers: request limiter → concurrency limiter → fleet shedder → worker shedder.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://stripe.com/blog/rate-limiters">Scaling your API with rate limiters</a> — Stripe Engineering Blog: the four limiter types (request, concurrent, fleet shedder, worker shedder), token bucket on Redis, fail-open, kill switches, dark launches, and real rejection numbers.</li>
+      <li><a href="https://en.wikipedia.org/wiki/Token_bucket">Token bucket</a> — Wikipedia: precise algorithm (rate <em>r</em>, capacity <em>b</em>), conformant vs non-conformant packets, burst formulas, comparison to leaky bucket.</li>
+      <li><a href="https://blog.bytebytego.com/p/rate-limiting-fundamentals">Rate Limiting Fundamentals</a> — ByteByteGo: fixed-window counter mechanics and the boundary-burst weakness; real API limits (Twitter, Google Docs) and the 429 status code.</li>
+      <li>Alex Xu, <em>System Design Interview</em> (Ch. "Design a Rate Limiter") — the canonical breakdown of the five algorithms and the distributed Redis design.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

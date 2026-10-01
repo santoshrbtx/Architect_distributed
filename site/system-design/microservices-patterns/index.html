@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Microservices Patterns — Service Discovery, API Gateway, BFF, Sidecar, Circuit Breaker, Bulkhead, Strangler Fig, Service Mesh</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #2dc653;
+    --laymen-bg: #eaf7ee;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px;
+  }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .pattern-card { border-left: 5px solid var(--arch); background: #fff; border-radius: 12px; padding: 20px 24px; margin: 18px 0; border: 1px solid var(--line); box-shadow: var(--shadow); }
+  .pattern-card h3 { margin-top: 0; }
+  .pattern-card .tag { display: inline-block; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; padding: 3px 10px; border-radius: 999px; color: #fff; margin-right: 6px; }
+  .p1 { border-left-color: #4cc9f0; } .p1 .tag { background: #4cc9f0; }
+  .p2 { border-left-color: #4361ee; } .p2 .tag { background: #4361ee; }
+  .p3 { border-left-color: #7048e8; } .p3 .tag { background: #7048e8; }
+  .p4 { border-left-color: #00b4d8; } .p4 .tag { background: #00b4d8; }
+  .p5 { border-left-color: #f7567c; } .p5 .tag { background: #f7567c; }
+  .p6 { border-left-color: #f4a259; } .p6 .tag { background: #f4a259; }
+  .p7 { border-left-color: #2dc653; } .p7 .tag { background: #2dc653; }
+  .p8 { border-left-color: #ff9900; } .p8 .tag { background: #ff9900; }
+
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] { transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease; transform-box: fill-box; }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Microservices Patterns — the essential eight</h1>
+    <p>Service Discovery · API Gateway · Backend for Frontend · Sidecar · Circuit Breaker · Bulkhead · Strangler Fig · Service Mesh — how the loose-coupling promise is actually paid for.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 The 8 patterns</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>Splitting a monolith into dozens of microservices sounds elegant on a whiteboard — until you realise you've traded one big deployment problem for a thousand tiny distributed-systems problems. <strong>Where does the mobile app find "the current shipping service"</strong> when there are 40 replicas coming and going? <strong>How do you keep a slow-dependency from taking down the whole request thread pool?</strong> <strong>How do you swap in a rewritten billing service without a Big-Bang cutover?</strong> The industry answers these with a small canon of well-named patterns — the ones every principal-engineer interview and every AWS Solutions Architect Professional exam probe.</p>
+    <p>The names in this page come from three canonical sources: <strong>Chris Richardson's microservices.io pattern language</strong>, <strong>Microsoft's Azure Architecture Center design-patterns catalogue</strong>, and <strong>Martin Fowler's original writings</strong>. They cover the whole life-cycle: how clients <em>reach</em> your fleet (API Gateway, BFF), how services <em>find</em> each other (Service Discovery), how they <em>speak</em> resiliently (Circuit Breaker, Bulkhead), how they get <em>cross-cutting features</em> for free (Sidecar, Service Mesh), and how you <em>migrate</em> off a monolith without a rewrite from hell (Strangler Fig). Real deployments — Netflix, Uber, Airbnb, Stripe, Meta, Amazon Retail — all use every one of these; if you can name and defend each one, you signal senior-plus-level thinking in any distributed-systems interview.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The whole thing, explained without any tech words</h2>
+    <p>Imagine your favourite mall. In the old days it was a single giant shop that sold everything — clothes, groceries, medicines, phones. If the electricity broke in one corner, the whole shop went dark. That's a <strong>monolith</strong>. Modern malls are different: they're made of many small independent shops. You get more variety, one shop can renovate without closing the others, and no single problem shuts everything down. That's <strong>microservices</strong>. But now the mall has new problems, and each pattern on this page is the mall's fix for one of them.</p>
+    <p>How does a visitor find the phone shop when it keeps changing floors? There's a <strong>directory near the entrance</strong> — that's <em>service discovery</em>. How do you avoid making the visitor walk from shop to shop? There's a <strong>concierge at the entrance</strong> who takes their whole order and dispatches to the right shops — that's the <em>API Gateway</em>. What if the mobile shopper wants a smaller lighter menu than the counter walker? You give each type of shopper their <strong>own personal concierge</strong> — that's <em>Backend for Frontend</em>.</p>
+    <p>What if the electrician's shop is failing today? A <strong>helper standing next to every shop</strong> handles all the boring but universal stuff — power, plumbing, security cameras — the same way for every shop, in every language. That's the <em>Sidecar</em>. What if too many shoppers rush into a broken shop and the crowd starts blocking other shops? A <strong>fuse box</strong> automatically trips and diverts them; when the shop looks healthy again, the fuse lets a trickle through, then reopens. That's the <em>Circuit Breaker</em>.</p>
+    <p>How do you make sure a busy problem in the food-court doesn't drain all the mall's staff away from the electronics section? You put <strong>separate teams of staff on each floor</strong>, so a stampede in one place can't empty out another. That's the <em>Bulkhead</em>, named after the sealed compartments on a ship.</p>
+    <p>What about the old giant shop that still handles half the sales — can we replace it without shutting the mall for a year? Yes: <strong>build new small shops around it and slowly move each aisle</strong>, so shoppers barely notice. Eventually the old shop has nothing left to sell and you tear it down. That's the <em>Strangler Fig</em>, named after a vine that grows around a tree until only the vine is left.</p>
+    <p>And finally, when the sidecars, the fuse boxes, the retries, the security cameras and the concierge all become too much to configure per-shop, you build a <strong>city-wide plumbing and electric grid</strong> that every shop just plugs into. That's the <em>Service Mesh</em>. Same eight ideas that Netflix, Uber, WhatsApp and Amazon all rely on — every day, for every request.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What a microservices platform must provide</h2>
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Locate</strong> live service instances in a constantly changing fleet (service discovery).</li>
+      <li><strong>Route</strong> and <strong>compose</strong> external requests into internal ones (API Gateway, BFF).</li>
+      <li><strong>Isolate</strong> failures so a single broken dependency can't take down the caller (Circuit Breaker, Bulkhead).</li>
+      <li><strong>Provide</strong> cross-cutting features — TLS, retries, observability — uniformly across polyglot services (Sidecar, Service Mesh).</li>
+      <li><strong>Evolve</strong> the architecture — swap out subsystems incrementally without downtime (Strangler Fig).</li>
+    </ul>
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>High availability</strong> — no single pattern point-of-failure (registries are HA, gateways are horizontally scaled).</li>
+      <li><strong>Low added latency</strong> — the gateway + sidecar overhead should be single-digit ms.</li>
+      <li><strong>Language-agnostic</strong> — patterns should work whether the service is Go, Java, C#, Python or Rust.</li>
+      <li><strong>Independently deployable</strong> — patching one pattern doesn't require redeploying every service.</li>
+    </ul>
+
+    <h3>Numbers to volunteer in an interview</h3>
+    <table>
+      <thead><tr><th>Concern</th><th>Typical scale / setting</th></tr></thead>
+      <tbody>
+        <tr><td>Service instance churn (autoscale + rolling deploys)</td><td>10 s–100 s of registrations/deregistrations per minute in a large fleet</td></tr>
+        <tr><td>Registry lookup latency</td><td>&lt; 5 ms (cached); Netflix Eureka refresh cycle: 30 s</td></tr>
+        <tr><td>Gateway added latency</td><td>1–10 ms per hop; Netflix Zuul p50 ≈ 2 ms</td></tr>
+        <tr><td>Circuit breaker error threshold</td><td>50% error rate over 20 requests / 10 s window (Hystrix defaults)</td></tr>
+        <tr><td>Circuit breaker "open" timeout</td><td>5–60 s before half-open probe</td></tr>
+        <tr><td>Bulkhead thread pool size</td><td>10–50 threads per dependency (Hystrix default: 10)</td></tr>
+        <tr><td>Sidecar CPU/RAM overhead</td><td>Envoy: ~50–200 MB RAM, &lt;1% CPU idle; adds ~1 ms per hop</td></tr>
+        <tr><td>Service mesh mTLS handshake</td><td>~1 ms after cert cache warm-up</td></tr>
+        <tr><td>Strangler migration duration</td><td>Months to years; a large Fowler-style project ~1–3 years total</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>Where each pattern lives on the map</h2>
+    <p>Every request in a modern microservices platform passes through most of these patterns in sequence. Here's the canonical layout:</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 940 520" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/></marker>
+        </defs>
+
+        <!-- Clients -->
+        <g><rect x="20" y="40" width="110" height="40" rx="8" fill="#0f1420" stroke="#4cc9f0"/><text x="75" y="65" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">📱 Mobile</text></g>
+        <g><rect x="20" y="90" width="110" height="40" rx="8" fill="#0f1420" stroke="#4cc9f0"/><text x="75" y="115" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">💻 Web</text></g>
+        <g><rect x="20" y="140" width="110" height="40" rx="8" fill="#0f1420" stroke="#4cc9f0"/><text x="75" y="165" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">🤝 Partner</text></g>
+
+        <!-- BFFs -->
+        <g><rect x="160" y="40" width="120" height="40" rx="8" fill="#4cc9f0"/><text x="220" y="65" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Mobile BFF</text></g>
+        <g><rect x="160" y="90" width="120" height="40" rx="8" fill="#4cc9f0"/><text x="220" y="115" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Web BFF</text></g>
+        <g><rect x="160" y="140" width="120" height="40" rx="8" fill="#4cc9f0"/><text x="220" y="165" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Partner BFF</text></g>
+        <line x1="130" y1="60"  x2="160" y2="60"  stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="130" y1="110" x2="160" y2="110" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="130" y1="160" x2="160" y2="160" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <!-- API Gateway -->
+        <g><rect x="310" y="70" width="130" height="80" rx="10" fill="#4361ee"/><text x="375" y="105" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">API Gateway</text><text x="375" y="124" text-anchor="middle" fill="#e3e7ff" font-size="10">auth · rate limit · route</text></g>
+        <line x1="280" y1="60"  x2="310" y2="90"  stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="280" y1="110" x2="310" y2="110" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="280" y1="160" x2="310" y2="130" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <!-- Service registry -->
+        <g><rect x="770" y="40" width="150" height="60" rx="10" fill="#7048e8"/><text x="845" y="66" text-anchor="middle" fill="#fff" font-size="12" font-weight="800">Service Registry</text><text x="845" y="84" text-anchor="middle" fill="#e3e7ff" font-size="10">Consul / Eureka / K8s DNS</text></g>
+        <line x1="440" y1="90" x2="770" y2="60" stroke="#7048e8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+        <!-- Services with sidecars -->
+        <g><rect x="470" y="200" width="200" height="70" rx="10" fill="#0f1420" stroke="#2dc653" stroke-width="2"/><text x="500" y="222" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Svc-A</text><rect x="540" y="205" width="120" height="30" rx="6" fill="#2dc653"/><text x="600" y="225" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Sidecar (Envoy)</text><text x="570" y="252" text-anchor="middle" fill="#c6d0e0" font-size="10">circuit breaker · retry · mTLS · trace</text></g>
+
+        <g><rect x="470" y="290" width="200" height="70" rx="10" fill="#0f1420" stroke="#2dc653" stroke-width="2"/><text x="500" y="312" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Svc-B</text><rect x="540" y="295" width="120" height="30" rx="6" fill="#2dc653"/><text x="600" y="315" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Sidecar (Envoy)</text><text x="570" y="342" text-anchor="middle" fill="#c6d0e0" font-size="10">bulkhead thread pool per dependency</text></g>
+
+        <g><rect x="470" y="380" width="200" height="70" rx="10" fill="#0f1420" stroke="#2dc653" stroke-width="2"/><text x="500" y="402" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Svc-C</text><rect x="540" y="385" width="120" height="30" rx="6" fill="#2dc653"/><text x="600" y="405" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Sidecar (Envoy)</text><text x="570" y="432" text-anchor="middle" fill="#c6d0e0" font-size="10">stateful — DB per service</text></g>
+
+        <line x1="440" y1="110" x2="470" y2="220" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="440" y1="110" x2="470" y2="315" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr)"/>
+        <line x1="440" y1="110" x2="470" y2="410" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr)"/>
+
+        <!-- Service mesh control plane -->
+        <g><rect x="720" y="240" width="170" height="90" rx="10" fill="#f4a259"/><text x="805" y="270" text-anchor="middle" fill="#fff" font-size="13" font-weight="800">Service Mesh</text><text x="805" y="288" text-anchor="middle" fill="#fff" font-size="10">control plane (Istio pilot)</text><text x="805" y="308" text-anchor="middle" fill="#fff" font-size="10">configures every sidecar</text><text x="805" y="322" text-anchor="middle" fill="#fff" font-size="10">issues mTLS certs</text></g>
+        <line x1="720" y1="270" x2="670" y2="230" stroke="#f4a259" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+        <line x1="720" y1="285" x2="670" y2="320" stroke="#f4a259" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+        <line x1="720" y1="300" x2="670" y2="410" stroke="#f4a259" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
+
+        <!-- Legacy monolith being strangled -->
+        <g><rect x="80" y="330" width="220" height="120" rx="10" fill="rgba(247,86,124,.1)" stroke="#f7567c" stroke-dasharray="5,4"/><text x="190" y="355" text-anchor="middle" fill="#f7567c" font-size="12" font-weight="800">Legacy Monolith</text><text x="190" y="378" text-anchor="middle" fill="#5b6677" font-size="11">being replaced route-by-route</text><text x="190" y="398" text-anchor="middle" fill="#5b6677" font-size="11">Gateway = the strangler fig</text><text x="190" y="418" text-anchor="middle" fill="#5b6677" font-size="11">shifting traffic to new svcs</text></g>
+        <line x1="310" y1="130" x2="300" y2="380" stroke="#f7567c" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#4cc9f0"></span>BFF (per client)</span>
+        <span><span class="dot" style="background:#4361ee"></span>API Gateway</span>
+        <span><span class="dot" style="background:#7048e8"></span>Service Registry</span>
+        <span><span class="dot" style="background:#2dc653"></span>Sidecar (data plane)</span>
+        <span><span class="dot" style="background:#f4a259"></span>Service Mesh (control plane)</span>
+        <span><span class="dot" style="background:#f7567c"></span>Legacy being strangled</span>
+      </div>
+    </div>
+
+    <p>A single "get product page" request from a phone travels through: Mobile BFF → API Gateway (auth, rate limit) → discovers Product-svc via registry → hits Svc-A sidecar (mTLS + circuit breaker) → Svc-A calls Svc-B via its sidecar (bulkheaded thread pool) → response composed back. Meanwhile, the same gateway may route <code>/legacy/*</code> to the fading monolith while <code>/new/*</code> already goes to the strangler-replacement services.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a request move through all eight patterns</h2>
+    <p>Follow a mobile request from tap to response and see each pattern doing its job.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
+        <defs><marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/></marker></defs>
+
+        <g id="client"><rect x="20" y="60" width="90" height="60" rx="10" fill="#0f1420" stroke="#4cc9f0" class="a-el" data-anim/><text x="65" y="88" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">📱 Mobile</text></g>
+        <g id="bff"><rect x="130" y="60" width="90" height="60" rx="10" fill="#0f1420" stroke="#4cc9f0" class="a-el" data-anim/><text x="175" y="86" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Mobile BFF</text><text x="175" y="102" text-anchor="middle" fill="#c6d0e0" font-size="10">shaped API</text></g>
+        <g id="gw"><rect x="240" y="60" width="100" height="60" rx="10" fill="#0f1420" stroke="#4361ee" class="a-el" data-anim/><text x="290" y="86" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">API Gateway</text><text x="290" y="102" text-anchor="middle" fill="#c6d0e0" font-size="10">auth · route</text></g>
+        <g id="reg"><rect x="360" y="60" width="100" height="60" rx="10" fill="#0f1420" stroke="#7048e8" class="a-el" data-anim/><text x="410" y="86" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Registry</text><text x="410" y="102" text-anchor="middle" fill="#c6d0e0" font-size="10">discover Svc-A</text></g>
+        <g id="scA"><rect x="480" y="60" width="90" height="60" rx="10" fill="#0f1420" stroke="#2dc653" class="a-el" data-anim/><text x="525" y="86" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Sidecar-A</text><text x="525" y="102" text-anchor="middle" fill="#c6d0e0" font-size="10">mTLS · CB</text></g>
+        <g id="svcA"><rect x="590" y="60" width="90" height="60" rx="10" fill="#0f1420" stroke="#2dc653" class="a-el" data-anim/><text x="635" y="86" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Svc-A</text></g>
+
+        <line x1="110" y1="90" x2="130" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="220" y1="90" x2="240" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="340" y1="90" x2="360" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="460" y1="90" x2="480" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="570" y1="90" x2="590" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+        <!-- Downstream Svc-B row -->
+        <g id="scB"><rect x="480" y="170" width="90" height="60" rx="10" fill="#0f1420" stroke="#f4a259" class="a-el" data-anim/><text x="525" y="196" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Sidecar-B</text><text x="525" y="212" text-anchor="middle" fill="#c6d0e0" font-size="10">bulkhead</text></g>
+        <g id="svcB"><rect x="590" y="170" width="90" height="60" rx="10" fill="#0f1420" stroke="#f4a259" class="a-el" data-anim/><text x="635" y="200" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Svc-B</text><text x="635" y="216" text-anchor="middle" fill="#c6d0e0" font-size="10">(slow!)</text></g>
+        <g id="cb"><rect x="720" y="170" width="130" height="60" rx="10" fill="#0f1420" stroke="#f7567c" stroke-dasharray="5,3" class="a-el a-dim" data-anim/><text x="785" y="196" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Circuit OPEN</text><text x="785" y="212" text-anchor="middle" fill="#c6d0e0" font-size="10">fast-fail</text></g>
+
+        <line x1="570" y1="200" x2="590" y2="200" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+        <!-- Legacy sink -->
+        <g id="legacy"><rect x="720" y="60" width="150" height="60" rx="10" fill="rgba(247,86,124,.15)" stroke="#f7567c" stroke-dasharray="5,4" class="a-el a-dim" data-anim/><text x="795" y="88" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">Legacy monolith</text><text x="795" y="104" text-anchor="middle" fill="#c6d0e0" font-size="10">/legacy/* only</text></g>
+
+        <!-- Packet -->
+        <g id="pkt" class="a-el a-hidden" data-anim><rect x="15" y="30" width="110" height="22" rx="6" fill="#4cc9f0"/><text x="70" y="46" text-anchor="middle" fill="#0b1626" font-size="11" font-weight="800">GET /product/42</text></g>
+
+        <!-- Info box -->
+        <rect x="30" y="270" width="820" height="90" rx="12" fill="rgba(76,201,240,.08)" stroke="#4cc9f0"/>
+        <text x="46" y="294" fill="#4cc9f0" font-size="12" font-weight="800">Watch which pattern is doing the work</text>
+        <text x="46" y="316" fill="#c6d0e0" font-size="11">The API Gateway is the strangler fig — it decides whether /product/42 goes to new Svc-A or to the legacy monolith.</text>
+        <text x="46" y="334" fill="#c6d0e0" font-size="11">Sidecars carry mTLS, retries, and the circuit breaker. The service mesh (not shown) is the control plane that configured them all.</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'A mobile request threading through all eight microservices patterns.',
+          interval: 1900,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => { el.classList.remove('a-glow'); el.removeAttribute('transform'); });
+            $('#pkt').classList.add('a-hidden');
+            $('#cb').classList.add('a-dim');
+            $('#legacy').classList.add('a-dim');
+          },
+          steps: [
+            { caption: 'Mobile client sends GET /product/42.', apply: (r, $) => { $('#pkt').classList.remove('a-hidden'); $('#client').classList.add('a-glow'); } },
+            { caption: 'BFF: a tailored API for this client type — trims the payload, batches calls the mobile screen needs.', apply: (r, $) => { $('#pkt').setAttribute('transform', 'translate(115,0)'); $('#bff').classList.add('a-glow'); } },
+            { caption: 'API Gateway checks auth + rate limit; it also decides whether to route to the new Svc-A or the legacy monolith (the strangler-fig split).', apply: (r, $) => { $('#pkt').setAttribute('transform', 'translate(225,0)'); $('#gw').classList.add('a-glow'); $('#legacy').classList.remove('a-dim'); } },
+            { caption: 'Gateway asks the Service Registry: where are the live Svc-A instances? Registry returns a healthy pod IP.', apply: (r, $) => { $('#pkt').setAttribute('transform', 'translate(345,0)'); $('#reg').classList.add('a-glow'); } },
+            { caption: 'Request enters Svc-A\'s sidecar (Envoy): mTLS handshake, tracing headers stamped, retry policy attached.', apply: (r, $) => { $('#pkt').setAttribute('transform', 'translate(465,0)'); $('#scA').classList.add('a-glow'); } },
+            { caption: 'Svc-A processes the request. It needs some data from Svc-B, so it calls out via its sidecar again.', apply: (r, $) => { $('#pkt').setAttribute('transform', 'translate(575,0)'); $('#svcA').classList.add('a-glow'); } },
+            { caption: 'Svc-B call goes through Sidecar-B, which enforces a bulkhead — a dedicated thread pool per dependency so a slow Svc-B can\'t drain Svc-A\'s workers.', apply: (r, $) => { $('#pkt').setAttribute('transform', 'translate(465,110)'); $('#scB').classList.add('a-glow'); } },
+            { caption: 'Svc-B has been erroring at > 50% for 10 s. The circuit breaker trips OPEN: subsequent calls fast-fail with a cached fallback instead of piling on load.', apply: (r, $) => { $('#cb').classList.remove('a-dim'); $('#cb').classList.add('a-glow'); $('#svcB').classList.add('a-glow'); } },
+            { caption: 'Response returns via all the sidecars back through the gateway. The service mesh control plane collected traces from every hop for one-glance debugging.', apply: (r, $) => { $('#pkt').setAttribute('transform', 'translate(0,0)'); $('#bff').classList.add('a-glow'); $('#gw').classList.add('a-glow'); } }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) { if (i < 0 || i >= CFG.steps.length) return; CFG.reset(root); for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$); idx = i; label.textContent = `Step ${i + 1}/${CFG.steps.length}`; cap.textContent = CFG.steps[i].caption; }
+        function reset() { idx = -1; playing = false; if (timer) { clearTimeout(timer); timer = null; } CFG.reset(root); label.textContent = 'Ready'; cap.textContent = CFG.intro; btnPlay.textContent = '▶ Play'; }
+        function play() { if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; return; } if (idx >= CFG.steps.length - 1) reset(); playing = true; btnPlay.textContent = '⏸ Pause'; function tick() { if (!playing) return; if (idx + 1 < CFG.steps.length) goto(idx + 1); if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval); else { playing = false; btnPlay.textContent = '▶ Replay'; } } timer = setTimeout(tick, 400); }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => { if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; } goto(idx + 1); });
+        btnPrev && btnPrev.addEventListener('click', () => { if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; } goto(idx - 1); });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 The eight patterns, one by one</h2>
+    <p>Each pattern below is presented the way you should explain it in an interview: <strong>the problem it solves, the mechanism, when to use it, and the failure modes to name.</strong></p>
+
+    <div class="pattern-card p1">
+      <span class="tag">1 · Discovery</span>
+      <h3>Service Discovery / Service Registry</h3>
+      <p><strong>Problem.</strong> In a dynamic environment, service instances come and go — autoscaling adds pods, deploys roll them, hosts crash. Clients cannot rely on hard-coded IPs. As microservices.io puts it, "the number of service instances and their locations changes dynamically." Something has to answer the question <em>"where is the shipping-svc right now?"</em> in real time.</p>
+      <p><strong>Mechanism.</strong> A <strong>service registry</strong> — a highly-available database of <code>(service name → healthy instance list)</code>. Instances <em>register</em> on startup and <em>deregister</em> on shutdown; the registry health-checks them and prunes dead ones. Two flavours of the lookup: <strong>client-side discovery</strong> (client queries the registry, picks an instance, calls it directly — Netflix Ribbon + Eureka) or <strong>server-side discovery</strong> (a load balancer or router does the lookup — AWS ALB, Kubernetes Service, Consul). Kubernetes bakes it in: every Service gets a stable DNS name resolved to a Cluster IP that routes to healthy pods automatically. Tools: <strong>Consul, etcd, ZooKeeper, Netflix Eureka, Kubernetes DNS, AWS Cloud Map</strong>.</p>
+      <p><strong>Watch out.</strong> The registry itself must be HA (typically an odd-number Raft/Paxos cluster). Clients should cache lookups (default TTL 30 s in Eureka) to survive registry outages, but stale cache means stale routing. Bootstrapping the registry's address is a chicken-and-egg problem solved with fixed DNS names or Elastic IPs.</p>
+    </div>
+
+    <div class="pattern-card p2">
+      <span class="tag">2 · Edge</span>
+      <h3>API Gateway</h3>
+      <p><strong>Problem.</strong> Exposing dozens of internal services directly to clients is painful: clients must know every service's URL, do multiple round-trips (bad on mobile networks), and understand cross-cutting concerns like auth. As Chris Richardson notes, "a mobile client can only make a few" round trips before the UX suffers.</p>
+      <p><strong>Mechanism.</strong> A <strong>single entry point</strong> for all external traffic. It performs <em>routing</em> (proxy to the right backend), <em>composition</em> (fan-out to N services and stitch results), <em>protocol translation</em> (public REST/GraphQL ↔ internal gRPC), and centralises <em>auth, rate limiting, throttling, logging, tracing headers, and circuit breaking</em>. Tools: <strong>Netflix Zuul, Kong, AWS API Gateway, Spring Cloud Gateway, Envoy at the edge</strong>. Gateways are latency-critical and are typically implemented with reactive/NIO stacks (Netty, Node.js).</p>
+      <p><strong>Watch out.</strong> The gateway is on the hot path for every request — a bug or a slow response there takes down the whole platform. Deploy N replicas behind a load balancer, keep it stateless, and never put business logic in it.</p>
+    </div>
+
+    <div class="pattern-card p3">
+      <span class="tag">3 · Edge variant</span>
+      <h3>Backend for Frontend (BFF)</h3>
+      <p><strong>Problem.</strong> A single gateway ends up as a lowest-common-denominator compromise — the mobile app wants a slim, aggregated response; the web app wants richer nested data; the partner API wants a stable long-term contract. Serving all three from one gateway leads to bloated payloads and coupling between UI teams.</p>
+      <p><strong>Mechanism.</strong> Instead of one gateway for everyone, deploy <strong>one gateway per client type</strong> — a "Backend for Frontend." The mobile BFF returns exactly the shape the mobile app needs; the web BFF returns richer objects; the partner BFF exposes a versioned public API. Each BFF is owned by the team that ships the corresponding frontend, so their release cadences aren't blocked on each other. Originated at SoundCloud (Phil Calçado) and popularised by Sam Newman.</p>
+      <p><strong>Watch out.</strong> N BFFs = N deployables to run. Some duplication of composition logic between BFFs is fine and expected; the alternative — sharing library code that every BFF must upgrade in lockstep — reintroduces the coupling BFFs exist to break.</p>
+    </div>
+
+    <div class="pattern-card p4">
+      <span class="tag">4 · Co-location</span>
+      <h3>Sidecar</h3>
+      <p><strong>Problem.</strong> Every microservice needs the same peripheral capabilities — TLS, retries, timeouts, service discovery client, metrics scraping, distributed tracing, secrets fetching, config reloading. Rewriting these in every language (Go, Java, C#, Python, Rust) is duplication hell and version-drift hell.</p>
+      <p><strong>Mechanism.</strong> Deploy a <strong>helper process alongside</strong> the application — in Kubernetes, a second container in the same Pod that shares localhost, filesystem volumes, and lifecycle. The main service calls the sidecar over localhost for those cross-cutting features, and outbound traffic passes through the sidecar too. Examples: <strong>Envoy</strong> (service-mesh data plane), <strong>Dapr</strong> (state, pubsub, secrets), <strong>Vault Agent</strong> (secret injection), <strong>OpenTelemetry Collector</strong> (telemetry pipeline), <strong>Fluent Bit</strong> (log shipping), <strong>istio-proxy</strong> (mTLS + policy).</p>
+      <p><strong>Watch out.</strong> Adds ~50–200 MB RAM and 1 ms latency per hop per sidecar; ratio of sidecar-to-app CPU can be surprising for tiny services. Kubernetes 1.29+ supports "native sidecars" (initContainers with <code>restartPolicy: Always</code>) that solve startup ordering and shutdown ordering cleanly.</p>
+    </div>
+
+    <div class="pattern-card p5">
+      <span class="tag">5 · Reliability</span>
+      <h3>Circuit Breaker</h3>
+      <p><strong>Problem.</strong> A downstream service starts failing or slowing. Every incoming request hits the timeout, threads pile up, and the caller runs out of workers — the failure <em>cascades</em>. Retrying makes it worse. As Microsoft docs put it, "this problem can exhaust resources, which might fail other unrelated parts of the system."</p>
+      <p><strong>Mechanism.</strong> A state machine with three states — <strong>Closed</strong> (calls pass through, failures counted), <strong>Open</strong> (calls short-circuit immediately with an exception or fallback, no downstream traffic), <strong>Half-Open</strong> (after a cool-down, let a trickle through; if they succeed close it, if any fail reopen). Tripped by a failure threshold (Hystrix defaults: ≥ 50 % error rate over ≥ 20 requests in a 10 s window). Cool-down 5–60 s. Libraries: <strong>Netflix Hystrix</strong> (retired), <strong>Resilience4j</strong> (JVM), <strong>Polly</strong> (.NET), and built into every service mesh (Istio, Linkerd).</p>
+      <p><strong>Watch out.</strong> Combine with retries carefully — retries inside an Open circuit are wasted. The Half-Open probe must be limited (1–5 requests, not the flood) or you re-DOS the recovering service. Modern implementations replace fixed thresholds with adaptive algorithms based on recent traffic.</p>
+    </div>
+
+    <div class="pattern-card p6">
+      <span class="tag">6 · Isolation</span>
+      <h3>Bulkhead</h3>
+      <p><strong>Problem.</strong> Even with circuit breakers, one type of traffic can exhaust a shared pool (threads, connections, memory) that other traffic needs. Named after the sealed watertight compartments of a ship's hull — if one floods, the ship stays afloat.</p>
+      <p><strong>Mechanism.</strong> <strong>Partition resources</strong> so a fault in one part cannot drain another. Two shapes: (a) partition the <em>caller</em>'s resources — one thread pool or connection pool per downstream dependency (a slow Svc-B doesn't starve Svc-C calls). (b) partition the <em>callee</em> — separate service instances or pools per class of consumer (premium vs free tier, tenant A vs tenant B). Also called <em>cell-based architecture</em> at large scale (AWS uses this for S3 and DynamoDB). Implementations: Hystrix thread pools (default 10 threads/dep), Resilience4j bulkheads, Polly Bulkhead policy, Kubernetes ResourceQuotas, per-tenant separate pods.</p>
+      <p><strong>Watch out.</strong> More partitions = less efficient resource use (each pool has idle capacity). Sizing is empirical — start at (peak concurrency × p99 latency) and adjust. Bulkhead + Circuit Breaker + Retry with jittered backoff is the canonical resilience triad.</p>
+    </div>
+
+    <div class="pattern-card p7">
+      <span class="tag">7 · Migration</span>
+      <h3>Strangler Fig</h3>
+      <p><strong>Problem.</strong> You have a huge monolith and want microservices. A full rewrite ("Big-Bang cutover") almost always fails — Martin Fowler notes wholesale rewrites "tend to go down in flames." How do you replace it without stopping the business?</p>
+      <p><strong>Mechanism.</strong> Named after strangler fig vines that grow around a host tree and eventually replace it. <strong>Put a proxy/router in front of the monolith</strong> (usually the API Gateway itself). New capabilities are built as new microservices <em>outside</em> the monolith; the router sends only their routes to them and everything else to the monolith. Over months/years, existing capabilities are extracted one seam at a time — each is a small, low-risk, incrementally-shippable migration. When the last route moves off, the monolith is deleted. Fowler stresses this must also be an <em>organisational</em> shift; without team realignment (Conway's Law) "the new systems will end up in a similar mess."</p>
+      <p><strong>Watch out.</strong> Requires clear seams — data ownership boundaries, well-defined APIs. If the monolith has tangled schemas, plan an intermediate "database strangler" first. Migration is measured in <em>years</em> for big estates; keep the migration KPI visible so it doesn't stall.</p>
+    </div>
+
+    <div class="pattern-card p8">
+      <span class="tag">8 · Platform</span>
+      <h3>Service Mesh</h3>
+      <p><strong>Problem.</strong> Once every service has a sidecar doing TLS, retries, circuit breakers, and tracing, configuring them consistently across hundreds of services is a nightmare. You want one place to define <em>"all traffic from Svc-A to Svc-B must be mTLS with mutual auth, retry twice with jitter, timeout 500 ms, and be traced 100 %."</em></p>
+      <p><strong>Mechanism.</strong> A <strong>dedicated infrastructure layer</strong> for service-to-service communication, split into a <em>data plane</em> (the sidecar proxies — usually Envoy — that intercept every packet) and a <em>control plane</em> (a component like Istio's <code>istiod</code> that pushes policy, cert bundles, and routes to every sidecar). Delivers <strong>zero-trust mTLS</strong>, workload identity, traffic management (canary, blue/green, weighted splits, mirroring), retries + circuit breakers at the mesh, and observability (Prometheus metrics + distributed traces on every hop). Products: <strong>Istio, Linkerd, Consul Connect, AWS App Mesh, Cilium Service Mesh (eBPF)</strong>. Istio also supports "ambient mode" that skips the per-pod sidecar for lower overhead.</p>
+      <p><strong>Watch out.</strong> Non-trivial operational cost — a mesh is a distributed system in itself. Not worth it for &lt; 20 services. Overlaps with the API Gateway on north-south traffic; typically the gateway handles ingress (external → cluster) and the mesh handles east-west (service → service).</p>
+    </div>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>These patterns look like architecture but are backed by fairly classical DSA. Interviewers who probe deep will pull on these threads.</p>
+    <table>
+      <thead><tr><th>Pattern</th><th>Structure / algorithm</th><th>Complexity</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Service registry lookup</td><td>Hash map keyed by service name; sorted set of instances</td><td>O(1) lookup, O(log n) instance pick</td><td>Discovery must be O(1) on the hot path</td></tr>
+        <tr><td>Client-side load balance</td><td>Weighted round-robin / Power-of-two-choices</td><td>O(1) / O(1)</td><td>Even distribution without central coordination</td></tr>
+        <tr><td>Gateway routing</td><td>Trie / prefix tree on URL paths</td><td>O(path depth)</td><td>Match /api/v1/users/... against 1000 routes fast</td></tr>
+        <tr><td>Rate limiting</td><td>Token bucket / sliding-window counter (Redis)</td><td>O(1) per request</td><td>Constant per-request cost, works distributed</td></tr>
+        <tr><td>Circuit breaker</td><td>3-state finite state machine + rolling window counter</td><td>O(1) per call</td><td>Per-call decision must be near-zero cost</td></tr>
+        <tr><td>Bulkhead</td><td>Semaphore or bounded thread pool per dependency</td><td>O(1) acquire/release</td><td>Isolate resources without dynamic allocation</td></tr>
+        <tr><td>Retry backoff</td><td>Exponential + jitter: <code>min(cap, base × 2^n) × rand()</code></td><td>O(1)</td><td>Break lockstep retry storms</td></tr>
+        <tr><td>Health-check aggregation</td><td>Gossip protocol (SWIM in Consul) or Raft leader election</td><td>O(log n) per event</td><td>Scale membership state across the fleet</td></tr>
+        <tr><td>Distributed tracing</td><td>Tree/DAG of spans keyed by trace-id + parent-id</td><td>O(hops)</td><td>Reconstruct the request path across services</td></tr>
+        <tr><td>Consistent hashing (routing)</td><td>Hash ring with virtual nodes</td><td>O(log n)</td><td>Sticky sessions, cache locality on rebalance</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the eight patterns to AWS</h2>
+    <p>You can build every one of these patterns natively on AWS. Here is the canonical mapping:</p>
+    <table>
+      <thead><tr><th>Pattern</th><th>AWS service(s)</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Service Discovery</td><td>AWS Cloud Map + Route 53 · ECS Service Discovery · EKS/Kubernetes DNS</td><td>Managed registries with DNS integration and health checks</td></tr>
+        <tr><td>API Gateway</td><td>Amazon API Gateway (REST/HTTP/WebSocket) or Application Load Balancer</td><td>Auth, throttling, mapping templates, WAF; ALB for path/host routing</td></tr>
+        <tr><td>Backend for Frontend</td><td>Multiple API Gateway APIs / ALBs; AppSync for GraphQL BFFs</td><td>One per client class (mobile/web/partner)</td></tr>
+        <tr><td>Sidecar</td><td>ECS "linked container" / EKS pod sidecar; Envoy in App Mesh; Dapr on EKS</td><td>Same pod → shared localhost/volumes</td></tr>
+        <tr><td>Circuit Breaker</td><td>App Mesh route retry + outlier detection; Polly in .NET code; ALB target group deregistration</td><td>Mesh-level tripping keeps app code clean</td></tr>
+        <tr><td>Bulkhead</td><td>Separate ECS/EKS services with own task/pod quotas; SQS with per-queue concurrency limits</td><td>Compute isolation + queue isolation</td></tr>
+        <tr><td>Strangler Fig</td><td>API Gateway with weighted routes; ALB listener rules; Route 53 weighted DNS</td><td>Shift traffic percentages route-by-route</td></tr>
+        <tr><td>Service Mesh</td><td>AWS App Mesh (Envoy-based, being sunset) → Istio on EKS / Linkerd / Cilium</td><td>mTLS, traffic policies, observability across cluster</td></tr>
+        <tr><td>Observability (all patterns)</td><td>CloudWatch + AWS X-Ray + Managed Grafana + Managed Prometheus</td><td>Metrics + traces across every hop</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Recommended production stack (modern):</strong> EKS on Fargate for the workloads, <strong>Istio</strong> for the service mesh (data plane Envoy sidecars, control plane <code>istiod</code>), <strong>API Gateway HTTP API</strong> at the edge routing to Istio Ingress Gateway, <strong>Cloud Map</strong> for cross-account service discovery, <strong>Polly</strong> in the .NET code for the last-mile circuit breaker and bulkhead policies inside the process. This gets you all 8 patterns wired up with maybe two full-time platform engineers, versus a decade of DIY.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — Polly for Circuit Breaker + Bulkhead + Retry</h2>
+    <p>In the .NET world the reference library is <strong>Polly</strong> (now integrated into <code>Microsoft.Extensions.Resilience</code>). One HttpClient-typed pipeline can express Circuit Breaker + Bulkhead + Retry + Timeout — the resilience triad — in a handful of lines. This is exactly what the sidecar would do at the mesh layer; you write it inline when you don't have a mesh.</p>
+<pre><span class="cmt">// dotnet add package Microsoft.Extensions.Http.Resilience</span>
+<span class="kw">using</span> Microsoft.Extensions.DependencyInjection;
+<span class="kw">using</span> Microsoft.Extensions.Http.Resilience;
+<span class="kw">using</span> Polly;
+
+<span class="kw">public static class</span> <span class="typ">ResilienceExtensions</span>
+{
+    <span class="kw">public static</span> <span class="typ">IServiceCollection</span> <span class="fn">AddResilientClients</span>(<span class="kw">this</span> <span class="typ">IServiceCollection</span> services)
+    {
+        <span class="cmt">// One resilient HttpClient per downstream dependency = BULKHEAD.
+        // Each has its own connection pool and its own circuit breaker,
+        // so a slow "inventory-svc" cannot exhaust the "payment-svc" pool.</span>
+
+        services.AddHttpClient(<span class="str">"payment-svc"</span>, c =&gt; c.BaseAddress = <span class="kw">new</span>(<span class="str">"https://payment-svc/"</span>))
+            .AddStandardResilienceHandler(o =&gt;
+            {
+                <span class="cmt">// Retries: exponential + jitter, 3 attempts max</span>
+                o.Retry.MaxRetryAttempts   = <span class="str">3</span>;
+                o.Retry.Delay              = <span class="typ">TimeSpan</span>.FromMilliseconds(<span class="str">200</span>);
+                o.Retry.BackoffType        = DelayBackoffType.Exponential;
+                o.Retry.UseJitter          = <span class="kw">true</span>;
+
+                <span class="cmt">// Circuit breaker: open if &gt; 50% of the last 100 calls fail in a 30s window,
+                // stay open for 15s, then trickle through in half-open.</span>
+                o.CircuitBreaker.FailureRatio            = <span class="str">0.5</span>;
+                o.CircuitBreaker.MinimumThroughput       = <span class="str">100</span>;
+                o.CircuitBreaker.SamplingDuration        = <span class="typ">TimeSpan</span>.FromSeconds(<span class="str">30</span>);
+                o.CircuitBreaker.BreakDuration           = <span class="typ">TimeSpan</span>.FromSeconds(<span class="str">15</span>);
+
+                <span class="cmt">// Per-attempt + total timeouts guard against slow dependencies.</span>
+                o.AttemptTimeout.Timeout        = <span class="typ">TimeSpan</span>.FromSeconds(<span class="str">2</span>);
+                o.TotalRequestTimeout.Timeout   = <span class="typ">TimeSpan</span>.FromSeconds(<span class="str">10</span>);
+            });
+
+        <span class="cmt">// Second dependency = second bulkhead. Isolation is automatic.</span>
+        services.AddHttpClient(<span class="str">"inventory-svc"</span>, c =&gt; c.BaseAddress = <span class="kw">new</span>(<span class="str">"https://inventory-svc/"</span>))
+            .AddStandardResilienceHandler();
+
+        <span class="kw">return</span> services;
+    }
+}
+
+<span class="cmt">// Consuming service: inject a named client, call it, and let Polly do the rest.</span>
+<span class="kw">public sealed class</span> <span class="typ">CheckoutHandler</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IHttpClientFactory</span> _factory;
+    <span class="kw">public</span> <span class="fn">CheckoutHandler</span>(<span class="typ">IHttpClientFactory</span> factory) =&gt; _factory = factory;
+
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">PaymentReceipt</span>&gt; <span class="fn">ChargeAsync</span>(<span class="typ">ChargeRequest</span> req, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">var</span> client = _factory.CreateClient(<span class="str">"payment-svc"</span>);
+        <span class="kw">try</span>
+        {
+            <span class="kw">var</span> resp = <span class="kw">await</span> client.PostAsJsonAsync(<span class="str">"/charges"</span>, req, ct);
+            resp.EnsureSuccessStatusCode();
+            <span class="kw">return</span> (<span class="kw">await</span> resp.Content.ReadFromJsonAsync&lt;<span class="typ">PaymentReceipt</span>&gt;(ct))!;
+        }
+        <span class="kw">catch</span> (<span class="typ">BrokenCircuitException</span>)
+        {
+            <span class="cmt">// Circuit is OPEN → fall back to a queued deferred charge.</span>
+            <span class="kw">return</span> <span class="typ">PaymentReceipt</span>.QueuedForRetry(req.Id);
+        }
+    }
+}
+</pre>
+    <p>For service discovery in .NET, the same idiom uses <code>AddServiceDiscovery()</code> from <code>Microsoft.Extensions.ServiceDiscovery</code> plus a resolver (DNS SRV, Kubernetes, Consul, or AWS Cloud Map). For the API Gateway/BFF pattern, use <strong>YARP</strong> (Microsoft's Yet Another Reverse Proxy) — a config-driven Kestrel-based gateway that Microsoft itself runs at scale. For the mesh, Istio + Envoy is universal regardless of language.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Trade-offs</h3>
+    <p><strong>Sidecar-per-pod vs mesh vs in-process library.</strong> Sidecars are language-agnostic and hot-swappable but add RAM + latency. In-process libraries (Polly, Resilience4j) are zero-latency but must be maintained per-language. A full mesh centralises policy but is a big platform investment. Small teams start with libraries, mid-size add sidecars for a few services, and mesh comes when > 20 services need consistent policies.</p>
+    <p><strong>API Gateway vs BFF.</strong> One gateway = one deploy, one team, one lowest-common-denominator API. Multiple BFFs = frontend teams own their own contracts, higher velocity, more infra. Standard advice: start with one gateway; split into BFFs only when you feel the coupling pain.</p>
+    <p><strong>Circuit Breaker in code vs mesh.</strong> In-code circuit breakers give the app rich fallback logic (return cached data, degraded response); mesh circuit breakers happen invisibly to the app and can only fail-fast. Best practice: mesh does the coarse tripping, app has fine-grained fallbacks for the paths that matter.</p>
+    <p><strong>Strangler timeline.</strong> Fowler warns the migration is 1–3 years for a real monolith. Sponsorship must be executive, or the "temporary" gateway becomes permanent tech debt.</p>
+
+    <h3>Bottlenecks &amp; failure modes</h3>
+    <ul>
+      <li><strong>Registry split-brain</strong> — old cache says node X is alive, new cache says X is dead; clients call dead nodes and retry storm. Fix: TTL discipline + fail-fast on connection error.</li>
+      <li><strong>Gateway single-point-of-failure</strong> — a bug in the gateway takes the whole cluster down. Fix: canary a small % of traffic to new gateway versions.</li>
+      <li><strong>Sidecar startup ordering</strong> — app starts before sidecar has certs, first N requests fail. Fix: Kubernetes native sidecars (1.29+) with startup dependencies.</li>
+      <li><strong>Circuit-breaker false trips</strong> — brief network blip → open circuit → cascading fast-fails to callers. Fix: require minimum throughput before tripping (e.g. 100 requests).</li>
+      <li><strong>Bulkhead sizing</strong> — pool too small = queue fills, request rejected under normal load; too big = defeats isolation. Instrument and tune from real traffic.</li>
+      <li><strong>Mesh operator complexity</strong> — misconfigured VirtualService can break routing cluster-wide. Fix: GitOps + progressive rollout of mesh config, not <code>kubectl apply</code>.</li>
+      <li><strong>Strangler fig zombie routes</strong> — the router ends up with dozens of exception routes that nobody remembers. Fix: sunset dates on each temporary rule.</li>
+    </ul>
+
+    <h3>Likely interviewer follow-ups (with crisp answers)</h3>
+    <div class="qa"><p class="q">Why not just DNS for service discovery?</p><p class="a">DNS has long TTLs (seconds to minutes) and no health-check semantics — a healthy instance change won't propagate fast enough for autoscale/rolling deploys. A registry with sub-second health signals + client cache is the modern answer, though Kubernetes DNS is now good enough for many workloads because it's driven by the API server directly.</p></div>
+    <div class="qa"><p class="q">API Gateway vs service mesh — do I need both?</p><p class="a">Yes, they solve different problems. Gateway = north-south (outside → cluster) with auth, rate limit, transformation. Mesh = east-west (service → service) with mTLS, retries, traffic splits. Some products (Istio Gateway, Kong Mesh) fuse both, but the responsibilities are distinct.</p></div>
+    <div class="qa"><p class="q">When does the circuit breaker close again?</p><p class="a">After the configured cool-down (e.g. 15 s), it moves to Half-Open and lets a limited number of probe calls through. If they succeed, it closes; if any fail, it re-opens and restarts the timer. This prevents flooding a recovering service.</p></div>
+    <div class="qa"><p class="q">Circuit breaker vs Bulkhead — aren't they the same?</p><p class="a">No. Circuit breaker <em>stops calling</em> a failing downstream. Bulkhead <em>protects the caller's own resources</em> so one failing downstream can't drain thread pools/connections used by other downstreams. You use both together.</p></div>
+    <div class="qa"><p class="q">Why is the Strangler Fig called that?</p><p class="a">Named by Martin Fowler after the strangler fig vine, which germinates in a tree, grows around it, and eventually leaves only the fig once the host dies. The metaphor for gradual, incremental replacement of a legacy system.</p></div>
+    <div class="qa"><p class="q">What's the difference between BFF and API composition?</p><p class="a">BFF is <em>who owns and shapes the API</em> — one per client class. API composition is <em>the technique</em> of a gateway or BFF calling multiple backends and merging their responses. A BFF typically uses API composition, but composition can happen in any gateway.</p></div>
+    <div class="qa"><p class="q">Is a service mesh worth the operational overhead for a 10-service system?</p><p class="a">Usually not. Below ~20 services and one language, in-process libraries (Polly for .NET, Resilience4j for Java) get you the same resilience without operating a mesh. Above that, or with polyglot services, the mesh's cross-cutting benefits amortise the platform cost.</p></div>
+    <div class="qa"><p class="q">How do you version APIs during a strangler-fig migration?</p><p class="a">The router (API Gateway) is your versioning surface. Add a <code>/v2/</code> namespace that routes to new services; keep <code>/v1/</code> pointing at the monolith. Never break v1 during migration — deprecate on a public schedule instead.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch">
+      <strong>30-second pitch:</strong> "There are eight canonical microservices patterns. Service Discovery is a registry that answers 'where is X right now?'. API Gateway is the single entry point that centralises auth, routing, and composition. BFF gives each client class its own tailored gateway. Sidecar is a helper process alongside every service for cross-cutting concerns like TLS and tracing. Circuit Breaker fast-fails a failing downstream to prevent cascading failure. Bulkhead isolates resources — one thread pool per dependency — so a slow service can't drain the whole pool. Strangler Fig is Fowler's incremental legacy-replacement pattern: put a router in front and shift traffic route-by-route until the monolith dies. Service Mesh is the platformisation of the sidecar — a control plane that configures a fleet of Envoy sidecars for mTLS, retries, circuit breaking, and observability. Together they turn 'a bunch of services' into 'a manageable platform.'"
+    </p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Circuit-breaker default: <strong>50% error rate over ≥ 20 requests in a 10 s window</strong>, open 5–60 s.</li>
+      <li>Hystrix bulkhead default: <strong>10 threads per dependency</strong>.</li>
+      <li>Netflix Zuul p50 latency: <strong>~2 ms</strong>.</li>
+      <li>Sidecar overhead: <strong>~50–200 MB RAM, ~1 ms latency</strong>.</li>
+      <li>Service mesh worthwhile above <strong>~20 services</strong>.</li>
+      <li>Strangler migration: <strong>months to years</strong>, executive-sponsored.</li>
+      <li>API Gateway is <strong>essential for mobile</strong> (round-trip cost).</li>
+    </ul>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li><strong>Circuit Breaker and Bulkhead are different</strong> — one stops calling, the other protects your own pool. Say it out loud.</li>
+      <li><strong>Sidecar → Service Mesh</strong> is the natural evolution — you go from a per-app helper to a fleet-wide control plane.</li>
+      <li><strong>BFF fights the "shared gateway compromise"</strong> — one per client type, owned by the frontend team.</li>
+      <li><strong>Strangler Fig requires organisational change</strong>, not just code — Fowler on Conway's Law.</li>
+      <li><strong>Service Discovery is O(1) with cache</strong> — clients cache to survive registry blips.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://microservices.io/patterns/microservices.html">Chris Richardson — Microservice Architecture pattern catalogue (microservices.io)</a></li>
+      <li><a href="https://microservices.io/patterns/apigateway.html">Chris Richardson — API Gateway pattern (microservices.io)</a></li>
+      <li><a href="https://microservices.io/patterns/service-registry.html">Chris Richardson — Service Registry pattern (microservices.io)</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker">Microsoft Azure Architecture Center — Circuit Breaker pattern</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead">Microsoft Azure Architecture Center — Bulkhead pattern</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar">Microsoft Azure Architecture Center — Sidecar pattern</a></li>
+      <li><a href="https://martinfowler.com/bliki/StranglerFigApplication.html">Martin Fowler — Strangler Fig Application</a></li>
+      <li><a href="https://istio.io/latest/about/service-mesh/">Istio — What is a Service Mesh?</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WhatsApp / Chat System — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --layman: #2dc653;
+    --layman-bg: #eaf9ee;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #25D366 0%, #128C7E 55%, #075E54 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.layman   { border-left: 6px solid var(--layman);   background: var(--layman-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .layman .badge   { background: var(--layman); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #25D366; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>WhatsApp / Chat System</h1>
+    <p>A planet-scale, low-latency, end-to-end encrypted messenger — 2 billion users, 100 billion messages a day, delivered in under a second whether you're online, offline, or on four devices at once.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#layman">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>We're designing a <strong>real-time messaging system</strong> — the class of product that powers <strong>WhatsApp, Facebook Messenger, iMessage, Telegram, Signal, Slack, Discord, WeChat and Microsoft Teams</strong>. A user opens the app, types a message, and it appears on the other person's phone in well under a second — even though the two devices might be on different continents, on different networks, and one of them might have been offline for the last three hours. Under the hood the system must maintain <em>hundreds of millions of persistent connections</em>, route messages to whichever server owns the receiver's socket, buffer anything the receiver hasn't picked up yet, and deliver every message <strong>exactly once, in order, with strong delivery and read receipts</strong>.</p>
+    <p>This scenario is the archetypal <em>stateful</em> system-design interview: unlike a URL shortener where every request is a one-shot HTTP call, a chat backend has to hold long-lived connections and coordinate <em>fan-out</em> across devices. Interviewers use it to probe how you reason about <strong>WebSockets, service discovery, message queues, event-driven fan-out, distributed key-value storage, presence detection, and multi-device synchronization</strong> — and how you defend the trade-offs when they push back.</p>
+  </section>
+
+  <section id="layman" class="card layman">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The whole thing, without any jargon</h2>
+    <p>You type "hey, are you free tonight?" and tap send. A second later your friend's phone buzzes. <strong>That short second is what we're designing.</strong> It sounds trivial — but two billion people are doing this at the same time, from every country, on flaky trains and packed metros, and the app promises the message will <em>always</em> arrive, in the right order, even if their phone was off when you sent it.</p>
+    <p>Picture a giant international post office. When you sign in to WhatsApp, the app quietly walks over to one specific clerk's window and says <em>"I'm here — anything for me?"</em> and then <strong>stays at the window with the phone line open</strong>. That's the trick: instead of you calling every few minutes to ask <em>"got any mail?"</em>, you leave a permanent line running so the clerk can just shout your name the instant a letter drops on the counter. This permanent line is called a <strong>WebSocket</strong>, and it's what makes chat feel <em>instant</em> instead of laggy.</p>
+    <p>When your friend Priya sends you a message, her app hands it to <em>her</em> clerk. Her clerk stamps it with a number so ordering never gets scrambled, writes a copy into a giant filing cabinet (in case something breaks), and then figures out which clerk you're currently talking to — using a big directory that says "Sonu is at window 47B." Your clerk shouts down your open line, your app buzzes, and up pops the message.</p>
+    <p>What if your phone was <strong>off</strong> when Priya sent it? Easy — the message just <em>waits in the filing cabinet</em>, and the moment you sign back in, the system replays everything you missed, in order. This is why WhatsApp never says "you missed 3 messages, sorry" — it will always catch you up.</p>
+    <p>The little grey ticks you see are the story of that journey: <strong>one tick means the server got it, two ticks mean your friend's phone got it, two blue ticks mean their eyes actually looked at it.</strong> Each tick is a tiny confirmation message travelling the other way. And when you use WhatsApp Web at the same time as your phone, the same trick keeps <em>both</em> screens in sync — every device gets a copy through its own line.</p>
+    <p>The hard part isn't <em>one</em> message — it's <em>a hundred billion messages a day</em>. No single post office could hold that. So there are thousands of clerks in dozens of buildings around the world, all talking to each other over super-fast internal pipes, and a smart directory that tells your app which building to walk into. That's the design.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>1-on-1 messaging</strong> with delivery + read receipts (single grey tick → double grey tick → double blue tick).</li>
+      <li><strong>Group messaging</strong> (WhatsApp caps at 1024 members per group; WeChat caps at 500).</li>
+      <li><strong>Presence</strong> (online/last-seen).</li>
+      <li><strong>Offline delivery</strong> — messages sent while you were offline arrive as soon as you reconnect, in order.</li>
+      <li><strong>Media messages</strong> (images/video) stored separately in blob storage.</li>
+      <li><strong>Multi-device</strong> — same account on phone + web + desktop, kept in sync.</li>
+      <li><strong>End-to-end encryption</strong> — the server can never read message content.</li>
+    </ul>
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Low latency</strong>: p99 send-to-deliver &lt; 500 ms for online users.</li>
+      <li><strong>Extreme availability</strong>: multi-region active-active, 99.99% uptime.</li>
+      <li><strong>Durability</strong>: never lose a message that the server has acknowledged.</li>
+      <li><strong>Ordering</strong>: monotonic ordering within a conversation (not globally).</li>
+      <li><strong>Consistency</strong>: read-your-writes and monotonic reads within a device.</li>
+    </ul>
+
+    <h3>Back-of-the-envelope estimates</h3>
+    <table>
+      <tr><th>Metric</th><th>Estimate</th><th>How we got it</th></tr>
+      <tr><td>Daily active users (DAU)</td><td>~2 billion</td><td>Public WhatsApp figure.</td></tr>
+      <tr><td>Messages/day</td><td>~100 billion</td><td>50 msgs/user/day × 2B users.</td></tr>
+      <tr><td>Messages/sec (avg)</td><td>~1.2 M/s</td><td>100B ÷ 86,400 s.</td></tr>
+      <tr><td>Peak QPS (send + fan-out)</td><td>~3–5 M/s</td><td>~3× average during peak hours.</td></tr>
+      <tr><td>Avg message size</td><td>~100 bytes</td><td>Text-dominated, ~20 words.</td></tr>
+      <tr><td>Storage/day (text)</td><td>~10 TB/day</td><td>100 B × 100B msgs.</td></tr>
+      <tr><td>Storage/year (text)</td><td>~3.6 PB/year</td><td>10 TB × 365.</td></tr>
+      <tr><td>Bandwidth (steady)</td><td>~1 Gb/s</td><td>10 TB/day / 86 400 s ≈ 116 MB/s.</td></tr>
+      <tr><td>Concurrent WebSocket connections</td><td>~500 M – 1 B</td><td>25–50% of DAU online at once.</td></tr>
+      <tr><td>Connections per chat server</td><td>~1 M (up to 10 M with tuning)</td><td>C10M problem; well-tuned Linux + epoll.</td></tr>
+      <tr><td>Chat servers needed</td><td>~500 – 1000</td><td>1B connections ÷ 1–2M per box.</td></tr>
+    </table>
+    <p>These numbers are what an interviewer expects you to <em>volunteer</em> before drawing any boxes. The two anchor facts to memorise: <strong>~100 B messages/day</strong> and <strong>~1 M WebSocket connections per server</strong>. Everything else derives from those.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The system splits into three planes. <strong>Stateless services</strong> (auth, signup, profile, friend list, media upload) sit behind a normal load balancer — any node can serve any request. <strong>Stateful chat services</strong> hold long-lived WebSocket connections; each client is pinned to exactly one chat server, so we need a <em>service-discovery layer</em> (typically <strong>Apache ZooKeeper</strong>) to tell a signing-in client which chat server to connect to. Finally, <strong>storage</strong> is split: user profiles and group metadata live in a relational DB (MySQL), messages live in a horizontally sharded key-value store (Cassandra / HBase / DynamoDB), and media blobs live in an object store (S3) fronted by a CDN.</p>
+    <p>When Priya sends a message to Sonu, the request travels: <strong>Priya's phone → her chat server → ID generator (Snowflake) → message KV store → message sync queue (Kafka) → Sonu's chat server → Sonu's phone</strong>. If Sonu is offline, the last hop is replaced with a <strong>push notification</strong> via APNs/FCM; the message stays in the KV store until Sonu reconnects and pulls anything above his last-synced message ID. Read receipts flow the same way in reverse, encoded as tiny control messages on the same WebSocket.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 860 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="WhatsApp architecture">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#8ea3ff"/>
+          </marker>
+          <marker id="arrA" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/>
+          </marker>
+          <marker id="arrG" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#25D366"/>
+          </marker>
+        </defs>
+        <style>
+          .box { fill:#1b2940; stroke:#2a3652; stroke-width:1.5; rx:10; }
+          .lbl { fill:#e7ecf3; font: 700 12px -apple-system,sans-serif; }
+          .sub { fill:#8ea3ff; font: 400 10px -apple-system,sans-serif; }
+          .flow { stroke:#8ea3ff; stroke-width:2; fill:none; }
+          .async { stroke:#f4a259; stroke-width:2; stroke-dasharray:5 4; fill:none; }
+          .push { stroke:#25D366; stroke-width:2; fill:none; }
+        </style>
+
+        <!-- Left: sender -->
+        <rect class="box" x="20" y="200" width="120" height="60"/>
+        <text class="lbl" x="80" y="228" text-anchor="middle">Sender App</text>
+        <text class="sub" x="80" y="246" text-anchor="middle">Priya's phone</text>
+
+        <!-- LB -->
+        <rect class="box" x="180" y="200" width="110" height="60"/>
+        <text class="lbl" x="235" y="228" text-anchor="middle">Load Balancer</text>
+        <text class="sub" x="235" y="246" text-anchor="middle">TLS 443 / WSS</text>
+
+        <!-- ZooKeeper -->
+        <rect class="box" x="180" y="60" width="110" height="50"/>
+        <text class="lbl" x="235" y="82" text-anchor="middle">ZooKeeper</text>
+        <text class="sub" x="235" y="98" text-anchor="middle">service discovery</text>
+
+        <!-- Chat Servers -->
+        <rect class="box" x="330" y="180" width="130" height="100"/>
+        <text class="lbl" x="395" y="208" text-anchor="middle">Chat Server 1</text>
+        <text class="sub" x="395" y="226" text-anchor="middle">WebSocket, stateful</text>
+        <text class="sub" x="395" y="242" text-anchor="middle">1M conns / node</text>
+        <text class="sub" x="395" y="258" text-anchor="middle">owns Priya's socket</text>
+
+        <rect class="box" x="500" y="180" width="130" height="100"/>
+        <text class="lbl" x="565" y="208" text-anchor="middle">Chat Server 2</text>
+        <text class="sub" x="565" y="226" text-anchor="middle">WebSocket, stateful</text>
+        <text class="sub" x="565" y="242" text-anchor="middle">owns Sonu's socket</text>
+
+        <!-- ID gen -->
+        <rect class="box" x="330" y="70" width="130" height="50"/>
+        <text class="lbl" x="395" y="92" text-anchor="middle">ID Generator</text>
+        <text class="sub" x="395" y="108" text-anchor="middle">Snowflake · 64-bit</text>
+
+        <!-- Presence -->
+        <rect class="box" x="500" y="70" width="130" height="50"/>
+        <text class="lbl" x="565" y="92" text-anchor="middle">Presence Service</text>
+        <text class="sub" x="565" y="108" text-anchor="middle">Redis · heartbeats</text>
+
+        <!-- Kafka -->
+        <rect class="box" x="330" y="330" width="130" height="55"/>
+        <text class="lbl" x="395" y="355" text-anchor="middle">Kafka</text>
+        <text class="sub" x="395" y="371" text-anchor="middle">FIFO msg queue</text>
+
+        <!-- KV store -->
+        <rect class="box" x="500" y="330" width="130" height="55"/>
+        <text class="lbl" x="565" y="355" text-anchor="middle">Message KV</text>
+        <text class="sub" x="565" y="371" text-anchor="middle">Cassandra / HBase</text>
+
+        <!-- Receiver -->
+        <rect class="box" x="710" y="200" width="130" height="60"/>
+        <text class="lbl" x="775" y="228" text-anchor="middle">Receiver App</text>
+        <text class="sub" x="775" y="246" text-anchor="middle">Sonu's phone / Web</text>
+
+        <!-- Push -->
+        <rect class="box" x="710" y="330" width="130" height="55"/>
+        <text class="lbl" x="775" y="355" text-anchor="middle">APNs / FCM</text>
+        <text class="sub" x="775" y="371" text-anchor="middle">push (offline)</text>
+
+        <!-- flows -->
+        <path class="flow" d="M140 230 L180 230" marker-end="url(#arr)"/>
+        <path class="flow" d="M290 230 L330 230" marker-end="url(#arr)"/>
+        <path class="flow" d="M460 230 L500 230" marker-end="url(#arr)"/>
+        <path class="flow" d="M630 230 L710 230" marker-end="url(#arr)"/>
+        <path class="flow" d="M235 200 L235 110" marker-end="url(#arr)"/>
+        <path class="flow" d="M395 180 L395 120" marker-end="url(#arr)"/>
+        <path class="flow" d="M565 180 L565 120" marker-end="url(#arr)"/>
+        <path class="async" d="M395 280 L395 330" marker-end="url(#arrA)"/>
+        <path class="async" d="M460 358 L500 358" marker-end="url(#arrA)"/>
+        <path class="async" d="M565 330 L565 280" marker-end="url(#arrA)"/>
+        <path class="push" d="M630 358 L710 358" marker-end="url(#arrG)"/>
+        <path class="push" d="M775 330 L775 260" marker-end="url(#arrG)"/>
+
+        <!-- legend -->
+        <g transform="translate(20,420)">
+          <rect width="12" height="4" y="4" fill="#8ea3ff"/>
+          <text x="20" y="10" fill="#c6d0e0" font-size="11">real-time (WebSocket)</text>
+          <rect width="12" height="4" y="4" x="200" fill="#f4a259"/>
+          <text x="220" y="10" fill="#c6d0e0" font-size="11">async / durable</text>
+          <rect width="12" height="4" y="4" x="360" fill="#25D366"/>
+          <text x="380" y="10" fill="#c6d0e0" font-size="11">offline push</text>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a message travel — send, ack, deliver, read, sync</h2>
+    <p>Priya sends "hey" to Sonu. Sonu has two devices online (phone + web). This animation walks the full lifecycle: send → durable store → route to whichever chat server owns Sonu's socket → double tick → read → sync across his devices.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 820 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Message flow animation">
+        <defs>
+          <marker id="animArr" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#8ea3ff"/>
+          </marker>
+        </defs>
+        <style>
+          .a-box { fill:#1b2940; stroke:#2a3652; stroke-width:1.5; rx:10; }
+          .a-lbl { fill:#e7ecf3; font: 700 12px -apple-system,sans-serif; }
+          .a-sub { fill:#8ea3ff; font: 400 10px -apple-system,sans-serif; }
+          .a-wire { stroke:#2a3652; stroke-width:2; stroke-dasharray:4 4; fill:none; }
+        </style>
+
+        <!-- Priya -->
+        <rect class="a-box" x="20" y="150" width="110" height="60" id="priya"/>
+        <text class="a-lbl" x="75" y="178" text-anchor="middle">Priya</text>
+        <text class="a-sub" x="75" y="196" text-anchor="middle">sender</text>
+
+        <!-- Chat A -->
+        <rect class="a-box" x="180" y="150" width="120" height="60" id="chatA"/>
+        <text class="a-lbl" x="240" y="178" text-anchor="middle">Chat Server A</text>
+        <text class="a-sub" x="240" y="196" text-anchor="middle">owns Priya</text>
+
+        <!-- KV / Kafka -->
+        <rect class="a-box" x="350" y="30" width="120" height="60" id="kv"/>
+        <text class="a-lbl" x="410" y="58" text-anchor="middle">Kafka + KV</text>
+        <text class="a-sub" x="410" y="76" text-anchor="middle">durable · Snowflake ID</text>
+
+        <!-- Chat B -->
+        <rect class="a-box" x="520" y="150" width="120" height="60" id="chatB"/>
+        <text class="a-lbl" x="580" y="178" text-anchor="middle">Chat Server B</text>
+        <text class="a-sub" x="580" y="196" text-anchor="middle">owns Sonu (phone)</text>
+
+        <!-- Chat C -->
+        <rect class="a-box" x="520" y="270" width="120" height="60" id="chatC"/>
+        <text class="a-lbl" x="580" y="298" text-anchor="middle">Chat Server C</text>
+        <text class="a-sub" x="580" y="316" text-anchor="middle">owns Sonu (web)</text>
+
+        <!-- Sonu phone -->
+        <rect class="a-box" x="680" y="150" width="120" height="60" id="sonuP"/>
+        <text class="a-lbl" x="740" y="178" text-anchor="middle">Sonu 📱</text>
+        <text class="a-sub" x="740" y="196" text-anchor="middle">phone</text>
+
+        <!-- Sonu web -->
+        <rect class="a-box" x="680" y="270" width="120" height="60" id="sonuW"/>
+        <text class="a-lbl" x="740" y="298" text-anchor="middle">Sonu 💻</text>
+        <text class="a-sub" x="740" y="316" text-anchor="middle">web</text>
+
+        <!-- wires -->
+        <path class="a-wire" d="M130 180 L180 180"/>
+        <path class="a-wire" d="M300 180 L520 180"/>
+        <path class="a-wire" d="M300 180 Q380 180 380 90"/>
+        <path class="a-wire" d="M380 90 Q380 180 520 180"/>
+        <path class="a-wire" d="M380 90 Q380 300 520 300"/>
+        <path class="a-wire" d="M640 180 L680 180"/>
+        <path class="a-wire" d="M640 300 L680 300"/>
+
+        <!-- Message packet, hidden initially -->
+        <g id="pkt" class="a-el a-hidden" transform="translate(0,0)">
+          <rect x="0" y="0" width="70" height="26" rx="6" fill="#25D366"/>
+          <text x="35" y="18" text-anchor="middle" fill="#0f1420" font-size="11" font-weight="800">hey</text>
+        </g>
+
+        <!-- Ack packet (single tick) -->
+        <g id="ack1" class="a-el a-hidden" transform="translate(300,220)">
+          <rect x="0" y="0" width="46" height="22" rx="6" fill="#f4a259"/>
+          <text x="23" y="16" text-anchor="middle" fill="#0f1420" font-size="11" font-weight="800">✓</text>
+        </g>
+
+        <!-- Delivered (double tick) -->
+        <g id="ack2" class="a-el a-hidden" transform="translate(300,240)">
+          <rect x="0" y="0" width="46" height="22" rx="6" fill="#8ea3ff"/>
+          <text x="23" y="16" text-anchor="middle" fill="#0f1420" font-size="11" font-weight="800">✓✓</text>
+        </g>
+
+        <!-- Read (blue tick) -->
+        <g id="ack3" class="a-el a-hidden" transform="translate(300,260)">
+          <rect x="0" y="0" width="46" height="22" rx="6" fill="#4361ee"/>
+          <text x="23" y="16" text-anchor="middle" fill="#fff" font-size="11" font-weight="800">✓✓</text>
+        </g>
+
+        <!-- Web copy packet -->
+        <g id="pktW" class="a-el a-hidden" transform="translate(0,0)">
+          <rect x="0" y="0" width="70" height="26" rx="6" fill="#25D366"/>
+          <text x="35" y="18" text-anchor="middle" fill="#0f1420" font-size="11" font-weight="800">hey</text>
+        </g>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'Priya sends "hey" to Sonu (2 devices). Follow the packet through send → durable → route → deliver → read → multi-device sync.',
+          interval: 1900,
+          reset: (r) => {
+            ['#pkt','#pktW','#ack1','#ack2','#ack3'].forEach(id => {
+              const el = r.querySelector(id);
+              if (!el) return;
+              el.classList.add('a-hidden');
+              el.classList.remove('a-glow');
+              el.removeAttribute('transform');
+            });
+            ['#priya','#chatA','#kv','#chatB','#chatC','#sonuP','#sonuW'].forEach(id => {
+              r.querySelector(id)?.classList.remove('a-glow');
+            });
+            r.querySelector('#pkt').setAttribute('transform','translate(75,163)');
+            r.querySelector('#pktW').setAttribute('transform','translate(75,163)');
+          },
+          steps: [
+            { caption: 'Priya types "hey" and taps send. The client encrypts (Signal Protocol) and pushes over her open WebSocket to Chat Server A.',
+              apply: (r, $) => {
+                $('#pkt').classList.remove('a-hidden');
+                $('#pkt').setAttribute('transform','translate(210,163)');
+                $('#chatA').classList.add('a-glow');
+              }},
+            { caption: 'Chat Server A stamps a Snowflake message-ID, writes the ciphertext to the durable KV store, and appends to Kafka for reliable fan-out.',
+              apply: (r, $) => {
+                $('#pkt').setAttribute('transform','translate(380,60)');
+                $('#kv').classList.add('a-glow');
+                $('#chatA').classList.remove('a-glow');
+              }},
+            { caption: 'Once durable, server acks back to Priya — that\'s the single grey tick ✓ ("stored, we won\'t lose it").',
+              apply: (r, $) => {
+                $('#ack1').classList.remove('a-hidden');
+                $('#ack1').setAttribute('transform','translate(150,220)');
+              }},
+            { caption: 'Presence lookup shows Sonu\'s phone is on Chat Server B and his web is on Chat Server C. Fan-out delivers a copy to each.',
+              apply: (r, $) => {
+                $('#pkt').setAttribute('transform','translate(560,163)');
+                $('#pktW').classList.remove('a-hidden');
+                $('#pktW').setAttribute('transform','translate(560,283)');
+                $('#chatB').classList.add('a-glow');
+                $('#chatC').classList.add('a-glow');
+              }},
+            { caption: 'Both chat servers push the message down the receiver WebSockets. Sonu\'s phone and web light up simultaneously.',
+              apply: (r, $) => {
+                $('#pkt').setAttribute('transform','translate(710,163)');
+                $('#pktW').setAttribute('transform','translate(710,283)');
+                $('#sonuP').classList.add('a-glow');
+                $('#sonuW').classList.add('a-glow');
+              }},
+            { caption: 'Client-ack: Sonu\'s device replies "got it" over its own WebSocket. Priya sees the double grey tick ✓✓ ("delivered").',
+              apply: (r, $) => {
+                $('#ack2').classList.remove('a-hidden');
+                $('#ack2').setAttribute('transform','translate(150,240)');
+              }},
+            { caption: 'Sonu opens the chat. His device sends a "read" event. Priya sees ✓✓ turn blue — read receipts complete the loop.',
+              apply: (r, $) => {
+                $('#ack3').classList.remove('a-hidden');
+                $('#ack3').setAttribute('transform','translate(150,260)');
+              }},
+            { caption: 'If a device had been OFFLINE, Chat Server B/C would have skipped it. When it reconnects, it pulls all msgs where id > cur_max_message_id.',
+              apply: (r, $) => {
+                $('#sonuP').classList.remove('a-glow');
+                $('#sonuW').classList.remove('a-glow');
+                $('#kv').classList.add('a-glow');
+              }},
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. WebSocket connection — how messages reach online users</h3>
+    <p>Every online user opens a <strong>WebSocket</strong> (WSS on port 443) to a specific chat server. Unlike HTTP request/response, a WebSocket is bidirectional and persistent — the server can push a new message the millisecond it arrives without the client polling. Behind the scenes the server pins <code>userId → (server, socket_fd)</code> in an in-memory table (backed by <strong>Redis</strong> across the fleet) so that any other server can look up "where is Sonu right now?" in O(1). This is the piece a lot of candidates get wrong: chat is stateful — a load balancer alone doesn't help, because you need to route the packet to the <em>exact</em> server that owns the recipient's socket.</p>
+    <p>Why WebSocket and not HTTP long-polling? Three reasons interviewers want to hear: <strong>(1)</strong> real bidirectional push, no polling waste; <strong>(2)</strong> one connection per device instead of one HTTP request per message — massively lower CPU and memory; <strong>(3)</strong> the server can immediately detect a graceful close, so presence flips cleanly. The trade-off: WebSockets are <em>stateful</em>, so autoscaling is harder — you can't just add a box and route half the traffic to it.</p>
+
+    <h3>2. Offline handling — Kafka + durable KV</h3>
+    <p>Before a message is acked to the sender, the chat server writes it to <strong>Kafka</strong> (a FIFO log) and to a <strong>replicated key-value store</strong> (Cassandra / HBase / DynamoDB). Only then does it send the single grey tick back. This is the <em>write-then-ack</em> pattern — the message is durable before we promise anything. If the recipient is offline, we simply skip the WebSocket push; the message sits in the KV store keyed by <code>(recipient_id, message_id)</code> where <code>message_id</code> is a time-sortable Snowflake ID. When the recipient reconnects, its device sends <em>"give me everything &gt; cur_max_message_id"</em> — a bounded, ordered replay.</p>
+    <p>WhatsApp historically used <strong>Mnesia</strong> (an Erlang-native distributed DB) for pending-message storage, which is why they can run so few servers per user — but modern designs use Cassandra or DynamoDB with a similar shape.</p>
+
+    <h3>3. Guaranteed delivery — at-least-once + idempotent client-ack</h3>
+    <p>Real messengers are <strong>at-least-once with client-side dedup</strong>, not exactly-once. The flow: the sender generates a client-side UUID (<code>client_msg_id</code>) and retries the send until it gets a server-ack. The server generates a durable Snowflake ID and stores the mapping <code>client_msg_id → server_msg_id</code>. If the sender ever retries the same <code>client_msg_id</code>, the server returns the existing <code>server_msg_id</code> instead of creating a duplicate. On the receiver side, the client also tracks the highest server ID it has stored and drops duplicates by ID. This gives you <strong>effectively exactly-once</strong> without needing distributed 2PC.</p>
+
+    <h3>4. Read receipts — three-state ACK chain</h3>
+    <p>Every message has three delivery states, each triggering a tiny control packet the other way:</p>
+    <ul>
+      <li><strong>Server-ack (✓ single grey tick)</strong> — chat server has durably stored the message.</li>
+      <li><strong>Delivery-ack (✓✓ double grey tick)</strong> — receiver's device has received it over its WebSocket.</li>
+      <li><strong>Read-ack (✓✓ blue)</strong> — the receiver actually opened the chat and rendered the message.</li>
+    </ul>
+    <p>These acks are just small JSON envelopes on the same WebSocket: <code>{type: "ack", state: "read", server_msg_id: 87342...}</code>. The sender's client renders them into the little ticks you see under each bubble.</p>
+
+    <h3>5. Multi-device sync — per-device identity + client fan-out</h3>
+    <p>The 2021 WhatsApp multi-device rewrite (see the Meta engineering post in Sources) is worth memorising because it flips a common assumption. Instead of the <em>phone</em> being the single source of truth that mirrors to companions, <strong>each device (phone, web, desktop, Portal) has its own identity key</strong>. When Priya sends a message to Sonu, her client encrypts and transmits <strong>N times — once per device</strong> in Sonu's device list, using pairwise Signal Protocol sessions. This is called <strong>client-fanout</strong>. The server never sees plaintext; it just routes N ciphertexts. For app state (contact names, archived chats, starred), the server holds an <em>end-to-end encrypted</em> snapshot each device can pull.</p>
+    <p>For sync ordering, every device tracks <code>cur_max_message_id</code>. On reconnect it asks "give me everything &gt; my max" and gets back an ordered stream. Because Snowflake IDs are monotonic within a partition, this is trivially O(log N) with a range query.</p>
+
+    <h3>6. Presence — heartbeats, not disconnect events</h3>
+    <p>Naïvely you'd say "flip user to offline when the WebSocket closes." That fails in practice — mobile users drop and reconnect constantly (tunnels, metros, switching Wi-Fi ↔ 4G). A single close-event would make Priya's app flicker "online / last seen 3s ago" every 30 seconds. Instead, clients send a <strong>heartbeat every 5 seconds</strong>, and presence flips offline only after <strong>~30 seconds of no heartbeat</strong>. Presence changes fan out via pub/sub (Redis channels or Kafka) to <em>only</em> the friends who currently have that user's chat open — not to everyone.</p>
+
+    <h3>7. Group messaging — server fan-out vs client fan-out</h3>
+    <p>Two approaches: (a) <strong>server fan-out</strong> — the sender ships one ciphertext to the server, the server duplicates it into N recipient inboxes; (b) <strong>client fan-out</strong> — the sender's client ships N ciphertexts, one per recipient. WhatsApp uses (b) for E2E encryption reasons (server can't hold decryption keys). For large groups (1024 members) this uses the <strong>Signal Sender Key</strong> optimisation: the sender encrypts the message once with a symmetric group key and only sends that group key pairwise to each member — a huge reduction. Facebook Messenger and Discord historically used server fan-out because they don't do E2E by default.</p>
+
+    <h3>8. Storage schema</h3>
+    <p>Two tables in a Cassandra-style KV store:</p>
+    <div class="viz">-- 1-on-1 messages (partitioned by chat_id, ordered by message_id)
+CREATE TABLE messages (
+  chat_id      uuid,       -- deterministic hash(min(a,b), max(a,b))
+  message_id   bigint,     -- Snowflake, time-sortable
+  sender_id    uuid,
+  content      blob,       -- ciphertext
+  sent_at      timestamp,
+  PRIMARY KEY ((chat_id), message_id)
+) WITH CLUSTERING ORDER BY (message_id DESC);
+
+-- Per-user inbox (used for offline replay)
+CREATE TABLE inbox (
+  user_id      uuid,
+  message_id   bigint,
+  chat_id      uuid,
+  PRIMARY KEY ((user_id), message_id)
+) WITH CLUSTERING ORDER BY (message_id DESC);</div>
+    <p>The <code>messages</code> table is the source of truth. The <code>inbox</code> table is a per-user projection that makes "pending offline messages for user X" a single partition read. Both are shardable by their partition key.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>A chat backend isn't fancy algorithms — it's the <em>right</em> data structure at each layer. Here are the ones an interviewer will probe:</p>
+    <table>
+      <tr><th>Where</th><th>Structure / algo</th><th>Why</th><th>Complexity</th></tr>
+      <tr><td>userId → chat-server lookup</td><td>Hash map (Redis)</td><td>O(1) route lookup to push a message to the right server.</td><td>O(1) avg</td></tr>
+      <tr><td>Chat server internal socket table</td><td>epoll + open-addressed hash map</td><td>Handle 1M+ FDs on one box; kernel-level readiness events.</td><td>O(1) per event</td></tr>
+      <tr><td>Message ID generation</td><td>Snowflake / Sonyflake (64-bit)</td><td>Monotonic, time-sortable, decentralised (no coordinator).</td><td>O(1)</td></tr>
+      <tr><td>Pending message queue per user</td><td>Sorted set / Cassandra clustering column</td><td>Fetch "everything above my last seen ID" as a range scan.</td><td>O(log N + K)</td></tr>
+      <tr><td>Message queue between servers</td><td>Kafka partitioned log (append-only)</td><td>FIFO ordering per partition, durable, replayable.</td><td>O(1) append</td></tr>
+      <tr><td>Presence pub/sub</td><td>Publish–subscribe on <em>friend-pair</em> channels</td><td>Only notify the small set of viewers who care.</td><td>O(F) fanout, F = friends viewing</td></tr>
+      <tr><td>Consistent hashing (chat server sharding)</td><td>Consistent hash ring</td><td>Adding/removing chat servers moves only 1/N of connections, not all.</td><td>O(log N) with a sorted ring</td></tr>
+      <tr><td>Group encryption key distribution</td><td>Signal Sender Key + pairwise Double Ratchet</td><td>One symmetric group encrypt, N pairwise key deliveries — massive win over N pairwise encrypts.</td><td>O(N) once, O(1) per message</td></tr>
+      <tr><td>Deduplication on client</td><td>LRU cache of seen (client_msg_id, server_msg_id)</td><td>Absorb at-least-once retries without extra network round-trips.</td><td>O(1)</td></tr>
+    </table>
+    <p>The two that always come up: <strong>Snowflake</strong> (why not UUIDs? because UUIDs don't sort by time, and the inbox scan needs a monotonic clustering column) and <strong>consistent hashing</strong> for sharding chat servers (why not modulo-N? because a modulo hash re-shuffles every user on every scale event).</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>DNS + geo-routing</td><td>Route 53 (latency-based)</td><td>Send the user to the nearest region.</td></tr>
+      <tr><td>TLS termination + WebSocket LB</td><td>Application Load Balancer (WebSocket support) or NLB for raw TCP</td><td>ALB supports WSS out of the box; NLB scales further for millions of long-lived connections.</td></tr>
+      <tr><td>Auth / signup / profile</td><td>API Gateway + Lambda + Cognito</td><td>Stateless, autoscaled, zero ops.</td></tr>
+      <tr><td>Chat servers</td><td>ECS/EKS on EC2 (c7g / c7i) — <em>not</em> Fargate for long-lived conns</td><td>Need control over kernel tuning (fd limits, TCP keepalives, epoll). Long-lived WebSockets don't play nicely with Lambda's 15-min limit.</td></tr>
+      <tr><td>Service discovery</td><td>AWS Cloud Map or self-hosted ZooKeeper on EC2</td><td>Register healthy chat servers; return the closest one to a client.</td></tr>
+      <tr><td>userId → chat-server routing table</td><td>ElastiCache (Redis Cluster)</td><td>Sub-millisecond lookup; used on every cross-server push.</td></tr>
+      <tr><td>Presence store</td><td>ElastiCache (Redis)</td><td>Heartbeats + TTL + pub/sub in one system.</td></tr>
+      <tr><td>Message queue (durable FIFO)</td><td>Amazon MSK (Kafka) — or Kinesis</td><td>Kafka's partitioned log gives per-conversation ordering and replay.</td></tr>
+      <tr><td>Message KV store</td><td>DynamoDB (partition key = <code>chat_id</code>, sort key = <code>message_id</code>)</td><td>Horizontal scale, single-digit-ms reads, TTL for retention.</td></tr>
+      <tr><td>User profile / groups metadata</td><td>Aurora MySQL</td><td>Relational data with joins, low volume.</td></tr>
+      <tr><td>Media blobs</td><td>S3 + CloudFront (with S3 Object Lambda for on-the-fly resize)</td><td>Cheap durable storage; CDN cuts latency to the phone.</td></tr>
+      <tr><td>Push notifications (offline)</td><td>SNS Mobile Push → APNs / FCM</td><td>Waking a killed app is the OS's job; SNS is a thin fan-out layer.</td></tr>
+      <tr><td>Observability</td><td>CloudWatch + X-Ray + OpenTelemetry</td><td>Trace a message across services; alert on p99 latency and delivery-lag.</td></tr>
+    </table>
+    <p>Deployment shape: <strong>multi-region active-active</strong>. Each region owns a slice of users (assigned by phone-number country code hashed into a region). Cross-region messages travel over a Kafka MirrorMaker link to the destination region, then out to the recipient's chat server. DynamoDB Global Tables replicate the message store between regions asynchronously for disaster recovery, but the write path is region-local for latency.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>A minimal-but-correct chat server: it accepts WebSocket connections, tracks online users in a Redis-backed routing table, generates Snowflake message IDs, persists to a message store, and routes the message to the recipient's chat server. Ack/read receipts are just typed frames on the same socket.</p>
+
+    <pre><span class="cmt">// ChatServer.cs — hosting a WebSocket endpoint at /ws</span>
+<span class="kw">using</span> System.Net.WebSockets;
+<span class="kw">using</span> System.Text;
+<span class="kw">using</span> System.Text.Json;
+<span class="kw">using</span> StackExchange.Redis;
+
+<span class="kw">var</span> builder = WebApplication.CreateBuilder(args);
+<span class="kw">var</span> app = builder.Build();
+<span class="kw">var</span> redis = <span class="kw">await</span> ConnectionMultiplexer.ConnectAsync(<span class="str">"redis:6379"</span>);
+<span class="kw">var</span> db    = redis.GetDatabase();
+<span class="kw">var</span> pubsub= redis.GetSubscriber();
+<span class="kw">var</span> serverId = Environment.MachineName;                <span class="cmt">// e.g. "chat-us-east-2-42"</span>
+<span class="kw">var</span> sockets = <span class="kw">new</span> ConcurrentDictionary&lt;<span class="typ">string</span>, WebSocket&gt;();
+
+app.UseWebSockets();
+
+app.Map(<span class="str">"/ws"</span>, <span class="kw">async</span> (HttpContext ctx) =&gt;
+{
+    <span class="kw">if</span> (!ctx.WebSockets.IsWebSocketRequest) { ctx.Response.StatusCode = 400; <span class="kw">return</span>; }
+    <span class="kw">var</span> userId = AuthenticateJwt(ctx.Request.Headers[<span class="str">"Authorization"</span>]);
+    <span class="kw">var</span> ws = <span class="kw">await</span> ctx.WebSockets.AcceptWebSocketAsync();
+
+    sockets[userId] = ws;
+    <span class="kw">await</span> db.StringSetAsync(<span class="str">$"route:{userId}"</span>, serverId, TimeSpan.FromMinutes(2));
+    <span class="kw">var</span> inboxChannel = <span class="kw">new</span> RedisChannel(<span class="str">$"deliver:{serverId}"</span>, RedisChannel.PatternMode.Literal);
+    <span class="kw">await</span> pubsub.SubscribeAsync(inboxChannel, (_, msg) =&gt; DeliverToSocket(msg!));
+
+    <span class="cmt">// Heartbeat + drain incoming</span>
+    <span class="kw">var</span> buf = <span class="kw">new</span> <span class="typ">byte</span>[8192];
+    <span class="kw">while</span> (ws.State == WebSocketState.Open)
+    {
+        <span class="kw">var</span> res = <span class="kw">await</span> ws.ReceiveAsync(buf, CancellationToken.None);
+        <span class="kw">if</span> (res.MessageType == WebSocketMessageType.Close) <span class="kw">break</span>;
+        <span class="kw">var</span> frame = JsonSerializer.Deserialize&lt;Frame&gt;(buf.AsSpan(0, res.Count));
+        <span class="kw">await</span> HandleFrame(userId, frame!);
+        <span class="kw">await</span> db.KeyExpireAsync(<span class="str">$"route:{userId}"</span>, TimeSpan.FromMinutes(2)); <span class="cmt">// refresh</span>
+    }
+
+    sockets.TryRemove(userId, <span class="kw">out</span> _);
+    <span class="kw">await</span> db.KeyDeleteAsync(<span class="str">$"route:{userId}"</span>);
+});
+
+<span class="kw">async</span> Task HandleFrame(<span class="typ">string</span> senderId, Frame f)
+{
+    <span class="kw">switch</span> (f.Type)
+    {
+        <span class="kw">case</span> <span class="str">"send"</span>:
+            <span class="kw">var</span> serverMsgId = Snowflake.NextId();                     <span class="cmt">// 64-bit time-sortable</span>
+            <span class="kw">await</span> PersistMessage(senderId, f.RecipientId!, serverMsgId, f.Content!);
+            <span class="kw">await</span> AckToSender(senderId, f.ClientMsgId!, serverMsgId); <span class="cmt">// ✓ single tick</span>
+            <span class="kw">await</span> Route(f.RecipientId!, <span class="kw">new</span> Frame(<span class="str">"deliver"</span>, senderId, serverMsgId, f.Content));
+            <span class="kw">break</span>;
+
+        <span class="kw">case</span> <span class="str">"delivered_ack"</span>:                                     <span class="cmt">// ✓✓ double tick</span>
+        <span class="kw">case</span> <span class="str">"read_ack"</span>:                                          <span class="cmt">// ✓✓ blue tick</span>
+            <span class="kw">await</span> Route(f.OriginalSenderId!, f);
+            <span class="kw">break</span>;
+
+        <span class="kw">case</span> <span class="str">"heartbeat"</span>:
+            <span class="kw">await</span> db.KeyExpireAsync(<span class="str">$"presence:{senderId}"</span>, TimeSpan.FromSeconds(30));
+            <span class="kw">break</span>;
+    }
+}
+
+<span class="kw">async</span> Task Route(<span class="typ">string</span> targetUserId, Frame frame)
+{
+    <span class="kw">var</span> targetServer = <span class="kw">await</span> db.StringGetAsync(<span class="str">$"route:{targetUserId}"</span>);
+    <span class="kw">if</span> (targetServer.HasValue)                                    <span class="cmt">// online</span>
+    {
+        <span class="kw">await</span> pubsub.PublishAsync(<span class="str">$"deliver:{targetServer}"</span>,
+                                 JsonSerializer.Serialize(frame));
+    }
+    <span class="kw">else</span>                                                          <span class="cmt">// offline</span>
+    {
+        <span class="kw">await</span> EnqueueInbox(targetUserId, frame);                   <span class="cmt">// KV write</span>
+        <span class="kw">await</span> SendPushNotificationAsync(targetUserId);
+    }
+}
+
+<span class="kw">async</span> Task DeliverToSocket(<span class="typ">string</span> serialised)
+{
+    <span class="kw">var</span> f = JsonSerializer.Deserialize&lt;Frame&gt;(serialised)!;
+    <span class="kw">if</span> (sockets.TryGetValue(f.RecipientId!, <span class="kw">out</span> <span class="kw">var</span> ws) &amp;&amp; ws.State == WebSocketState.Open)
+    {
+        <span class="kw">var</span> bytes = Encoding.UTF8.GetBytes(serialised);
+        <span class="kw">await</span> ws.SendAsync(bytes, WebSocketMessageType.Text, endOfMessage: <span class="kw">true</span>, CancellationToken.None);
+    }
+}
+
+<span class="kw">record</span> Frame(<span class="typ">string</span> Type, <span class="typ">string</span>? SenderId = <span class="kw">null</span>, <span class="typ">long</span>? ServerMsgId = <span class="kw">null</span>,
+              <span class="typ">string</span>? Content = <span class="kw">null</span>, <span class="typ">string</span>? RecipientId = <span class="kw">null</span>,
+              <span class="typ">string</span>? ClientMsgId = <span class="kw">null</span>, <span class="typ">string</span>? OriginalSenderId = <span class="kw">null</span>);
+
+app.Run();</pre>
+
+    <p>What to point out in an interview when walking through this: <strong>(1)</strong> the routing table (<code>route:{userId}</code>) is the entire trick — any server can push to any user in one Redis lookup; <strong>(2)</strong> the send handler acks after durable persist, not on socket accept — that's what makes the single grey tick meaningful; <strong>(3)</strong> the Redis pub/sub channel-per-server means a message crosses at most one hop between chat servers; <strong>(4)</strong> heartbeat + TTL on the Redis key handles graceful and non-graceful disconnects uniformly.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>The scaling bottlenecks</h3>
+    <p>The <strong>WebSocket layer</strong> is always the first bottleneck. Each connection burns ~30–50 KB of kernel + user memory, plus a file descriptor. On a well-tuned Linux box you can push ~1–2M concurrent sockets, WhatsApp reportedly ran up to ~10M with heavy kernel tuning on Erlang. Above that you're just adding boxes. The <strong>routing table</strong> (Redis) is the second bottleneck — it takes a hit on every message; you shard it by <code>hash(userId) % N</code>. The <strong>message store</strong> is the third: at 1M writes/sec you must partition by <code>chat_id</code>, not by user or by time.</p>
+
+    <h3>Consistency trade-off</h3>
+    <p>We chose <strong>availability over strong consistency</strong> (AP in CAP terms). If a partition happens between regions, sending still works — messages queue locally and reconcile when the link heals. The cost is that a message can very briefly land <em>out of order</em> if it crossed a region right at partition — the Snowflake ID lets clients reorder on receive, so users never see it.</p>
+
+    <h3>Delivery-guarantee trade-off</h3>
+    <p>We do <strong>at-least-once</strong> + client-side idempotency, not exactly-once. Building true exactly-once would require distributed 2PC on every message — too slow. The dedup key (<code>client_msg_id</code>) makes retries invisible in practice.</p>
+
+    <h3>Follow-ups you should expect</h3>
+    <div class="qa"><p class="q">What happens if a chat server crashes with 1M connected users?</p>
+    <p class="a">All those TCP connections drop. Clients detect the RST and immediately reconnect through the load balancer, which routes them (via ZooKeeper/Cloud Map) to a healthy server. On reconnect, each client asks the KV store for messages above its <code>cur_max_message_id</code>. Nothing is lost because the message was durable before we acked it.</p></div>
+
+    <div class="qa"><p class="q">How do you scale groups to 1000+ members without server fan-out costing 1000× storage?</p>
+    <p class="a">Two techniques. (1) Client fan-out with Signal Sender Keys: sender encrypts once with a group key, sends N tiny key envelopes but only one ciphertext. (2) Server stores one copy of the ciphertext in a "channel" partition and uses per-user pointers rather than duplicating.</p></div>
+
+    <div class="qa"><p class="q">How is ordering preserved when two people type at the same time?</p>
+    <p class="a">Ordering is only guaranteed <em>within a conversation</em>. Both messages get Snowflake IDs; the client sorts by ID before rendering. Because Snowflake embeds a millisecond timestamp, ties are extremely rare and broken deterministically by machine ID.</p></div>
+
+    <div class="qa"><p class="q">How does WhatsApp Web stay in sync with your phone?</p>
+    <p class="a">Post-2021 architecture: each device has its own identity key and its own WebSocket to the server. Every message is client-fanout'd to every device in the recipient's device list. On new-device link, the primary device transfers an E2E-encrypted history bundle. App state (mutes, archives) sits on the server as an E2E-encrypted blob each device can pull.</p></div>
+
+    <div class="qa"><p class="q">How do you handle a user with 100,000 friends going online?</p>
+    <p class="a">You don't broadcast presence to all of them. Presence pub/sub only fires for the subset of friends who <em>currently have that user's chat open</em> — a much smaller set. For the rest, presence is fetched on demand when they next open the chat.</p></div>
+
+    <div class="qa"><p class="q">How does end-to-end encryption survive multi-device without exposing keys server-side?</p>
+    <p class="a">The server holds <em>identity public keys</em>, one per device, and never sees a private key. The Signal Protocol's Double Ratchet establishes a pairwise session between every (sender-device, receiver-device) pair. The server just routes ciphertexts.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "I'd build it as three planes — stateless APIs behind ALB, stateful chat servers holding WebSockets, and durable storage in DynamoDB + S3. A Redis routing table maps <code>userId → chat_server</code> so any node can push to any user in one hop. Sends are written to Kafka + DynamoDB <em>before</em> we ack, giving durable at-least-once delivery with client-side dedup on <code>client_msg_id</code>. Offline users get catch-up via a range scan on their inbox partition. Read receipts are just typed control frames on the same socket. Multi-device works via per-device identity keys and client-fanout, so E2E encryption stays intact."</p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>2B DAU, ~100B messages/day, ~10 TB/day storage (text), ~3.6 PB/year.</li>
+      <li>~500M–1B concurrent WebSockets, ~1M per well-tuned box → ~500–1000 chat servers.</li>
+      <li>p99 send-to-deliver &lt; 500 ms; heartbeat every 5s, offline after 30s.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li><strong>WebSocket routing</strong> — a stateful chat needs a fleet-wide <code>userId → server</code> map, not just a load balancer.</li>
+      <li><strong>Write-then-ack</strong> — durable persist before returning ✓; that's how the single grey tick becomes a promise.</li>
+      <li><strong>Snowflake IDs</strong> — monotonic, time-sortable, decentralised — enable "everything above my last ID" replay.</li>
+      <li><strong>Client fan-out for multi-device</strong> — per-device identity keys keep E2E encryption intact across web/phone/desktop.</li>
+      <li><strong>Heartbeats, not disconnect events</strong> — the only sane way to handle presence on flaky mobile networks.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://engineering.fb.com/2021/07/14/security/whatsapp-multi-device/" target="_blank" rel="noreferrer">Meta Engineering — WhatsApp Multi-Device Architecture (2021)</a> — canonical explanation of per-device identity keys, client-fanout, and app-state sync.</li>
+      <li><a href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noreferrer">ByteByteGo — Design a Chat System</a> — WebSocket vs long-poll, service discovery, message-sync queue, presence via heartbeats.</li>
+      <li><a href="https://www.geeksforgeeks.org/system-design/designing-whatsapp-messenger-system-design/" target="_blank" rel="noreferrer">GeeksforGeeks — Designing WhatsApp Messenger System Design</a> — capacity estimates (100B msgs/day, 10 TB/day, ~10M conns/server) and Mnesia/Kafka storage details.</li>
+      <li><a href="https://signal.org/docs/specifications/doubleratchet/" target="_blank" rel="noreferrer">Signal Protocol — Double Ratchet Specification</a> — pairwise E2E session used for every WhatsApp message.</li>
+      <li><a href="https://www.erlang-solutions.com/blog/a-few-notes-on-erlang-and-whatsapp/" target="_blank" rel="noreferrer">Erlang Solutions — Notes on Erlang &amp; WhatsApp</a> — how Erlang lets a single node hold millions of persistent connections.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

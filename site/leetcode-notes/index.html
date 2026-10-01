@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LeetCode Notes — Pattern Notebook</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --accent: #6c5ce7;
+    --accent2: #00b4d8;
+    --easy: #2dc653;
+    --med: #f4a259;
+    --hard: #f7567c;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.6;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #6c5ce7 0%, #00b4d8 100%);
+    color: #fff; border-radius: var(--radius); padding: 38px 34px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .72rem;
+    font-weight: 700; opacity: .85; margin-bottom: 8px;
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.05rem; opacity: .93; }
+  .home { display:inline-block; margin-bottom:16px; color:var(--accent); text-decoration:none; font-weight:600; font-size:.9rem; }
+  .home:hover { text-decoration:underline; }
+  nav.pnav {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.pnav a {
+    text-decoration: none; color: var(--muted); font-size: .82rem; font-weight: 600;
+    padding: 5px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+    border: 1px solid var(--line);
+  }
+  nav.pnav a:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  section.pattern {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 22px 24px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.pattern > h2 {
+    margin: 0 0 4px; font-size: 1.3rem; letter-spacing: -.3px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  section.pattern > h2::before {
+    content: ""; width: 10px; height: 22px; border-radius: 4px; background: var(--accent);
+  }
+  section.pattern > .phint { margin: 0 0 12px; color: var(--muted); font-size: .9rem; }
+  /* mechanic explainer box — "what the technique physically does" */
+  .mech { background:#f3f0ff; border:1px solid #e3dcff; border-radius:10px;
+          padding:10px 14px; font-size:.86rem; margin:0 0 14px; color:#3a3160; }
+  .mech b { color: var(--accent); }
+  /* highlighter marker for the KEY trigger word — the thing to pattern-match */
+  mark.cue { background: linear-gradient(transparent 52%, #ffe08a 52%);
+             padding: 0 3px; font-weight: 800; color: var(--ink); }
+  /* the named variant of the technique, e.g. "slow/fast" */
+  .variant { display:inline-block; background:var(--accent); color:#fff; font-weight:700;
+             font-size:.72rem; padding:2px 9px; border-radius:999px; margin-left:4px; }
+  .qcard {
+    border: 1px solid var(--line); border-left: 4px solid var(--accent2);
+    border-radius: 12px; padding: 13px 16px; margin: 10px 0; background: #fbfcfe;
+  }
+  .qhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+  .qno { font-weight: 700; font-size: 1.02rem; text-decoration: none; color: var(--ink); }
+  .qno:hover { color: var(--accent); }
+  .diff { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
+          padding: 3px 9px; border-radius: 999px; color: #fff; }
+  .diff.easy { background: var(--easy); }
+  .diff.med  { background: var(--med); }
+  .diff.hard { background: var(--hard); }
+  .qcard p { margin: 4px 0; font-size: .93rem; }
+  .qcard .k { font-weight: 700; margin-right: 6px; }
+  .sig .k   { color: var(--accent2); }
+  .bite .k  { color: var(--easy); }
+  .cx       { color: var(--muted); font-family: "SF Mono", Consolas, monospace; font-size: .85rem; }
+  .trick .k { color: var(--med); }
+  .qcard code {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88em;
+  }
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; font-size: 1.02rem; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <a class="home" href="../index.html">← Study Hub</a>
+
+  <header class="hero">
+    <div class="kicker">LeetCode · Pattern Notebook</div>
+    <h1>🗒️ My LeetCode Notes</h1>
+    <p>Crispy revision cards grouped by algorithm pattern — <em>spot the <mark class="cue" style="background:linear-gradient(transparent 52%, rgba(255,255,255,.45) 52%)">highlighted cue</mark>, pick the algorithm.</em> <span id="counter">14 questions across 7 patterns</span></p>
+  </header>
+
+  <nav class="pnav" id="pnav">
+    <a href="#two-pointers">Two Pointers</a>
+    <a href="#greedy">Greedy</a>
+    <a href="#prefix-suffix">Prefix / Suffix Product</a>
+    <a href="#voting">Boyer-Moore Voting</a>
+    <a href="#array-inplace">Array In-Place Tricks</a>
+    <a href="#sorting-counting">Sorting / Counting</a>
+    <a href="#design-hashing">Design / Hashing</a>
+  </nav>
+
+  <main id="notebook">
+
+    <section class="pattern" id="two-pointers">
+      <h2>Two Pointers</h2>
+      <p class="phint"><b>Trigger word:</b> <mark class="cue">in place</mark> on an array (often <mark class="cue">sorted</mark>). If you must rebuild/scan an array using O(1) extra space, two indices do it in one pass.</p>
+      <div class="mech">
+        <b>Two flavours — know which one each problem wants:</b><br>
+        ① <b>slow / fast (read–write)</b> — both start at the left and move the <em>same</em> direction.
+        <b>fast</b> = <em>read</em> cursor that visits every element; <b>slow</b> = <em>write</em> cursor marking where the next <em>kept</em> element goes.
+        When <b>fast</b> finds a keeper, copy it to <b>slow</b> and bump <b>slow</b>. At the end <b>slow</b> = new length. → remove / dedupe in place.<br>
+        ② <b>opposite ends</b> — one pointer at each end moving toward each other (or filling from the back). → merge / pair-sum on sorted data.
+      </div>
+
+      <div class="qcard" id="q-88">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/merge-sorted-array/">#88 Merge Sorted Array</a>
+          <span class="diff easy">Easy</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> two <mark class="cue">sorted</mark> arrays · <mark class="cue">merge in place</mark> into nums1's spare tail <span class="variant">opposite ends · from the back</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> Pointer <code>i</code> at end of nums1's data, <code>j</code> at end of nums2, write cursor <code>k</code> at the very end; copy the larger tail into <code>k</code> and step backwards.</p>
+        <p class="cx"><span class="k">⏱</span> O(m+n) time · O(1) space</p>
+        <p class="trick"><span class="k">⚠ Trick</span> Fill back-to-front so you never overwrite unmerged nums1 values; leftover nums2 still gets copied.</p>
+      </div>
+
+      <div class="qcard" id="q-27">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/remove-element/">#27 Remove Element</a>
+          <span class="diff easy">Easy</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> <mark class="cue">remove all val in place</mark> · order may change · return new length <span class="variant">slow / fast</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> <b>fast</b> reads every element; when it's a keeper (<code>≠ val</code>) write it at <b>slow</b> and advance <b>slow</b>. <b>slow</b> ends as the new length.</p>
+        <p class="cx"><span class="k">⏱</span> O(n) time · O(1) space</p>
+      </div>
+
+      <div class="qcard" id="q-26">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/remove-duplicates-from-sorted-array/">#26 Remove Duplicates from Sorted Array</a>
+          <span class="diff easy">Easy</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> <mark class="cue">sorted</mark> · keep each unique <mark class="cue">once, in place</mark> <span class="variant">slow / fast</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> <b>fast</b> scans; write to <b>slow</b> only when <code>nums[fast] != nums[slow-1]</code> (differs from the last kept value), so duplicates are skipped.</p>
+        <p class="cx"><span class="k">⏱</span> O(n) time · O(1) space</p>
+        <p class="trick"><span class="k">⚠ Trick</span> "Sorted" is what lets you compare only against the previous kept element instead of a whole set.</p>
+      </div>
+
+      <div class="qcard" id="q-80">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/remove-duplicates-from-sorted-array-ii/">#80 Remove Duplicates from Sorted Array II</a>
+          <span class="diff med">Medium</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> <mark class="cue">sorted</mark> · keep each value <mark class="cue">at most twice, in place</mark> <span class="variant">slow / fast + look-back</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> Write <code>nums[fast]</code> to <b>slow</b> only if <code>slow &lt; 2</code> or it differs from <code>nums[slow-2]</code> — peek 2 back. Generalises to "keep at most k" via <code>slow-k</code>.</p>
+        <p class="cx"><span class="k">⏱</span> O(n) time · O(1) space</p>
+        <p class="trick"><span class="k">⚠ Trick</span> Compare against <code>nums[slow-2]</code> (the position), not a running count — works only because it's sorted.</p>
+      </div>
+    </section>
+
+    <section class="pattern" id="greedy">
+      <h2>Greedy</h2>
+      <p class="phint"><b>Trigger words:</b> <mark class="cue">maximum / minimum</mark>, <mark class="cue">can you reach</mark>, "best so far" — and a locally-best choice is provably globally best.</p>
+      <div class="mech">
+        <b>The move:</b> sweep once, keep a single running "best" (min price, farthest reach, running tank…) and make the obvious greedy choice at each step. <b>Never look back, never store the whole history</b> — that's what keeps it O(1) space.
+      </div>
+
+      <div class="qcard" id="q-121">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/best-time-to-buy-and-sell-stock/">#121 Best Time to Buy and Sell Stock</a>
+          <span class="diff easy">Easy</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> <mark class="cue">one transaction</mark> · maximise profit <span class="variant">track min-so-far</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> Sweep once keeping the cheapest price seen on the left; at each day candidate profit = <code>price − minSoFar</code>, keep the max.</p>
+        <p class="cx"><span class="k">⏱</span> O(n) time · O(1) space</p>
+      </div>
+
+      <div class="qcard" id="q-122">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/best-time-to-buy-and-sell-stock-ii/">#122 Best Time to Buy and Sell Stock II</a>
+          <span class="diff med">Medium</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> <mark class="cue">unlimited transactions</mark> · maximise profit <span class="variant">sum the rises</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> Add every positive day-to-day delta <code>price[i]−price[i-1]</code> — catching every upward step equals the best multi-trade profit.</p>
+        <p class="cx"><span class="k">⏱</span> O(n) time · O(1) space</p>
+      </div>
+
+      <div class="qcard" id="q-55">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/jump-game/">#55 Jump Game</a>
+          <span class="diff med">Medium</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> <mark class="cue">can you reach</mark> the last index? · jump lengths <span class="variant">track farthest reach</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> Sweep keeping <code>maxReach</code>; if an index is beyond <code>maxReach</code> you're stuck → false, else extend reach with <code>i + nums[i]</code>.</p>
+        <p class="cx"><span class="k">⏱</span> O(n) time · O(1) space</p>
+      </div>
+
+      <div class="qcard" id="q-45">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/jump-game-ii/">#45 Jump Game II</a>
+          <span class="diff med">Medium</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> <mark class="cue">minimum jumps</mark> to reach the end <span class="variant">greedy BFS by levels</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> Each jump is a "level"; track current level's end and the farthest reachable. When <code>i == currentEnd</code>, jumps++ and set <code>currentEnd = farthest</code>.</p>
+        <p class="cx"><span class="k">⏱</span> O(n) time · O(1) space</p>
+        <p class="trick"><span class="k">⚠ Trick</span> It's implicit BFS — the level boundary is what counts a jump.</p>
+      </div>
+
+      <div class="qcard" id="q-134">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/gas-station/">#134 Gas Station</a>
+          <span class="diff med">Medium</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> <mark class="cue">circular route</mark> · find the unique start that completes the loop <span class="variant">running tank + reset start</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> If total gas ≥ total cost a start exists; track running tank, and whenever it dips below 0 reset start to the next station and zero the tank.</p>
+        <p class="cx"><span class="k">⏱</span> O(n) time · O(1) space</p>
+        <p class="trick"><span class="k">⚠ Trick</span> A failing segment can't contain the answer, so the station right after a deficit is the only candidate.</p>
+      </div>
+    </section>
+
+    <section class="pattern" id="prefix-suffix">
+      <h2>Prefix / Suffix Product</h2>
+      <p class="phint"><b>Trigger words:</b> <mark class="cue">except self</mark> / "all elements but this one", or "<mark class="cue">no division</mark>" — each answer needs an aggregate of everything before and after an index.</p>
+      <div class="mech">
+        <b>The move:</b> two sweeps. Pass 1 (L→R) stores the running product of everything to the <em>left</em>; pass 2 (R→L) multiplies in the running product of everything to the <em>right</em>. Left × Right = "all except me".
+      </div>
+
+      <div class="qcard" id="q-238">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/product-of-array-except-self/">#238 Product of Array Except Self</a>
+          <span class="diff med">Medium</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> product of all <mark class="cue">except self</mark> · <mark class="cue">no division</mark> · O(n) required <span class="variant">prefix × suffix</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> Pass 1 L→R fills each slot with the product of everything to its left; pass 2 R→L multiplies in everything to its right (held in one scalar).</p>
+        <p class="cx"><span class="k">⏱</span> O(n) time · O(1) extra space (output reused)</p>
+        <p class="trick"><span class="k">⚠ Trick</span> Division is banned because a single <code>0</code> breaks <code>total/nums[i]</code>; prefix/suffix handles zeros for free.</p>
+      </div>
+    </section>
+
+    <section class="pattern" id="voting">
+      <h2>Boyer-Moore Voting</h2>
+      <p class="phint"><b>Trigger words:</b> <mark class="cue">more than n/2 times</mark> (strict majority) <em>and</em> a demand for O(1) space (no hashmap).</p>
+      <div class="mech">
+        <b>The move:</b> keep one <em>candidate</em> + a <em>count</em>. Matching element → count++, different → count−−, count hits 0 → adopt the current element as the new candidate. The true majority can never be fully cancelled, so it survives.
+      </div>
+
+      <div class="qcard" id="q-169">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/majority-element/">#169 Majority Element</a>
+          <span class="diff easy">Easy</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> element appearing <mark class="cue">more than n/2 times</mark> · want <mark class="cue">O(1) space</mark> <span class="variant">vote &amp; cancel</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> One candidate + count: same ++ , different −− , adopt new candidate when count==0 — majority outlasts all cancellations.</p>
+        <p class="cx"><span class="k">⏱</span> O(n) time · O(1) space</p>
+        <p class="trick"><span class="k">⚠ Trick</span> Only valid because a strict majority is guaranteed; a HashMap count is the easy O(n)-space fallback.</p>
+      </div>
+    </section>
+
+    <section class="pattern" id="array-inplace">
+      <h2>Array In-Place Tricks</h2>
+      <p class="phint"><b>Trigger words:</b> transform the array <mark class="cue">in place, O(1) space</mark> — reach for reversal tricks, cyclic replacement, or index-as-hash.</p>
+
+      <div class="qcard" id="q-189">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/rotate-array/">#189 Rotate Array</a>
+          <span class="diff med">Medium</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> <mark class="cue">rotate right by k</mark> · in place, O(1) space <span class="variant">triple reversal</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> Reverse the whole array → reverse first k → reverse the rest. Each element lands in its rotated spot.</p>
+        <p class="cx"><span class="k">⏱</span> O(n) time · O(1) space</p>
+        <p class="trick"><span class="k">⚠ Trick</span> Do <code>k %= n</code> first; reversal avoids the GCD bookkeeping of cyclic swaps.</p>
+      </div>
+    </section>
+
+    <section class="pattern" id="sorting-counting">
+      <h2>Sorting / Counting</h2>
+      <p class="phint"><b>Trigger words:</b> an <mark class="cue">order statistic</mark> or a <mark class="cue">threshold over a distribution</mark> (k-th, "at least h with ≥ h") — sort then scan, or bucket-count in O(n).</p>
+
+      <div class="qcard" id="q-274">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/h-index/">#274 H-Index</a>
+          <span class="diff med">Medium</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> <mark class="cue">largest h with ≥ h items ≥ h</mark> · answer bounded by n <span class="variant">counting sort</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> Bucket citations (clamp <code>&gt; n</code> into bucket n), scan high→low accumulating a running count; first index where running count ≥ index is the answer.</p>
+        <p class="cx"><span class="k">⏱</span> O(n) time · O(n) space — or O(n log n)/O(1) with sort+scan</p>
+        <p class="trick"><span class="k">⚠ Trick</span> Clamp citations above n — they can't push h beyond n anyway.</p>
+      </div>
+    </section>
+
+    <section class="pattern" id="design-hashing">
+      <h2>Design / Hashing</h2>
+      <p class="phint"><b>Trigger words:</b> an API needing <mark class="cue">O(1) insert + delete + random</mark> — pair a hash map (value → index) with a backing array.</p>
+      <div class="mech">
+        <b>The move:</b> the <em>array</em> gives O(1) random pick + O(1) append; the <em>map</em> gives O(1) locate. To delete in O(1) without leaving a hole, <b>swap the target with the last element, pop the last, and fix the moved element's index in the map</b>.
+      </div>
+
+      <div class="qcard" id="q-380">
+        <div class="qhead">
+          <a class="qno" href="https://leetcode.com/problems/insert-delete-getrandom-o1/">#380 Insert Delete GetRandom O(1)</a>
+          <span class="diff med">Medium</span>
+        </div>
+        <p class="sig"><span class="k">🔑 Signals</span> insert + delete + getRandom <mark class="cue">all O(1)</mark> <span class="variant">array + hashmap(val→idx)</span></p>
+        <p class="bite"><span class="k">💡 Bite</span> Array for random/append, map for lookup; delete = swap target with last element, pop, and update the moved element's index in the map.</p>
+        <p class="cx"><span class="k">⏱</span> O(1) average per op · O(n) space</p>
+        <p class="trick"><span class="k">⚠ Trick</span> The swap-with-last on delete is the whole point — and don't forget to repoint the moved element in the map.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>Generated by the <strong>leetcode-notes</strong> skill · a living revision sheet · open via localhost</footer>
+</div>
+  <script src="../nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Concurrency & Parallelism — FAANG Interview (Multithreaded Web Crawler)</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  .statgrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; margin: 16px 0; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .stat .n { font-size: 1.5rem; font-weight: 800; color: var(--arch); letter-spacing: -.5px; }
+  .stat .l { font-size: .82rem; color: var(--muted); margin-top: 2px; }
+  .prompt-card {
+    background: #0f1420; color: #e7ecf3; border-radius: 14px; padding: 22px 26px;
+    border-left: 6px solid #f7567c; margin: 4px 0 4px;
+  }
+  .prompt-card .ask { font-size: 1.08rem; font-weight: 600; margin: 0 0 10px; color:#fff; }
+  .prompt-card ul { margin: 8px 0 0; padding-left: 20px; color:#c6d0e0; }
+  .prompt-card .stage { color:#f7a072; font-weight:700; text-transform:uppercase; letter-spacing:.06em; font-size:.72rem; }
+  .warn { border-left: 4px solid #f7567c; background: #fff0f4; padding: 8px 14px; border-radius: 8px; margin: 10px 0; font-size:.92rem; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · FAANG Concurrency Round</div>
+    <h1>Concurrency &amp; Parallelism</h1>
+    <p>"Build a multithreaded web crawler." The classic concurrency round — threads vs async, shared state, race conditions, deadlock, thread pools, and knowing when to stop.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 The question</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA / primitives</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 The interview question</span>
+    <h2>The prompt — and the real-time use case</h2>
+    <div class="prompt-card">
+      <p class="stage">The ask</p>
+      <p class="ask">"Design a <strong>multithreaded web crawler</strong>. Given a start URL, fetch the page, extract links on the <em>same hostname</em>, and keep crawling — but use many workers to go fast. Each URL must be visited exactly once. Then tell me: how do the threads share the 'visited' set safely, how do you avoid crawling the same page twice, how do you know when you're <em>done</em>, and would you use threads or async here?"</p>
+      <p class="stage">The follow-ups they'll drill into</p>
+      <ul>
+        <li>Concurrency vs parallelism — are they the same thing? (No.)</li>
+        <li>Threads vs <code>async/await</code> — this is I/O-bound, so which wins and why?</li>
+        <li>How do you make the shared <em>visited</em> set thread-safe without killing throughput?</li>
+        <li>Where's the <strong>race condition</strong>, and how would a naive lock cause a <strong>deadlock</strong> or a bottleneck?</li>
+        <li>How do you detect termination when work generates more work?</li>
+      </ul>
+    </div>
+    <p style="margin-top:18px">This is the canonical concurrency question (it's <strong>LeetCode 1242, "Web Crawler Multithreaded,"</strong> and shows up at Google, Meta, Amazon, and Microsoft) because it packs every core concept into one tractable problem: <em>shared mutable state, synchronization, work queues, thread pools, and the hardest part — termination detection.</em> The same skeleton is what powers real systems: <strong>Googlebot and Bingbot</strong> (search indexing), <strong>site-scrapers and SEO tools</strong> (Ahrefs, Screaming Frog), <strong>link-checkers</strong>, and <strong>data-pipeline ingesters</strong> that fan out across thousands of endpoints. The interviewer wants to see that you can reason about correctness under concurrency, not just make it "fast."</p>
+    <div class="warn"><strong>First thing to say out loud:</strong> "Concurrency is <em>dealing with</em> many things at once (structure); parallelism is <em>doing</em> many things at once (execution on multiple cores). A crawler is <strong>I/O-bound</strong> — threads spend their time waiting on the network — so the goal is high <em>concurrency</em>, not CPU parallelism. That points me at <code>async/await</code> over raw threads."</p></div>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The busy kitchen with one fridge and one chopping board</h2>
+    <p>Picture a busy restaurant kitchen on a Saturday night. Ten cooks are all trying to prepare different dishes at the same time, but they share <strong>one fridge, one chopping board, and one big pot of stock</strong>. If two cooks reach for the last onion at the exact same moment, one of them ends up empty-handed and the whole dish is ruined. If a cook grabs the chopping board and then walks off to answer the phone, everyone else is stuck waiting.</p>
+    <p>That is what happens inside a computer when many pieces of work run at the same time. Each cook is a little worker, and the shared fridge is memory that everyone needs to touch. The trick is <strong>letting cooks work in parallel without stepping on each other's toes</strong>.</p>
+    <p>Now imagine our kitchen is really a website like Google going out to fetch a million web pages. Each fetch is like sending a runner to a shop across town — the runner spends ages just <em>waiting in traffic</em>, not doing real work. It would be silly to hire a thousand runners when they are all just standing around waiting. Instead, one clever runner drops off many orders and comes back to whichever one is ready first. This is what "async" means in plain words — <strong>don't hire more people, just stop them from waiting idly</strong>.</p>
+    <p>The hard parts show up in tiny moments. Two cooks both scribble "onion" on the shopping list at once — now it's on there twice. That's called a <strong>race</strong>. A cook holds the fridge key while asking a colleague for the pantry key, and that colleague is holding the pantry key waiting for the fridge — nobody moves. That's a <strong>deadlock</strong>. And the head chef has to somehow know when <em>everyone</em> is finally done, so they can turn off the lights and go home. Products you use every day — Google Search crawling the web, WhatsApp handling millions of chats, your browser loading a page — all quietly solve this exact kitchen problem.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Crawl starting from a seed URL; extract links; visit each unique URL <strong>exactly once</strong>.</li>
+      <li>Stay within the same hostname (the LeetCode constraint) — generalizes to a configurable allow-list.</li>
+      <li>Return the full set of reachable URLs; run correctly with N concurrent workers.</li>
+    </ul>
+
+    <h3>Non-functional requirements (the hard part)</h3>
+    <ul>
+      <li><strong>Correctness under concurrency</strong> — no duplicate fetches, no lost URLs, no crashes from data races.</li>
+      <li><strong>High throughput</strong> — saturate available bandwidth by overlapping many in-flight requests.</li>
+      <li><strong>Clean termination</strong> — stop when (and only when) all reachable URLs are done.</li>
+      <li><strong>Politeness &amp; safety</strong> — bounded concurrency so we don't DoS the target or exhaust the thread pool.</li>
+    </ul>
+
+    <h3>The numbers to quote</h3>
+    <div class="statgrid">
+      <div class="stat"><div class="n">~100 ms</div><div class="l">per HTTP fetch (I/O wait)</div></div>
+      <div class="stat"><div class="n">~1 ms</div><div class="l">CPU to parse a page</div></div>
+      <div class="stat"><div class="n">99%</div><div class="l">time spent waiting on I/O</div></div>
+      <div class="stat"><div class="n">1000s</div><div class="l">concurrent fetches via async</div></div>
+      <div class="stat"><div class="n">~1 MB</div><div class="l">thread stack (why not 10k threads)</div></div>
+      <div class="stat"><div class="n">cores×N</div><div class="l">thread-pool sweet spot for CPU work</div></div>
+    </div>
+    <p>The decisive back-of-the-envelope: a fetch takes ~100 ms of <em>waiting</em> and ~1 ms of <em>CPU</em>. So a single thread doing sync fetches is idle 99% of the time. If you scale with <strong>OS threads</strong>, each costs ~1 MB of stack + scheduler overhead, so 10,000 in-flight requests = 10 GB of stacks — infeasible. With <strong>async/await</strong>, an awaiting request holds <em>no thread</em> (it's a state machine parked on a completion callback), so a handful of thread-pool threads can juggle thousands of concurrent fetches. <strong>That asymmetry is the whole reason async beats threads for I/O-bound work.</strong></p>
+    <table>
+      <tr><th>Question to ask yourself</th><th>Scenario</th><th>Right tool</th></tr>
+      <tr><td>"Am I <em>waiting</em> on network/disk/DB?"</td><td><strong>I/O-bound</strong> (the crawler)</td><td><code>async/await</code>, no <code>Task.Run</code>; don't use the TPL.</td></tr>
+      <tr><td>"Am I doing an <em>expensive computation</em>?"</td><td><strong>CPU-bound</strong> (parsing millions of pages)</td><td><code>Task.Run</code> / <code>Parallel.ForEach</code> across cores.</td></tr>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The design is a <strong>producer–consumer pipeline</strong>. A concurrent <strong>work queue</strong> holds URLs to fetch; a pool of <strong>worker tasks</strong> dequeue a URL, fetch it (async I/O), parse links, and for each <em>newly seen</em> link enqueue it back — workers are both consumers and producers. A shared, thread-safe <strong>visited set</strong> guarantees each URL is enqueued once. The crux is the <strong>termination detector</strong>: because work creates more work, you can't stop when the queue is momentarily empty — a worker might be about to enqueue more. You track "outstanding work" with an atomic counter (or a <code>CountdownEvent</code>) and stop only when the queue is empty <em>and</em> no worker is mid-flight.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 860 470" role="img" aria-label="Multithreaded web crawler architecture">
+        <defs>
+          <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,3 L0,6 z" fill="#7aa2f7"/>
+          </marker>
+          <marker id="arrA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,3 L0,6 z" fill="#f7a072"/>
+          </marker>
+        </defs>
+        <style>
+          .lbl{fill:#e7ecf3;font:600 13px -apple-system,Segoe UI,sans-serif;}
+          .sub{fill:#9aa7bd;font:400 11px -apple-system,Segoe UI,sans-serif;}
+          .flow{stroke:#7aa2f7;stroke-width:2;fill:none;marker-end:url(#arr);}
+          .aflow{stroke:#f7a072;stroke-width:2;fill:none;stroke-dasharray:6 5;marker-end:url(#arrA);}
+        </style>
+
+        <!-- seed -->
+        <rect x="24" y="200" width="120" height="60" rx="12" fill="#1b2940" stroke="#4361ee"/>
+        <text x="84" y="228" text-anchor="middle" class="lbl">Seed URL</text>
+        <text x="84" y="246" text-anchor="middle" class="sub">enqueue start</text>
+
+        <!-- queue -->
+        <rect x="190" y="180" width="150" height="100" rx="12" fill="#241b40" stroke="#7048e8"/>
+        <text x="265" y="206" text-anchor="middle" class="lbl">Work Queue</text>
+        <text x="265" y="224" text-anchor="middle" class="sub">ConcurrentQueue /</text>
+        <text x="265" y="238" text-anchor="middle" class="sub">Channel&lt;string&gt;</text>
+        <text x="265" y="258" text-anchor="middle" class="sub">URLs to fetch</text>
+
+        <!-- workers -->
+        <rect x="400" y="70" width="180" height="60" rx="12" fill="#0f2a1c" stroke="#2dc653"/>
+        <text x="490" y="96" text-anchor="middle" class="lbl">Worker 1 … Worker N</text>
+        <text x="490" y="114" text-anchor="middle" class="sub">async fetch + parse</text>
+        <rect x="400" y="150" width="180" height="52" rx="12" fill="#0f2a1c" stroke="#2dc653" opacity=".85"/>
+        <text x="490" y="180" text-anchor="middle" class="sub">bounded by SemaphoreSlim</text>
+
+        <!-- visited -->
+        <rect x="400" y="300" width="180" height="80" rx="12" fill="#3a2410" stroke="#f4a259"/>
+        <text x="490" y="328" text-anchor="middle" class="lbl">Visited Set</text>
+        <text x="490" y="346" text-anchor="middle" class="sub">ConcurrentDictionary</text>
+        <text x="490" y="360" text-anchor="middle" class="sub">TryAdd = "claim" a URL</text>
+
+        <!-- termination -->
+        <rect x="640" y="180" width="190" height="90" rx="12" fill="#0f2a2f" stroke="#00b4d8"/>
+        <text x="735" y="206" text-anchor="middle" class="lbl">Termination Detector</text>
+        <text x="735" y="224" text-anchor="middle" class="sub">outstanding-work counter</text>
+        <text x="735" y="238" text-anchor="middle" class="sub">(Interlocked / Countdown)</text>
+        <text x="735" y="256" text-anchor="middle" class="sub">stop when → 0</text>
+
+        <!-- web -->
+        <rect x="640" y="70" width="190" height="60" rx="12" fill="#1b2940" stroke="#4361ee"/>
+        <text x="735" y="96" text-anchor="middle" class="lbl">The Web (hosts)</text>
+        <text x="735" y="114" text-anchor="middle" class="sub">HTTP — the I/O wait</text>
+
+        <!-- flows -->
+        <path class="flow" d="M144,230 L188,230"/>
+        <path class="flow" d="M340,210 C365,180 375,140 398,110"/>
+        <text x="345" y="160" class="sub">dequeue</text>
+        <path class="flow" d="M580,100 L638,100"/>
+        <text x="588" y="90" class="sub">fetch (await)</text>
+
+        <!-- worker checks visited, enqueues new -->
+        <path class="aflow" d="M490,202 L490,298"/>
+        <text x="498" y="255" class="sub">TryAdd? new → enqueue</text>
+        <path class="aflow" d="M400,340 C340,320 300,300 300,282"/>
+        <text x="300" y="315" class="sub">enqueue new URL</text>
+
+        <!-- workers update counter -->
+        <path class="aflow" d="M580,110 C640,140 640,160 648,196"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7aa2f7"></span> fetch path (dequeue → HTTP)</span>
+        <span><span class="dot" style="background:#f7a072"></span> feedback loop (claim URL, enqueue new work)</span>
+      </div>
+    </div>
+
+    <ol class="steps">
+      <li><strong>Seed:</strong> add the start URL to the visited set and the work queue; set outstanding-work counter to 1.</li>
+      <li><strong>Dequeue:</strong> a free worker pulls a URL from the concurrent queue (or awaits a channel reader).</li>
+      <li><strong>Fetch (async):</strong> <code>await httpClient.GetStringAsync(url)</code> — the worker yields its thread while the network responds.</li>
+      <li><strong>Parse &amp; claim:</strong> extract same-host links; for each, <code>visited.TryAdd(link)</code> — the atomic add is what makes "visit once" correct.</li>
+      <li><strong>Enqueue new work:</strong> only URLs that were <em>newly</em> added get enqueued; increment the outstanding counter per new item.</li>
+      <li><strong>Terminate:</strong> when a worker finishes a URL it decrements the counter; when it hits 0 (queue empty and nothing in flight), signal completion.</li>
+    </ol>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. Concurrency vs parallelism (nail this distinction)</h3>
+    <p><strong>Concurrency</strong> is a <em>structuring</em> concern: composing a program as independently-progressing tasks that may interleave — it exists even on a single core (the OS time-slices). <strong>Parallelism</strong> is an <em>execution</em> concern: literally running instructions simultaneously on multiple cores. You can have concurrency without parallelism (thousands of awaiting async operations on one core) and parallelism without much concurrency (a <code>Parallel.For</code> splitting a big array across 8 cores). The crawler needs <em>massive concurrency</em> (many overlapping waits) but almost no parallelism, because the CPU work is trivial.</p>
+
+    <h3>2. Threads vs async/await — the I/O-bound decision</h3>
+    <p>Per Microsoft's own guidance: if the code <em>waits</em> for a result (network, DB, file), it's <strong>I/O-bound → use <code>async/await</code> without <code>Task.Run</code></strong>; if it runs an <em>expensive computation</em>, it's <strong>CPU-bound → offload with <code>Task.Run</code>/TPL across threads</strong>. A crawler is overwhelmingly I/O-bound, so async is the right primitive. The key mental model: <code>await</code> compiles to a <strong>state machine</strong> that yields control back to the caller and <em>frees the thread</em> while the I/O is outstanding — so an awaiting request occupies no thread at all. Spawning one OS thread per URL would instead burn ~1 MB of stack each and drown in context-switch overhead.</p>
+
+    <h3>3. The shared visited set &amp; the race condition</h3>
+    <p>The correctness hazard: two workers extract the same link at the same instant, both check "is it visited?", both see "no," and both enqueue it — a classic <strong>check-then-act race condition</strong> causing a duplicate crawl. The fix is to make "check and claim" a <em>single atomic operation</em>. <code>ConcurrentDictionary.TryAdd(url, true)</code> does exactly this: it returns <code>true</code> to exactly one caller and <code>false</code> to the rest, so only the first worker "wins" the URL and enqueues it. This is faster than a coarse <code>lock</code> because the dictionary shards its buckets internally, allowing many threads to update disjoint keys in parallel.</p>
+
+    <h3>4. Locks, atomics, and lock-free</h3>
+    <p>Three escalating tools. A <strong><code>lock</code> (Monitor/mutex)</strong> gives mutual exclusion but serializes access — over-locking creates a bottleneck (and, if two locks are taken in different orders by different threads, a <strong>deadlock</strong>). <strong>Atomics</strong> (<code>Interlocked.Increment</code>, CAS) update a single value without a lock, ideal for counters and flags. <strong>Lock-free structures</strong> (like <code>ConcurrentDictionary</code>/<code>ConcurrentQueue</code>) use fine-grained atomics internally to let many threads progress without a global lock. Rule of thumb: prefer a concurrent collection or atomic over a hand-rolled lock; if you must lock, hold it briefly and always acquire multiple locks in a consistent global order to avoid deadlock.</p>
+
+    <h3>5. Thread pools &amp; bounded concurrency</h3>
+    <p>You never <code>new Thread()</code> per task — you use the <strong>thread pool</strong> (which the TPL/async schedules onto), which reuses a small set of threads and grows/shrinks with load. But you still bound <em>in-flight work</em>: a <code>SemaphoreSlim(maxConcurrency)</code> caps how many fetches run at once so you don't hammer the target host or exhaust sockets. This is "politeness" and self-protection in one knob.</p>
+
+    <h3>6. Termination detection — the sneaky-hard part</h3>
+    <p>Because each fetched page <em>produces</em> more URLs, "queue is empty" does <strong>not</strong> mean "done" — a worker could be mid-fetch about to enqueue ten links. You need to know that the queue is empty <em>and</em> no worker is still processing. The clean solution is an <strong>outstanding-work counter</strong>: increment it when you enqueue, decrement when a URL is fully processed; when it reaches zero, everything reachable is done. In .NET, <code>Task.WhenAll</code> over a dynamically-growing task list, a <code>CountdownEvent</code>, or a <code>Channel</code> you <code>Complete()</code> when the counter hits zero all express this.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA &amp; primitives behind it</span>
+    <h2>Data structures, algorithms &amp; sync primitives</h2>
+    <p>Under the hood it's a graph traversal (BFS over the link graph) wrapped in the right concurrency primitives. The graph part is ordinary; the <em>thread-safety</em> of each structure is what the interviewer probes.</p>
+    <table>
+      <tr><th>Primitive / structure</th><th>Where it's used</th><th>Cost / property</th></tr>
+      <tr><td><strong>BFS / graph traversal</strong></td><td>The crawl itself — pages are nodes, links are edges.</td><td>O(V + E) over reachable URLs; queue-driven.</td></tr>
+      <tr><td><strong>ConcurrentDictionary (visited)</strong></td><td>Atomic "check-and-claim" via <code>TryAdd</code>; dedupe URLs.</td><td>O(1) avg; lock-striped so many threads write disjoint keys in parallel.</td></tr>
+      <tr><td><strong>ConcurrentQueue / Channel</strong></td><td>The producer–consumer work queue of URLs.</td><td>O(1) lock-free enqueue/dequeue; Channel adds async backpressure.</td></tr>
+      <tr><td><strong>Interlocked / atomic CAS</strong></td><td>Outstanding-work counter; flags — no lock needed.</td><td>O(1), single CPU instruction; wait-free.</td></tr>
+      <tr><td><strong>SemaphoreSlim</strong></td><td>Bound concurrency (politeness, socket limits).</td><td>Throttles to N in-flight; async-aware <code>WaitAsync</code>.</td></tr>
+      <tr><td><strong>CountdownEvent / WhenAll</strong></td><td>Termination detection — know when all work is drained.</td><td>Signals once outstanding count → 0.</td></tr>
+      <tr><td><strong>Bloom filter (at scale)</strong></td><td>Approximate "seen this URL?" when the set is billions and won't fit in RAM.</td><td>O(k) probabilistic; no false negatives → never re-crawls a seen page.</td></tr>
+    </table>
+    <p><strong>Why <code>ConcurrentDictionary.TryAdd</code> over <code>lock + HashSet</code>:</strong> a single global lock around a <code>HashSet</code> serializes every worker at the exact hottest path, collapsing your N workers to effectively one. The concurrent dictionary shards its internal buckets so unrelated URLs touch different locks, preserving parallel progress while still making each individual claim atomic. This is the "prefer fine-grained/lock-free over coarse locks" principle made concrete.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Scaling from one process to a distributed crawler</h2>
+    <p>The in-process design (queue + visited set + workers) maps cleanly onto distributed AWS primitives when one machine isn't enough — this is the natural "now scale it to a billion pages" follow-up.</p>
+    <table>
+      <tr><th>In-process component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Work queue</td><td><strong>Amazon SQS</strong></td><td>Durable, distributed URL queue; visibility timeout prevents two workers grabbing the same URL, and dedup on FIFO queues helps enforce once-only.</td></tr>
+      <tr><td>Worker pool</td><td><strong>ECS/EKS</strong> or <strong>Lambda</strong></td><td>Horizontally scale stateless fetch/parse workers; autoscale on queue depth.</td></tr>
+      <tr><td>Visited set (dedupe)</td><td><strong>DynamoDB</strong> (conditional put)</td><td><code>PutItem</code> with <code>attribute_not_exists</code> is the distributed equivalent of <code>TryAdd</code> — atomic claim across machines.</td></tr>
+      <tr><td>Fetched content</td><td><strong>Amazon S3</strong></td><td>Store raw HTML cheaply for downstream indexing/parsing.</td></tr>
+      <tr><td>Coordination / counters</td><td><strong>ElastiCache (Redis)</strong></td><td>Atomic counters (<code>INCR</code>) and a Bloom/set for fast "seen?" checks at scale.</td></tr>
+      <tr><td>Pipeline / analytics</td><td><strong>Kinesis</strong> → <strong>Athena</strong></td><td>Stream discovered links and metrics for monitoring and reprocessing.</td></tr>
+    </table>
+    <p><strong>Deployment shape:</strong> SQS holds URLs; a fleet of ECS/Lambda workers long-poll it, dedupe via a DynamoDB conditional write (the distributed <code>TryAdd</code>), fetch the page, store HTML in S3, and publish newly-found links back to SQS. Concurrency per worker is still bounded (SemaphoreSlim / reserved concurrency), and termination becomes "queue depth 0 and no in-flight messages" — the same outstanding-work idea, just observed via CloudWatch queue metrics.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>The idiomatic .NET answer: an <strong>async</strong> crawler with a <code>ConcurrentDictionary</code> for atomic dedupe, a <code>SemaphoreSlim</code> to bound concurrency, and a growing <code>Task.WhenAll</code> for termination. No raw threads, no manual locks.</p>
+
+    <h3>Async, bounded, race-free web crawler</h3>
+    <pre><span class="kw">using</span> System.Collections.Concurrent;
+
+<span class="kw">public class</span> <span class="typ">WebCrawler</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">HttpClient</span> _http = <span class="kw">new</span>();
+    <span class="cmt">// Atomic "claim" set: TryAdd returns true to exactly ONE thread per URL.</span>
+    <span class="kw">private readonly</span> <span class="typ">ConcurrentDictionary</span>&lt;<span class="typ">string</span>, <span class="typ">bool</span>&gt; _visited = <span class="kw">new</span>();
+    <span class="cmt">// Bound in-flight fetches — politeness + socket safety (async-aware).</span>
+    <span class="kw">private readonly</span> <span class="typ">SemaphoreSlim</span> _gate;
+    <span class="kw">private readonly</span> <span class="typ">IHtmlParser</span> _parser;
+
+    <span class="kw">public</span> <span class="fn">WebCrawler</span>(<span class="typ">IHtmlParser</span> parser, <span class="typ">int</span> maxConcurrency = <span class="str">50</span>)
+    {
+        _parser = parser;
+        _gate   = <span class="kw">new</span> <span class="typ">SemaphoreSlim</span>(maxConcurrency);
+    }
+
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">IReadOnlyCollection</span>&lt;<span class="typ">string</span>&gt;&gt; <span class="fn">CrawlAsync</span>(<span class="typ">string</span> startUrl)
+    {
+        <span class="kw">var</span> host  = <span class="kw">new</span> <span class="typ">Uri</span>(startUrl).Host;
+        <span class="kw">var</span> tasks = <span class="kw">new</span> <span class="typ">ConcurrentBag</span>&lt;<span class="typ">Task</span>&gt;();
+
+        <span class="kw">void</span> <span class="fn">Schedule</span>(<span class="typ">string</span> url)
+        {
+            <span class="cmt">// The claim: only the FIRST caller for this url proceeds. Fixes the</span>
+            <span class="cmt">// check-then-act race that would otherwise double-crawl a page.</span>
+            <span class="kw">if</span> (<span class="typ">Uri</span>.<span class="fn">TryCreate</span>(url, <span class="typ">UriKind</span>.Absolute, <span class="kw">out</span> <span class="kw">var</span> u)
+                &amp;&amp; u.Host == host
+                &amp;&amp; _visited.<span class="fn">TryAdd</span>(url, <span class="kw">true</span>))
+            {
+                tasks.<span class="fn">Add</span>(<span class="fn">FetchAsync</span>(url, Schedule));  <span class="cmt">// pass the scheduler in</span>
+            }
+        }
+
+        <span class="kw">async</span> <span class="typ">Task</span> <span class="fn">FetchAsync</span>(<span class="typ">string</span> url, <span class="typ">Action</span>&lt;<span class="typ">string</span>&gt; schedule)
+        {
+            <span class="kw">await</span> _gate.<span class="fn">WaitAsync</span>();                 <span class="cmt">// throttle: at most N in flight</span>
+            <span class="kw">try</span>
+            {
+                <span class="cmt">// await FREES the thread while the network responds — the</span>
+                <span class="cmt">// reason async scales to thousands of fetches on few threads.</span>
+                <span class="kw">var</span> html  = <span class="kw">await</span> _http.<span class="fn">GetStringAsync</span>(url);
+                <span class="kw">foreach</span> (<span class="kw">var</span> link <span class="kw">in</span> _parser.<span class="fn">ExtractLinks</span>(html))
+                    schedule(link);                    <span class="cmt">// worker is also a producer</span>
+            }
+            <span class="kw">catch</span> { <span class="cmt">/* log &amp; skip dead links; don't kill the crawl */</span> }
+            <span class="kw">finally</span> { _gate.<span class="fn">Release</span>(); }
+        }
+
+        <span class="fn">Schedule</span>(startUrl);
+        <span class="cmt">// Termination: drain the dynamically-growing task set until no work remains.</span>
+        <span class="kw">while</span> (tasks.<span class="fn">Any</span>(t =&gt; !t.IsCompleted))
+            <span class="kw">await</span> <span class="typ">Task</span>.<span class="fn">WhenAll</span>(tasks.<span class="fn">ToArray</span>());
+
+        <span class="kw">return</span> _visited.Keys.<span class="fn">ToList</span>();
+    }
+}</pre>
+
+    <h3>The atomic counter alternative for termination (Interlocked)</h3>
+    <pre><span class="cmt">// When you prefer a queue + fixed worker loop over a growing task list,</span>
+<span class="cmt">// an atomic outstanding-work counter tells you exactly when to stop.</span>
+<span class="kw">private int</span> _outstanding;
+
+<span class="kw">void</span> <span class="fn">Enqueue</span>(<span class="typ">string</span> url)
+{
+    <span class="kw">if</span> (_visited.<span class="fn">TryAdd</span>(url, <span class="kw">true</span>))
+    {
+        <span class="typ">Interlocked</span>.<span class="fn">Increment</span>(<span class="kw">ref</span> _outstanding); <span class="cmt">// one CPU instruction, no lock</span>
+        _queue.<span class="fn">Enqueue</span>(url);
+    }
+}
+
+<span class="kw">void</span> <span class="fn">OnUrlProcessed</span>()
+{
+    <span class="cmt">// Empty queue is NOT "done" — only zero outstanding work is.</span>
+    <span class="kw">if</span> (<span class="typ">Interlocked</span>.<span class="fn">Decrement</span>(<span class="kw">ref</span> _outstanding) == <span class="str">0</span>)
+        _completion.<span class="fn">TrySetResult</span>(<span class="kw">true</span>);       <span class="cmt">// signal all-done</span>
+}</pre>
+    <p>Other stacks solve the same problem with equivalent tools: Java's <code>ConcurrentHashMap.putIfAbsent</code> + <code>ExecutorService</code> + <code>ConcurrentLinkedQueue</code> + a <code>Phaser</code>/<code>CountDownLatch</code>; Go's <code>sync.Map</code> + goroutines + a <code>sync.WaitGroup</code> and channels; Python's <code>asyncio</code> + a <code>set</code> guarded by an <code>asyncio.Lock</code>. The primitives differ; the design is identical.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <p><strong>Async vs threads — don't mix them up.</strong> Using threads (or <code>Parallel.ForEach</code>) for the crawl wastes ~1 MB per blocked thread and caps you at hundreds of in-flight requests; async scales to thousands because awaiting requests hold no thread. Conversely, don't use async-without-<code>Task.Run</code> for a CPU-bound crunch — you'd just block the pool. Match the tool to bound-ness.</p>
+    <p><strong>The lock bottleneck.</strong> A single global lock on the visited set serializes all workers at the hottest path, erasing your concurrency. Fine-grained/lock-free structures (<code>ConcurrentDictionary</code>) keep workers progressing in parallel — the difference between linear and near-zero speedup.</p>
+    <p><strong>Deadlock &amp; the sync-over-async trap.</strong> Deadlock arises when two threads grab locks in opposite orders — avoid by acquiring locks in a consistent global order and holding them briefly. A subtler .NET trap is <strong>sync-over-async</strong>: calling <code>.Result</code>/<code>.Wait()</code> on a task can deadlock against the captured synchronization context — the guidance is "async all the way down," use <code>await</code>, and if you truly must block, prefer <code>GetAwaiter().GetResult()</code>.</p>
+    <p><strong>Failure isolation &amp; politeness.</strong> One dead link must not kill the crawl (catch per-fetch). Unbounded concurrency can DoS the target and exhaust sockets/file handles — always cap with a semaphore and honor <code>robots.txt</code>/rate limits in production.</p>
+
+    <div class="qa"><p class="q">Q: Concurrency and parallelism — same thing?</p><p class="a">No. Concurrency is structuring work as interleavable tasks (exists on one core); parallelism is executing simultaneously on multiple cores. The crawler wants high concurrency (overlapping I/O waits), not parallelism, because its CPU work is negligible.</p></div>
+    <div class="qa"><p class="q">Q: Threads or async for the crawler?</p><p class="a">Async. It's I/O-bound, so <code>await</code> frees the thread during network waits and a few pool threads juggle thousands of fetches. Threads would burn ~1 MB stack each and drown in context switches.</p></div>
+    <div class="qa"><p class="q">Q: How do you make the visited set thread-safe without a bottleneck?</p><p class="a"><code>ConcurrentDictionary.TryAdd</code> — an atomic check-and-claim that returns true to exactly one worker. Its internal lock-striping lets many threads update different keys in parallel, unlike a single global lock around a HashSet.</p></div>
+    <div class="qa"><p class="q">Q: How do you know when the crawl is done?</p><p class="a">Not when the queue is empty — a worker may be about to enqueue more. Track an atomic outstanding-work counter (increment on enqueue, decrement on completion) and stop only when it hits zero, or await a dynamically-growing <code>Task.WhenAll</code>.</p></div>
+    <div class="qa"><p class="q">Q: Where's the race condition in a naive version?</p><p class="a">Check-then-act: two workers both see a URL as "not visited" and both enqueue it. Fix it by fusing the check and the insert into one atomic operation (<code>TryAdd</code>), so only the first worker claims it.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "A crawler is I/O-bound, so I want concurrency, not parallelism — I'll use <code>async/await</code>, where awaiting fetches hold no thread, so a few pool threads juggle thousands of requests. It's a producer–consumer pipeline: a concurrent work queue of URLs, worker tasks that fetch + parse + enqueue new links, and a shared visited set. Correctness hinges on one atomic op — <code>ConcurrentDictionary.TryAdd</code> — which fuses check-and-claim so each URL is crawled exactly once. I bound in-flight work with a <code>SemaphoreSlim</code> for politeness, and I detect termination with an atomic outstanding-work counter, since an empty queue doesn't mean we're done."</div>
+    <h3>Numbers &amp; facts to quote</h3>
+    <ul>
+      <li>Fetch ≈ <strong>100 ms wait</strong> vs <strong>~1 ms CPU</strong> → 99% idle → async wins for I/O-bound.</li>
+      <li>OS thread ≈ <strong>~1 MB stack</strong> → 10k threads infeasible; async holds <strong>no thread</strong> while awaiting.</li>
+      <li>I/O-bound → <code>async</code> <em>without</em> <code>Task.Run</code>; CPU-bound → <code>Task.Run</code>/<code>Parallel.ForEach</code>.</li>
+      <li><code>TryAdd</code> / <code>Interlocked</code> = atomic; <code>lock</code> = mutual exclusion but serializes.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li>Open with <strong>concurrency ≠ parallelism</strong> and classify the work as <strong>I/O-bound</strong>.</li>
+      <li>Name the <strong>check-then-act race</strong> and kill it with one <strong>atomic <code>TryAdd</code></strong>.</li>
+      <li>Prefer <strong>lock-free/concurrent collections</strong> over a global lock (the bottleneck).</li>
+      <li><strong>Bound concurrency</strong> with a semaphore — politeness + socket safety.</li>
+      <li><strong>Termination = outstanding-work counter → 0</strong>, not "queue empty."</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://learn.microsoft.com/en-us/dotnet/csharp/asynchronous-programming/async-scenarios">Microsoft Learn — Asynchronous programming scenarios (C#)</a> — I/O-bound vs CPU-bound decision table, the await state machine, <code>Task.WhenAll</code>/<code>WhenAny</code>, sync-over-async deadlocks.</li>
+      <li><a href="https://learn.microsoft.com/en-us/dotnet/standard/parallel-programming/task-parallel-library-tpl">Microsoft Learn — Task Parallel Library (TPL)</a> — task vs data parallelism, thread-pool scheduling, and the note that you must understand locks/deadlocks/races.</li>
+      <li><a href="https://leetcode.com/problems/web-crawler-multithreaded/">LeetCode 1242 — Web Crawler Multithreaded</a> — the canonical problem: same-host BFS with a thread-safe visited set and termination.</li>
+      <li><a href="https://learn.microsoft.com/en-us/dotnet/api/system.collections.concurrent.concurrentdictionary-2">Microsoft Learn — ConcurrentDictionary</a> — atomic <code>TryAdd</code> and lock-striping for scalable concurrent updates.</li>
+      <li><a href="https://go.dev/blog/waza-talk">Rob Pike — "Concurrency is not Parallelism"</a> — the definitive framing of the distinction.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How Redis Handles Concurrency — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  .callout {
+    background: #fff9db; border-left: 4px solid #f7c948;
+    border-radius: 10px; padding: 12px 18px; margin: 14px 0;
+    font-size: .95rem;
+  }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg [data-anim] {
+    transition: transform .8s cubic-bezier(.4,0,.2,1),
+                opacity .45s ease, fill .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.15); }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>How Redis Handles Concurrency</h1>
+    <p>The single-threaded event loop that serves millions of ops/sec — plus the MULTI/WATCH transactions, Lua atomicity, and Redlock/single-node distributed locks for coordinating across many processes.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>Redis is famous for being fast — millions of operations per second on a single node — and yet it's <strong>single-threaded</strong> for command execution. That sounds like a contradiction: how does one thread serve thousands of concurrent clients without any locks, mutexes, or race conditions? And once you scale beyond one node, how do you coordinate <em>across</em> processes when Redis itself has no atomic cross-node primitive? That's what "how Redis handles concurrency" is really asking, and it splits cleanly into two questions.</p>
+    <p><strong>Within a single Redis instance</strong>, concurrency is solved by <em>not having any</em> — the event loop processes one command at a time, so every command is inherently atomic. Between commands, clients coordinate with server-side primitives: <code>MULTI/EXEC</code> transactions, <code>WATCH</code> for optimistic locking (CAS), Lua scripts as atomic units, and single atomic commands like <code>INCR</code> and <code>SET NX PX</code>. <strong>Across many Redis nodes or many application processes</strong>, you need distributed coordination — a single-node lock via <code>SET NX PX</code> for the common case, or the <em>Redlock</em> algorithm across a quorum of Redis nodes for safety under failover (though Redlock is famously controversial — Martin Kleppmann argues it's still unsafe for correctness locks without fencing tokens).</p>
+    <p>Real uses: this pattern is behind rate limiters (Stripe, AWS API Gateway), caching layers (Twitter, GitHub, Instagram), session stores, leaderboards, distributed job queues (Sidekiq, Bull), and countless "prevent double-processing" locks. In an interview, "how does Redis handle concurrency" tests whether you understand event loops, atomicity, optimistic locking, and the CAP-flavored trade-offs of a leader-based cache — a rich topic in a compact system.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>One incredibly fast bank teller and a shared clipboard</h2>
+    <p>Picture a small village bank on a Friday afternoon. Everyone in the village wants to withdraw money at once, and things could get ugly. One approach is to hire twenty tellers — but then they start arguing: "Wait, I already gave Maya her cash!" "But her account said she still had 500 rupees!" The tellers keep stepping on each other. So the bank tries a different trick: <strong>they hire one incredibly fast teller</strong>, put everyone into a single line, and say — this teller finishes each customer in a blink, and because there's only one, <strong>nobody can argue about who did what first</strong>. The line looks long, but it moves so quickly that customers barely notice. That's the whole idea behind this system's speed.</p>
+    <p>Now zoom out. In the modern world, a company like <strong>Instagram</strong> or <strong>Uber</strong> doesn't have one bank — it has hundreds of little "bank branches" scattered around the world, and hundreds of ticket-issuing machines (their apps) all sending requests at once. Sometimes two machines send the same request at the same instant: "Book this concert seat for me." Both can't win. So they use a clever second trick: a <strong>shared clipboard on the wall</strong> that anyone can grab, but only one person at a time. Whoever grabs the clipboard first gets to book the seat; everyone else sees the clipboard is taken and waits their turn. To make sure a forgetful person doesn't hold the clipboard forever, it comes with a <strong>tiny sand timer glued to it</strong> — after 30 seconds the clipboard automatically pops back onto the wall.</p>
+    <p>That's why when you tap "buy" on the last concert ticket, or "like" on a photo the exact millisecond your friend does, you never end up double-charged and the like count never goes wrong. One super-fast teller, one shared clipboard with a sand timer — and the whole internet stays civilised.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>The two concurrency problems Redis has to solve</h3>
+    <ul>
+      <li><strong>Intra-server concurrency</strong> — many clients hitting one Redis node concurrently. Redis must serialize command execution while sustaining high throughput and sub-ms latency.</li>
+      <li><strong>Inter-process coordination</strong> — many client processes wanting to acquire the same lock, run the same critical section once, or perform "check-then-set" atomically. Redis must offer primitives (transactions, WATCH, Lua, SET NX) so applications can build correct concurrency on top.</li>
+      <li><strong>Distributed correctness</strong> — coordination that must survive a Redis node failing and a replica being promoted (Redlock territory).</li>
+    </ul>
+
+    <h3>Non-functional requirements that shape the design</h3>
+    <ul>
+      <li><strong>Sub-microsecond command execution</strong> for common ops (GET/SET/INCR) — the whole point of Redis.</li>
+      <li><strong>Predictable latency</strong>: no other client's command should delay yours beyond the current command's own runtime.</li>
+      <li><strong>No lock overhead</strong> — no coarse GIL to fight; the event loop eliminates the concept of a race between concurrent commands.</li>
+      <li><strong>Well-defined semantics under contention</strong> — WATCH/MULTI/EXEC must abort the transaction when a watched key was touched, so lost updates are impossible.</li>
+      <li><strong>Safety under failover</strong> for distributed locks — the harder property, and where Redlock is proposed (and debated).</li>
+    </ul>
+
+    <h3>Capacity estimation &amp; key numbers</h3>
+    <table>
+      <tr><th>Quantity</th><th>Figure</th><th>Notes</th></tr>
+      <tr><td>Per-node throughput</td><td><strong>~100,000+ ops/sec</strong> per core (up to 1M+ with pipelining)</td><td>In-memory data + non-blocking I/O; sub-microsecond command execution.</td></tr>
+      <tr><td>Command execution model</td><td><strong>Single-threaded</strong></td><td>One command at a time on the main thread — atomicity by construction.</td></tr>
+      <tr><td>Intrinsic latency (bare metal)</td><td><strong>&lt; 100 µs</strong></td><td>Redis's own <code>--intrinsic-latency</code> benchmark. Cloud VMs typically 500 µs–1 ms.</td></tr>
+      <tr><td>Network latency</td><td>~200 µs (1 Gbit LAN) · ~30 µs (Unix socket)</td><td>Round-trip cost — mitigated by pipelining.</td></tr>
+      <tr><td>Redis 6+ I/O threads</td><td>Up to <strong>~4–8×</strong> more RPS on heavy traffic</td><td>Threads only parallelize socket I/O; command execution stays single-threaded.</td></tr>
+      <tr><td>Redlock quorum</td><td><strong>N/2 + 1</strong> nodes</td><td>Typically 5 independent Redis masters ⇒ need 3 to acquire.</td></tr>
+      <tr><td>Clock drift factor</td><td><strong>~1%</strong> of TTL</td><td>Subtracted from validity time in Redlock to bound clock skew.</td></tr>
+    </table>
+    <p><strong>The number to volunteer:</strong> "Redis is single-threaded for command execution — one command at a time, sub-microsecond for GET/SET, at 100k+ ops/sec per core. That single-threadedness is the concurrency model: every command is atomic because nothing else is running when it does. Everything else — MULTI, WATCH, Lua, SET NX PX, Redlock — is built on that foundation."</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>Redis's concurrency architecture has three layers, from bottom to top: (1) the <strong>event loop</strong> inside one Redis process, (2) client-side primitives (<strong>transactions, WATCH, Lua, atomic commands</strong>) that let apps coordinate within one node, and (3) <strong>distributed coordination</strong> across nodes and application processes via patterns like <code>SET NX PX</code> and Redlock.</p>
+    <p>The event loop uses <strong>I/O multiplexing</strong> (epoll on Linux, kqueue on macOS): a single thread waits on many client sockets simultaneously and wakes up whenever any of them is readable. It then reads the command, executes it in memory (dictionary lookup, list push, whatever), writes the reply back to the socket, and returns to the wait. Nothing runs in parallel with the command — no other client can observe a partial state, and no lock is needed. This is exactly like Node.js's design, and it's why "single-threaded" is not a scaling weakness for the type of workload Redis targets.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 860 470" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <defs>
+          <marker id="fwd" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#2dc653"/>
+          </marker>
+          <marker id="back" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#4cc9f0"/>
+          </marker>
+          <marker id="ret" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#f7567c"/>
+          </marker>
+        </defs>
+
+        <!-- Clients -->
+        <text x="80" y="24" fill="#c6d0e0" font-size="12" font-weight="700" text-anchor="middle">Concurrent clients</text>
+        <rect x="20" y="50" width="130" height="34" rx="8" fill="#4361ee"/>
+        <text x="85" y="72" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">client A: INCR x</text>
+        <rect x="20" y="94" width="130" height="34" rx="8" fill="#4361ee"/>
+        <text x="85" y="116" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">client B: GET x</text>
+        <rect x="20" y="138" width="130" height="34" rx="8" fill="#4361ee"/>
+        <text x="85" y="160" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">client C: MULTI…EXEC</text>
+        <rect x="20" y="182" width="130" height="34" rx="8" fill="#4361ee"/>
+        <text x="85" y="204" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">client D: EVAL script</text>
+        <rect x="20" y="226" width="130" height="34" rx="8" fill="#4361ee"/>
+        <text x="85" y="248" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">... hundreds more</text>
+
+        <!-- I/O threads (Redis 6+) — parallel socket read/write only -->
+        <rect x="200" y="55" width="150" height="210" rx="12" fill="#22304d" stroke="#ff9900" stroke-dasharray="4 3"/>
+        <text x="275" y="75" fill="#ffd9b0" font-size="11" font-weight="700" text-anchor="middle">I/O threads (Redis 6+)</text>
+        <text x="275" y="92" fill="#f4a259" font-size="10" text-anchor="middle">parallel socket</text>
+        <text x="275" y="106" fill="#f4a259" font-size="10" text-anchor="middle">read + write only</text>
+        <rect x="215" y="120" width="120" height="26" rx="5" fill="#f4a259" opacity=".7"/>
+        <text x="275" y="137" fill="#3a2400" font-size="10" text-anchor="middle" font-weight="700">io-thread 1</text>
+        <rect x="215" y="152" width="120" height="26" rx="5" fill="#f4a259" opacity=".7"/>
+        <text x="275" y="169" fill="#3a2400" font-size="10" text-anchor="middle" font-weight="700">io-thread 2</text>
+        <rect x="215" y="184" width="120" height="26" rx="5" fill="#f4a259" opacity=".7"/>
+        <text x="275" y="201" fill="#3a2400" font-size="10" text-anchor="middle" font-weight="700">io-thread 3</text>
+        <text x="275" y="232" fill="#8fa0bd" font-size="9.5" text-anchor="middle">command PARSING is</text>
+        <text x="275" y="246" fill="#8fa0bd" font-size="9.5" text-anchor="middle">parallel; EXECUTION isn't</text>
+
+        <!-- Event loop -->
+        <rect x="400" y="55" width="200" height="210" rx="12" fill="#4a2e91" stroke="#7048e8"/>
+        <text x="500" y="75" fill="#e3d9ff" font-size="11" font-weight="700" text-anchor="middle">Main thread — event loop</text>
+        <text x="500" y="93" fill="#c9b8ff" font-size="10" text-anchor="middle">epoll / kqueue multiplexing</text>
+        <text x="500" y="110" fill="#c9b8ff" font-size="10" text-anchor="middle">ONE command at a time</text>
+        <!-- Command queue visual -->
+        <rect x="420" y="130" width="160" height="26" rx="5" fill="#7048e8" opacity=".9"/>
+        <text x="500" y="147" fill="#fff" font-size="10.5" text-anchor="middle" font-weight="700">exec: INCR x → 43</text>
+        <rect x="420" y="162" width="160" height="26" rx="5" fill="#7048e8" opacity=".5"/>
+        <text x="500" y="179" fill="#fff" font-size="10.5" text-anchor="middle">next: GET x</text>
+        <rect x="420" y="194" width="160" height="26" rx="5" fill="#7048e8" opacity=".35"/>
+        <text x="500" y="211" fill="#fff" font-size="10.5" text-anchor="middle">next: MULTI…EXEC (atomic)</text>
+        <rect x="420" y="226" width="160" height="26" rx="5" fill="#7048e8" opacity=".25"/>
+        <text x="500" y="243" fill="#fff" font-size="10.5" text-anchor="middle">next: EVAL (atomic script)</text>
+
+        <!-- In-memory data -->
+        <rect x="650" y="55" width="170" height="90" rx="12" fill="#0f3d2e" stroke="#2dc653"/>
+        <text x="735" y="80" fill="#a8f0c6" font-size="11" font-weight="700" text-anchor="middle">In-memory data</text>
+        <text x="735" y="98" fill="#7fd7a3" font-size="10" text-anchor="middle">dict &amp; data structures</text>
+        <text x="735" y="115" fill="#7fd7a3" font-size="10" text-anchor="middle">O(1) hash-table ops</text>
+        <text x="735" y="132" fill="#7fd7a3" font-size="10" text-anchor="middle">no locks needed</text>
+
+        <!-- Background threads -->
+        <rect x="650" y="165" width="170" height="100" rx="12" fill="#22304d" stroke="#8fa0bd" stroke-dasharray="3 3"/>
+        <text x="735" y="188" fill="#c6d0e0" font-size="11" font-weight="700" text-anchor="middle">Background threads</text>
+        <text x="735" y="206" fill="#8fa0bd" font-size="10" text-anchor="middle">AOF fsync</text>
+        <text x="735" y="222" fill="#8fa0bd" font-size="10" text-anchor="middle">BGSAVE / BGREWRITEAOF</text>
+        <text x="735" y="238" fill="#8fa0bd" font-size="10" text-anchor="middle">async lazy free</text>
+        <text x="735" y="256" fill="#7fa5cc" font-size="9.5" text-anchor="middle">(never touch the main loop)</text>
+
+        <!-- Replication / persistence layer -->
+        <rect x="200" y="290" width="620" height="60" rx="12" fill="#155d3a" stroke="#2dc653" stroke-dasharray="4 3"/>
+        <text x="510" y="315" fill="#a8f0c6" font-size="11" font-weight="700" text-anchor="middle">Async replication → replicas + Redis Cluster (16384 hash slots)</text>
+        <text x="510" y="333" fill="#7fd7a3" font-size="10" text-anchor="middle">replicas eventually consistent · cluster shards data by key hash</text>
+
+        <!-- Redlock / distributed coordination -->
+        <rect x="200" y="370" width="620" height="80" rx="12" fill="#3a2440" stroke="#f7567c"/>
+        <text x="510" y="393" fill="#ffb8cc" font-size="11" font-weight="700" text-anchor="middle">Distributed coordination layer (application-managed)</text>
+        <text x="510" y="411" fill="#ff8fa8" font-size="10" text-anchor="middle">single-node: SET key value NX PX ttl · Lua scripts atomic</text>
+        <text x="510" y="428" fill="#ff8fa8" font-size="10" text-anchor="middle">multi-node quorum: Redlock across N independent masters (majority = ⌊N/2⌋+1)</text>
+        <text x="510" y="446" fill="#f78fa8" font-size="9.5" text-anchor="middle">(Kleppmann: correctness locks still need fencing tokens on the resource)</text>
+
+        <!-- Client → I/O thread arrows -->
+        <path d="M150 67 L 198 90" fill="none" stroke="#2dc653" stroke-width="2" marker-end="url(#fwd)"/>
+        <path d="M150 111 L 198 130" fill="none" stroke="#2dc653" stroke-width="2" marker-end="url(#fwd)"/>
+        <path d="M150 155 L 198 170" fill="none" stroke="#2dc653" stroke-width="2" marker-end="url(#fwd)"/>
+        <path d="M150 199 L 198 200" fill="none" stroke="#2dc653" stroke-width="2" marker-end="url(#fwd)"/>
+        <path d="M150 243 L 198 220" fill="none" stroke="#2dc653" stroke-width="2" marker-end="url(#fwd)"/>
+        <!-- I/O → event loop (queue) -->
+        <path d="M350 160 L 398 160" fill="none" stroke="#f4a259" stroke-width="2.6" marker-end="url(#fwd)"/>
+        <text x="373" y="150" fill="#f4a259" font-size="9">enqueue</text>
+        <!-- Event loop → data -->
+        <path d="M600 145 L 648 100" fill="none" stroke="#7048e8" stroke-width="2.6" marker-end="url(#fwd)"/>
+        <text x="620" y="130" fill="#c9b8ff" font-size="9">read/mutate</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#2dc653"></span>Client → server data flow</span>
+        <span><span class="dot" style="background:#f4a259"></span>I/O threads (Redis 6+, parallel sockets only)</span>
+        <span><span class="dot" style="background:#7048e8"></span>Single-threaded event loop (serializes execution)</span>
+        <span><span class="dot" style="background:#f7567c"></span>Distributed coordination layer</span>
+      </div>
+    </div>
+
+    <h3>What happens when 1,000 clients send commands at the same instant</h3>
+    <ol class="steps">
+      <li>The kernel wakes the Redis process via <strong>epoll</strong> with a list of readable sockets (all 1,000 of them).</li>
+      <li>Redis reads command bytes from each socket — with Redis 6+, this <em>parsing</em> step is parallelized across <strong>I/O threads</strong>, up to 8. Command <em>execution</em> is not.</li>
+      <li>Parsed commands enter the main thread's queue. The event loop executes them <strong>one at a time</strong> in receive order. Each is atomic — no other client sees a partial state.</li>
+      <li>Replies are written back to sockets (again optionally via I/O threads).</li>
+      <li>Slow commands (a big <code>SUNION</code>, a <code>KEYS</code> scan, an expensive Lua script) block <em>all</em> other clients until they finish. This is the one big trade-off — hence the standing advice to avoid slow commands or run them on a replica.</li>
+    </ol>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch the single-threaded event loop serialize commands, step by step</h2>
+    <p>Three clients send commands at the same instant. On a normal database this would need locks; on Redis the event loop just serves them in order — each command completes fully before the next starts, so there's nothing to race against. Then we'll watch <code>MULTI/EXEC</code> queue a transaction and run it as one indivisible unit, and a Lua script do the same. Use <em>Play</em> for the sequence.</p>
+
+    <div class="anim-frame" id="redis-anim">
+      <svg viewBox="0 0 780 420" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <!-- Clients -->
+        <text x="90" y="24" fill="#c6d0e0" font-size="12" font-weight="700" text-anchor="middle">Three concurrent clients</text>
+        <g id="cA" data-anim>
+          <rect x="20" y="50" width="150" height="42" rx="8" fill="#4361ee"/>
+          <text x="95" y="72" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">A: INCR counter</text>
+          <text x="95" y="85" fill="#dfe6ff" font-size="9">wants: +1</text>
+        </g>
+        <g id="cB" data-anim>
+          <rect x="20" y="110" width="150" height="42" rx="8" fill="#4361ee"/>
+          <text x="95" y="132" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">B: INCR counter</text>
+          <text x="95" y="145" fill="#dfe6ff" font-size="9">wants: +1</text>
+        </g>
+        <g id="cC" data-anim>
+          <rect x="20" y="170" width="150" height="42" rx="8" fill="#4361ee"/>
+          <text x="95" y="192" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">C: MULTI …</text>
+          <text x="95" y="205" fill="#dfe6ff" font-size="9">wants: atomic 2 cmds</text>
+        </g>
+
+        <!-- Command queue -->
+        <text x="360" y="24" fill="#c6d0e0" font-size="12" font-weight="700" text-anchor="middle">Main thread — command queue (executes one at a time)</text>
+        <rect x="220" y="45" width="290" height="180" rx="12" fill="#4a2e91" stroke="#7048e8"/>
+        <g id="slot1" data-anim>
+          <rect x="235" y="60" width="260" height="30" rx="6" fill="#7048e8" opacity=".35"/>
+          <text id="slot1-text" x="365" y="79" fill="#fff" font-size="11" text-anchor="middle" font-weight="700">(empty)</text>
+        </g>
+        <g id="slot2" data-anim>
+          <rect x="235" y="96" width="260" height="30" rx="6" fill="#7048e8" opacity=".25"/>
+          <text id="slot2-text" x="365" y="115" fill="#fff" font-size="11" text-anchor="middle">(empty)</text>
+        </g>
+        <g id="slot3" data-anim>
+          <rect x="235" y="132" width="260" height="30" rx="6" fill="#7048e8" opacity=".18"/>
+          <text id="slot3-text" x="365" y="151" fill="#fff" font-size="11" text-anchor="middle">(empty)</text>
+        </g>
+        <g id="slot4" data-anim>
+          <rect x="235" y="168" width="260" height="30" rx="6" fill="#7048e8" opacity=".14"/>
+          <text id="slot4-text" x="365" y="187" fill="#fff" font-size="11" text-anchor="middle">(empty)</text>
+        </g>
+        <text x="365" y="215" fill="#c9b8ff" font-size="9.5" text-anchor="middle">serial FIFO — atomicity by construction</text>
+
+        <!-- In-memory state -->
+        <text x="670" y="24" fill="#c6d0e0" font-size="12" font-weight="700" text-anchor="middle">Data (in-memory)</text>
+        <rect x="580" y="45" width="180" height="60" rx="10" fill="#0f3d2e" stroke="#2dc653"/>
+        <text x="670" y="70" fill="#a8f0c6" font-size="11" font-weight="700" text-anchor="middle">counter</text>
+        <text id="valText" data-anim x="670" y="90" fill="#2dc653" font-size="20" font-weight="800" text-anchor="middle">42</text>
+
+        <!-- Balance / balance:txn state (for MULTI/EXEC demo) -->
+        <rect x="580" y="120" width="180" height="60" rx="10" fill="#0f3d2e" stroke="#2dc653"/>
+        <text x="670" y="145" fill="#a8f0c6" font-size="11" font-weight="700" text-anchor="middle">balance</text>
+        <text id="balText" data-anim x="670" y="165" fill="#2dc653" font-size="20" font-weight="800" text-anchor="middle">100</text>
+
+        <!-- Reply box (bottom row) -->
+        <text x="90" y="255" fill="#c6d0e0" font-size="11" font-weight="700" text-anchor="middle">Replies</text>
+        <g id="rA" data-anim class="a-hidden">
+          <rect x="20" y="270" width="150" height="26" rx="6" fill="#2dc653"/>
+          <text id="rA-text" x="95" y="288" fill="#04140b" font-size="10" font-weight="700" text-anchor="middle">A ← 43</text>
+        </g>
+        <g id="rB" data-anim class="a-hidden">
+          <rect x="20" y="304" width="150" height="26" rx="6" fill="#2dc653"/>
+          <text id="rB-text" x="95" y="322" fill="#04140b" font-size="10" font-weight="700" text-anchor="middle">B ← 44</text>
+        </g>
+        <g id="rC" data-anim class="a-hidden">
+          <rect x="20" y="338" width="150" height="26" rx="6" fill="#2dc653"/>
+          <text id="rC-text" x="95" y="356" fill="#04140b" font-size="10" font-weight="700" text-anchor="middle">C ← [OK, OK]</text>
+        </g>
+
+        <!-- Phase label -->
+        <rect x="220" y="240" width="290" height="30" rx="6" fill="#0f1a30" stroke="#4cc9f0"/>
+        <text id="phase" x="365" y="260" fill="#4cc9f0" font-size="12" font-weight="700" text-anchor="middle">Ready</text>
+
+        <!-- Note about Lua -->
+        <rect x="220" y="290" width="290" height="120" rx="10" fill="#1b2940" stroke="#8fa0bd" stroke-dasharray="4 3"/>
+        <text x="365" y="312" fill="#c6d0e0" font-size="11" font-weight="700" text-anchor="middle">What just happened</text>
+        <text id="note1" x="365" y="332" fill="#8fa0bd" font-size="10" text-anchor="middle">Every command is atomic — no other</text>
+        <text id="note2" x="365" y="348" fill="#8fa0bd" font-size="10" text-anchor="middle">command runs while one is executing.</text>
+        <text id="note3" x="365" y="364" fill="#8fa0bd" font-size="10" text-anchor="middle">No mutex needed. No race possible.</text>
+        <text id="note4" x="365" y="384" fill="#7fa5cc" font-size="10" text-anchor="middle">MULTI/EXEC and EVAL take the same</text>
+        <text id="note5" x="365" y="400" fill="#7fa5cc" font-size="10" text-anchor="middle">guarantee and extend it to N commands.</text>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to watch the single-threaded event loop in action.</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('redis-anim');
+        if (!root) return;
+        const $ = (s) => root.querySelector(s);
+        const label = root.querySelector('.anim-step-label');
+        const cap   = root.querySelector('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const setSlot = (n, txt, opacity) => {
+          $(`#slot${n}-text`).textContent = txt;
+          $(`#slot${n} rect`).setAttribute('opacity', opacity);
+        };
+
+        const steps = [
+          { c: 'Three clients (A, B, C) all send commands at the same instant. On a threaded database this would need locks.',
+            a: () => { $('#phase').textContent = 'clients send concurrently'; }},
+          { c: 'Client A\'s INCR arrives first and enters the command queue.',
+            a: () => {
+              setSlot(1, 'A: INCR counter (running)', '.9');
+              $('#slot1').classList.add('a-glow');
+              $('#phase').textContent = 'executing A';
+            }},
+          { c: 'A executes atomically — counter 42 → 43. Nothing else can touch the counter mid-op because nothing else is running.',
+            a: () => {
+              $('#slot1').classList.remove('a-glow');
+              $('#valText').textContent = '43';
+              $('#rA-text').textContent = 'A ← 43';
+              $('#rA').classList.remove('a-hidden');
+              setSlot(1, '(done)', '.25');
+            }},
+          { c: 'Only now does the loop pick up B\'s INCR — one command at a time, in receive order.',
+            a: () => {
+              setSlot(2, 'B: INCR counter (running)', '.9');
+              $('#slot2').classList.add('a-glow');
+              $('#phase').textContent = 'executing B';
+            }},
+          { c: 'B completes: 43 → 44. Even though A and B raced from the client side, on the server they were serialized. No lost update, no race.',
+            a: () => {
+              $('#slot2').classList.remove('a-glow');
+              $('#valText').textContent = '44';
+              $('#rB-text').textContent = 'B ← 44';
+              $('#rB').classList.remove('a-hidden');
+              setSlot(2, '(done)', '.25');
+            }},
+          { c: 'Client C sent MULTI followed by DECRBY balance 30 and INCRBY balance:txn 30. Redis queues them and marks them as one atomic unit.',
+            a: () => {
+              setSlot(3, 'C: MULTI (queued: 2 cmds)', '.7');
+              $('#phase').textContent = 'C queued a transaction';
+            }},
+          { c: 'On EXEC, the whole batch runs as one indivisible step — nothing can interleave between the DECRBY and INCRBY. This is Redis transaction atomicity.',
+            a: () => {
+              setSlot(3, 'C: EXEC → running batch', '.95');
+              $('#slot3').classList.add('a-glow');
+              $('#phase').textContent = 'executing C\'s EXEC';
+            }},
+          { c: 'Batch complete: balance drops 100 → 70, transfer 0 → 30 in one atomic step. Both writes commit together — no half-transferred state.',
+            a: () => {
+              $('#slot3').classList.remove('a-glow');
+              $('#balText').textContent = '70';
+              $('#rC-text').textContent = 'C ← [OK, OK]';
+              $('#rC').classList.remove('a-hidden');
+              setSlot(3, '(done)', '.25');
+            }},
+          { c: 'Same shape works for EVAL: a Lua script is a single atomic unit — everything in the script runs before the next client sees Redis. That\'s Redis concurrency.',
+            a: () => {
+              setSlot(4, 'EVAL "...script..." — atomic', '.7');
+              $('#slot4').classList.add('a-glow');
+              $('#phase').textContent = 'Lua script atomic';
+            }}
+        ];
+
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          setSlot(1, '(empty)', '.35');
+          setSlot(2, '(empty)', '.25');
+          setSlot(3, '(empty)', '.18');
+          setSlot(4, '(empty)', '.14');
+          ['#slot1','#slot2','#slot3','#slot4'].forEach(id => $(id).classList.remove('a-glow'));
+          $('#valText').textContent = '42';
+          $('#balText').textContent = '100';
+          ['#rA','#rB','#rC'].forEach(id => $(id).classList.add('a-hidden'));
+          $('#phase').textContent = 'Ready';
+          label.textContent = 'Ready';
+          cap.textContent = 'Press ▶ Play to watch the single-threaded event loop in action.';
+          btnPlay.textContent = '▶ Play';
+        }
+        function goto(i) {
+          if (i < 0 || i >= steps.length) return;
+          reset();
+          for (let k = 0; k <= i; k++) steps[k].a();
+          idx = i;
+          label.textContent = `Step ${i + 1}/${steps.length}`;
+          cap.textContent = steps[i].c;
+        }
+        let idx = -1, playing = false, timer = null;
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < steps.length) {
+              idx++;
+              steps[idx].a();
+              label.textContent = `Step ${idx + 1}/${steps.length}`;
+              cap.textContent = steps[idx].c;
+            }
+            if (idx < steps.length - 1) timer = setTimeout(tick, 2200);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 300);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>The single-threaded event loop — where the concurrency "vanishes"</h3>
+    <p>Redis's own docs describe it as "mostly single-threaded" using <strong>multiplexing</strong>: one process serves every client request by cycling through them, but never blocks on syscalls (Redis uses non-blocking I/O with epoll/kqueue for readiness notification). Because a single thread does <em>all</em> command execution, two commands never truly run at the same time — the concept of a race between them doesn't exist. This is why Redis has no user-visible locks and yet safely supports thousands of concurrent clients. The elegant consequence: <strong>every individual Redis command is atomic</strong> by definition, so a single <code>INCR counter</code> under contention from a million clients never loses an increment.</p>
+    <p>Why is it fast, then? Two reasons: (1) data lives in RAM, so each operation is sub-microsecond; and (2) the loop never blocks on I/O — <code>epoll_wait</code> returns readiness events for many sockets, and Redis handles each in turn. In fact this is exactly the Node.js model. The <strong>catch</strong>, as Redis docs stress explicitly: "when a request is slow to serve, all the other clients will wait." So <code>KEYS *</code> or a huge <code>SUNION</code> stalls <em>everyone</em>. The mitigation is to avoid slow commands (use <code>SCAN</code>-family, run heavy queries on a replica) and use pipelining so many small commands amortize the network round-trip.</p>
+
+    <h3>Redis 6+ multi-threaded I/O — a subtle addition, not a rewrite</h3>
+    <p>Redis 6 added <strong>I/O threads</strong> (<code>io-threads</code> config, up to 128) that parallelize <em>reading from</em> and <em>writing to</em> client sockets. Command <strong>parsing</strong> can also happen on these threads. But <strong>command execution stays single-threaded on the main event loop</strong> — the atomicity guarantee is unchanged. This is a targeted fix for the case where the bottleneck was syscall overhead on the sockets (large deployments with many clients), and it delivers real throughput gains (multiple × RPS on network-bound workloads) without breaking the mental model.</p>
+
+    <h3>Atomic commands: the simplest coordination primitive</h3>
+    <p>Because every command is atomic, many "concurrency problems" have a trivial one-command solution:</p>
+    <ul>
+      <li><code>INCR counter</code> — atomic increment. Used for rate limiter tokens, ID generation, page views.</li>
+      <li><code>GETSET key value</code> — get old value, set new one, atomically.</li>
+      <li><code>SETNX key value</code> (aliased <code>SET key value NX</code>) — set only if key does not exist. The building block for locks.</li>
+      <li><code>SET key value NX PX 10000</code> — set only if absent, expire in 10 s. The safe single-node distributed lock idiom (auto-release on crash).</li>
+      <li><code>LPUSH / RPOPLPUSH</code> — atomic list moves for queues.</li>
+      <li><code>ZADD / ZINCRBY</code> — atomic sorted-set updates for leaderboards.</li>
+    </ul>
+
+    <h3>MULTI / EXEC / DISCARD — batching commands atomically</h3>
+    <p>Redis's version of a transaction is <strong>optimistic and simple</strong>: <code>MULTI</code> starts a queue, subsequent commands are stashed (not run), and <code>EXEC</code> runs them all as one indivisible unit — no other client can interleave. <code>DISCARD</code> throws the queue away. Two important non-obvious properties:</p>
+    <ul>
+      <li><strong>No rollback.</strong> If a command inside EXEC fails at runtime (say, INCR on a non-numeric string), the failed command errors out and the <em>rest still execute</em>. Redis's rationale: runtime failures are programmer bugs, not something to auto-heal. Handle them at the client.</li>
+      <li><strong>Isolation is trivial</strong> because the event loop runs the whole batch before any other command. There's no partial visibility.</li>
+    </ul>
+    <p>What MULTI/EXEC <em>alone</em> can't do is a read-then-write that depends on the read (like "if x &gt; 100, decrement it"). For that you need WATCH.</p>
+
+    <h3>WATCH — optimistic concurrency control (CAS)</h3>
+    <p><code>WATCH key</code> tells Redis: "keep an eye on this key; if any client modifies it before my EXEC, abort my transaction." Combined with MULTI/EXEC, this is <strong>optimistic locking</strong> — a check-and-set equivalent that never blocks. The client reads the current value, decides what to write, and executes; if someone else got there first, EXEC returns <code>nil</code> and the client retries.</p>
+    <pre><span class="cmt"># Classic conditional decrement — subtract 10 if balance ≥ 10, else fail.</span>
+WATCH balance
+val = GET balance
+<span class="kw">if</span> val &lt; 10: UNWATCH; abort
+MULTI
+  DECRBY balance 10
+EXEC   <span class="cmt"># returns nil if someone else touched `balance` between WATCH and EXEC</span></pre>
+    <p>WATCH is the piece that lets Redis handle contended write patterns correctly without pessimistic locking. It's the same optimistic-concurrency pattern used by ETag / <code>If-Match</code> in HTTP and by CAS in relational databases.</p>
+
+    <h3>Lua scripting (EVAL) — atomic multi-step logic</h3>
+    <p>A Redis <strong>Lua script</strong> runs on the server as one atomic step. While the script executes, no other command runs — same guarantee as a single command. This makes Lua the tool for logic that can't be expressed as one command and doesn't fit MULTI/EXEC (because it needs conditional reads). Classic examples: <strong>the atomic token-bucket rate limiter</strong> (refill, check, decrement, return in one shot); a <strong>reliable RPOPLPUSH-style dequeue with acknowledgement</strong>; a <strong>fair semaphore</strong>. Interviewer follow-up: "how would you implement rate limiting on Redis?" The best answer is a Lua script — it's the pattern Stripe and countless others actually use.</p>
+
+    <h3>Single-node distributed lock: <code>SET NX PX</code></h3>
+    <p>The idiomatic way to get a lock is:</p>
+    <pre>SET lock:job42 <unique-token> NX PX 10000   <span class="cmt"># set-if-absent, 10 s TTL</span></pre>
+    <p><code>NX</code> makes it a check-and-set. <code>PX</code> auto-releases if the holder crashes (no orphaned lock). The <strong>unique token</strong> is critical for release safety: to unlock you must run a Lua script that checks <code>GET lock:job42 == token</code> and only then deletes — otherwise a slow client whose lease already expired could delete a lock that another holder now owns.</p>
+    <pre><span class="cmt"># Safe release: check-and-delete atomically via Lua.</span>
+<span class="kw">if</span> redis.call(<span class="str">"GET"</span>, KEYS[1]) == ARGV[1] <span class="kw">then</span>
+    <span class="kw">return</span> redis.call(<span class="str">"DEL"</span>, KEYS[1])
+<span class="kw">else</span>
+    <span class="kw">return</span> 0
+<span class="kw">end</span></pre>
+    <p>This is the safe, simple, single-node lock — good enough for the vast majority of "make sure this cron job only runs once at a time" cases.</p>
+
+    <h3>Redlock — a lock across N independent Redis masters</h3>
+    <p>Single-node <code>SET NX PX</code> fails safety under <strong>Redis failover</strong>: replication is asynchronous, so if the master accepts a lock, then dies before replicating, the replica promoted in its place has no record of the lock — two clients can now hold it. To close that gap, <strong>Redlock</strong> (proposed by Redis creator Salvatore Sanfilippo) requires the client to acquire the lock on a <strong>majority</strong> of N <em>independent</em> Redis masters (N is typically 5, so 3 acquisitions needed):</p>
+    <ol class="steps">
+      <li>Client generates a unique random token.</li>
+      <li>Client records the current time <em>T₀</em>, then attempts <code>SET NX PX</code> on each of the N Redis instances with a short per-instance timeout.</li>
+      <li>Client computes elapsed time <em>Δ = now − T₀</em>. Success requires: (a) it got the lock on ≥ ⌊N/2⌋+1 nodes, AND (b) Δ &lt; the TTL.</li>
+      <li>Effective lock validity = TTL − Δ − clock-drift-factor (typically ~1% of TTL). If validity is not positive, the lock is not held.</li>
+      <li>To release, run the safe check-and-delete Lua on <em>every</em> node.</li>
+    </ol>
+
+    <h3>The Kleppmann critique — and when Redlock is NOT enough</h3>
+    <div class="callout"><strong>The industry debate:</strong> Martin Kleppmann's essay "How to do distributed locking" argues Redlock is unsafe for <em>correctness</em> locks (where a failure = data corruption) because it doesn't defend against <strong>process pauses</strong> (a client GCs for 30 s during its lease and wakes up thinking it still holds the lock), <strong>clock jumps</strong> (Redis uses non-monotonic time), or <strong>network delays</strong>. His prescription: use a real consensus system (ZooKeeper, etcd, Chubby) and, most importantly, enforce <strong>fencing tokens</strong> — the lock service issues a monotonically increasing token on each acquisition, and the protected resource rejects any write with a smaller token. Redlock has no fencing tokens.</div>
+    <p>The practical takeaway: for <strong>efficiency locks</strong> (avoiding duplicate work, e.g. "only one cron runs the report at a time"), single-node <code>SET NX PX</code> is fine — an occasional double-run is annoying, not catastrophic. For <strong>correctness locks</strong> (financial transactions, unique constraints), don't rely on Redis locks alone — pair them with fencing tokens the storage layer validates, or use ZooKeeper/etcd for the lock itself.</p>
+
+    <h3>Redis Cluster — the multi-node story</h3>
+    <p>Redis Cluster shards data across up to 1,000 nodes via <strong>16,384 hash slots</strong> (a key's slot = <code>CRC16(key) mod 16384</code>). Each master owns a range of slots and replicates to one or more replicas. Concurrency implications: <strong>each node is still single-threaded</strong>, so individual commands remain atomic. <strong>Multi-key transactions require the keys to hash to the same slot</strong> — use <code>{tag}</code>-style hash tags (e.g. <code>user:{42}:profile</code> and <code>user:{42}:sessions</code>) to force co-location when you need cross-key atomicity. Replication is <strong>asynchronous</strong> (fast but eventually consistent), so a write acked on the master can be lost if it fails before replicating — the same trade-off behind Redlock's motivation.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>The primitives that make Redis's concurrency model work are a small set of classic techniques applied precisely. Concurrency is achieved by <strong>serialization on the event loop</strong>, not locks; contention is resolved via <strong>optimistic concurrency</strong> (WATCH) and <strong>compare-and-swap</strong> (<code>SET NX</code> + unique token); distributed safety uses <strong>quorum consensus</strong>; hot-key protection uses <strong>lazy TTL + probabilistic sampling</strong>.</p>
+    <table>
+      <tr><th>Structure / Algorithm</th><th>Where it's used</th><th>Complexity</th><th>Why it's chosen</th></tr>
+      <tr><td>I/O multiplexing (epoll/kqueue)</td><td>Event loop over N sockets</td><td>O(1) readiness notification</td><td>Serve thousands of clients from one thread without blocking.</td></tr>
+      <tr><td>Serial command queue</td><td>Main-thread execution</td><td>O(1) atomicity, O(cmd) per op</td><td>No locks needed; every command atomic by construction.</td></tr>
+      <tr><td>Compare-and-swap (WATCH)</td><td>Optimistic transactions</td><td>O(1) abort check</td><td>Handle read-modify-write contention without pessimistic locking.</td></tr>
+      <tr><td><code>SET NX PX</code> + unique token</td><td>Single-node distributed lock</td><td>O(1) acquire/release</td><td>Auto-release on client crash via TTL; safe release via Lua CAS.</td></tr>
+      <tr><td>Majority quorum (Redlock)</td><td>Cross-node lock safety</td><td>O(N) network calls</td><td>Any N/2+1 nodes must agree ⇒ tolerant to node failures.</td></tr>
+      <tr><td>Lua script atomicity</td><td>Multi-step server-side logic</td><td>O(script)</td><td>Runs as one command — the token-bucket / dequeue idiom.</td></tr>
+      <tr><td>Consistent hash (16384 slots)</td><td>Redis Cluster sharding</td><td>O(1) route</td><td>Balance keys across masters; support online resharding.</td></tr>
+      <tr><td>Hash tags <code>{tag}</code></td><td>Co-locate keys in one slot</td><td>O(1)</td><td>Enable cross-key transactions inside the cluster.</td></tr>
+      <tr><td>Async replication</td><td>Leader → followers</td><td>O(writes)</td><td>Fast writes at the cost of potential loss on failover — the Redlock motivation.</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>On AWS you have three managed options depending on how much of Redis you want to run yourself, plus alternatives if you'd rather sidestep the Redlock debate entirely.</p>
+    <table>
+      <tr><th>Concern</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Managed Redis (single or clustered)</td><td><strong>Amazon ElastiCache for Redis</strong></td><td>Fully managed Redis with automatic failover, multi-AZ, encryption, backups. Supports both cluster mode and non-cluster (leader-replica).</td></tr>
+      <tr><td>Redis with faster storage tier</td><td><strong>MemoryDB for Redis</strong></td><td>Durable Redis (multi-AZ transaction log) — writes are ack'ed only after commit, closing the replication-lag gap that motivates Redlock.</td></tr>
+      <tr><td>Real consensus for correctness locks</td><td><strong>DynamoDB conditional writes</strong></td><td>Atomic compare-and-set on a strongly consistent store — Kleppmann's ideal. Great for fencing tokens.</td></tr>
+      <tr><td>Purpose-built distributed lock</td><td><strong>DynamoDB Lock Client</strong> (open-source library)</td><td>Ready-made lock service on Dynamo — combines TTL + conditional writes for a safe, fencing-token-friendly lock.</td></tr>
+      <tr><td>ZooKeeper-style consensus</td><td><strong>Amazon MSK</strong> (Kafka ships ZK/KRaft) or self-hosted <strong>etcd</strong></td><td>When you want the Kleppmann answer — a real consensus system with linearizable operations.</td></tr>
+      <tr><td>Rate-limit / counter workloads</td><td><strong>ElastiCache Redis</strong> + Lua</td><td>Best for token-bucket rate limiters — one atomic Lua call per request.</td></tr>
+      <tr><td>Session / cache</td><td><strong>ElastiCache Redis</strong> (or DAX for DynamoDB-backed)</td><td>The classic caching pairing; single-threaded execution keeps counters, top-K lists, and TTL-based sessions consistent.</td></tr>
+    </table>
+    <p><strong>Deployment story to tell:</strong> "For most concurrency needs — rate limiting, session storage, counters, leaderboards — I'd run <strong>ElastiCache Redis</strong> with a multi-AZ replica for failover, and use <strong>Lua scripts</strong> for any multi-step atomic logic. For a distributed lock I'd start with the <code>SET NX PX</code> pattern on a single ElastiCache node — an efficiency lock. If the lock is <em>correctness-critical</em>, I'd either use <strong>MemoryDB</strong> (which closes the replication-lag gap) or move to <strong>DynamoDB conditional writes</strong> with <strong>fencing tokens</strong> validated by the protected resource — matching Kleppmann's guidance."</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>Three canonical patterns using <strong>StackExchange.Redis</strong>, the standard .NET Redis client: (1) a safe single-node <strong>distributed lock</strong> with unique-token release, (2) a <strong>WATCH-based optimistic transaction</strong> for conditional decrement, and (3) an <strong>atomic token-bucket rate limiter</strong> in Lua — the pattern used in production by Stripe et al.</p>
+    <pre><span class="kw">using</span> StackExchange.Redis;
+
+<span class="cmt">// ---- (1) Single-node distributed lock: SET NX PX + unique-token safe release ----</span>
+<span class="kw">public sealed class</span> <span class="typ">RedisLock</span> : <span class="typ">IAsyncDisposable</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IDatabase</span> _db;
+    <span class="kw">private readonly</span> <span class="typ">RedisKey</span> _key;
+    <span class="kw">private readonly</span> <span class="typ">RedisValue</span> _token;   <span class="cmt">// unique per acquisition</span>
+    <span class="kw">private bool</span> _held;
+
+    <span class="kw">private const string</span> ReleaseLua = <span class="str">@"
+      if redis.call('GET', KEYS[1]) == ARGV[1] then
+          return redis.call('DEL', KEYS[1])
+      else
+          return 0
+      end"</span>;
+
+    <span class="kw">public</span> <span class="fn">RedisLock</span>(<span class="typ">IDatabase</span> db, <span class="typ">string</span> key)
+    {
+        _db = db; _key = key;
+        _token = <span class="typ">Guid</span>.<span class="fn">NewGuid</span>().<span class="fn">ToString</span>();  <span class="cmt">// unique token guards against expired-lease deletes</span>
+    }
+
+    <span class="cmt">// SET key token NX PX ttl — atomic acquire-if-absent with auto-release TTL.</span>
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">bool</span>&gt; <span class="fn">TryAcquireAsync</span>(<span class="typ">TimeSpan</span> ttl)
+    {
+        _held = <span class="kw">await</span> _db.<span class="fn">StringSetAsync</span>(_key, _token, ttl, When.NotExists);
+        <span class="kw">return</span> _held;
+    }
+
+    <span class="cmt">// Safe release: check token == mine, then DEL (atomic Lua).</span>
+    <span class="kw">public async</span> <span class="typ">ValueTask</span> <span class="fn">DisposeAsync</span>()
+    {
+        <span class="kw">if</span> (!_held) <span class="kw">return</span>;
+        <span class="kw">await</span> _db.<span class="fn">ScriptEvaluateAsync</span>(ReleaseLua,
+            <span class="kw">new</span> <span class="typ">RedisKey</span>[] { _key },
+            <span class="kw">new</span> <span class="typ">RedisValue</span>[] { _token });
+        _held = <span class="kw">false</span>;
+    }
+}
+
+<span class="cmt">// ---- (2) WATCH-based optimistic transaction: conditional decrement ----</span>
+<span class="cmt">// "if balance ≥ amount, subtract amount". Retries if someone else raced us.</span>
+<span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">bool</span>&gt; <span class="fn">TryDebitAsync</span>(<span class="typ">IDatabase</span> db, <span class="typ">RedisKey</span> key, <span class="typ">int</span> amount)
+{
+    <span class="kw">for</span> (<span class="kw">int</span> attempt = 0; attempt &lt; 5; attempt++)
+    {
+        <span class="cmt">// StackExchange.Redis exposes optimistic tx via CreateTransaction() with AddCondition().</span>
+        <span class="kw">var</span> current = (<span class="typ">int</span>)<span class="kw">await</span> db.<span class="fn">StringGetAsync</span>(key);
+        <span class="kw">if</span> (current &lt; amount) <span class="kw">return false</span>;                       <span class="cmt">// insufficient</span>
+
+        <span class="kw">var</span> tx = db.<span class="fn">CreateTransaction</span>();
+        tx.<span class="fn">AddCondition</span>(Condition.StringEqual(key, current));         <span class="cmt">// WATCH-equivalent CAS</span>
+        _ = tx.<span class="fn">StringDecrementAsync</span>(key, amount);
+        <span class="kw">if</span> (<span class="kw">await</span> tx.<span class="fn">ExecuteAsync</span>()) <span class="kw">return true</span>;                 <span class="cmt">// EXEC succeeded</span>
+        <span class="cmt">// else: someone raced; loop &amp; retry</span>
+    }
+    <span class="kw">throw new</span> <span class="typ">Exception</span>(<span class="str">"debit contention: gave up after 5 retries"</span>);
+}
+
+<span class="cmt">// ---- (3) Atomic token-bucket rate limiter (single Lua call) ----</span>
+<span class="kw">private const string</span> RateLimitLua = <span class="str">@"
+  local key      = KEYS[1]
+  local rate     = tonumber(ARGV[1])       -- tokens per second (r)
+  local capacity = tonumber(ARGV[2])       -- bucket size (b)
+  local now      = tonumber(ARGV[3])       -- caller's clock (seconds)
+  local cost     = tonumber(ARGV[4])
+
+  local b = redis.call('HMGET', key, 'tokens', 'ts')
+  local tokens = tonumber(b[1]) or capacity
+  local ts     = tonumber(b[2]) or now
+  tokens = math.min(capacity, tokens + (now - ts) * rate)   -- lazy refill
+  local ok = tokens >= cost
+  if ok then tokens = tokens - cost end
+  redis.call('HMSET', key, 'tokens', tokens, 'ts', now)
+  redis.call('EXPIRE', key, math.ceil(capacity / rate) + 1)
+  return ok and 1 or 0
+"</span>;
+
+<span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">bool</span>&gt; <span class="fn">TryAdmitAsync</span>(<span class="typ">IDatabase</span> db, <span class="typ">string</span> user, <span class="typ">int</span> rate, <span class="typ">int</span> burst)
+{
+    <span class="kw">try</span>
+    {
+        <span class="kw">var</span> res = (<span class="kw">long</span>)<span class="kw">await</span> db.<span class="fn">ScriptEvaluateAsync</span>(RateLimitLua,
+            <span class="kw">new</span> <span class="typ">RedisKey</span>[] { $<span class="str">"rl:{user}"</span> },
+            <span class="kw">new</span> <span class="typ">RedisValue</span>[] { rate, burst, <span class="typ">DateTimeOffset</span>.UtcNow.ToUnixTimeSeconds(), 1 });
+        <span class="kw">return</span> res == 1;
+    }
+    <span class="kw">catch</span> (<span class="typ">RedisException</span>) { <span class="kw">return true</span>; }  <span class="cmt">// FAIL OPEN: limiter must not become the outage</span>
+}</pre>
+    <p>Three takeaways: (1) The lock uses a <strong>unique token</strong> so a slow client whose lease expired can't accidentally delete another holder's lock — that's the safety property. (2) The optimistic transaction uses <strong>AddCondition</strong> as a WATCH — the transaction only commits if the key still has the value we read. (3) The rate limiter is a single Lua call; Redis's atomicity guarantees the read-modify-write is race-free, regardless of how many app servers concurrently invoke it. For <strong>Redlock across N nodes</strong> you'd use a library like <code>RedLock.net</code> (or roll it yourself) — but for most workloads the single-node lock above is enough.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <p><strong>Single-threaded = beautifully simple, but slow commands hurt everyone.</strong> Because one command executes at a time, a big <code>KEYS *</code> or a huge <code>SUNION</code> blocks every other client. Redis's docs explicitly call this out. Mitigations: avoid slow commands (use <code>SCAN</code>, <code>SSCAN</code>, <code>HSCAN</code>, <code>ZSCAN</code>), run analytics queries on a replica, and profile with <code>SLOWLOG</code>.</p>
+    <p><strong>MULTI/EXEC has no rollback.</strong> If a queued command errors at runtime, the rest still execute. That surprises people coming from SQL. The Redis philosophy: runtime errors are programmer bugs; don't hide them with rollback. Handle them at the client.</p>
+    <p><strong>Async replication ⇒ Redlock trade-off.</strong> A single-node lock is unsafe under failover; Redlock closes that gap with a majority quorum but adds latency and is still <strong>not safe for correctness locks</strong> (per Kleppmann) without fencing tokens on the resource. For efficiency locks, single-node is enough; for correctness, use fencing tokens or a real consensus system.</p>
+    <p><strong>Cluster mode restricts multi-key ops.</strong> In Redis Cluster, transactions and Lua scripts can only touch keys that live in the same slot — otherwise you get a <code>CROSSSLOT</code> error. Use <code>{tag}</code>-style hash tags to co-locate related keys.</p>
+    <p><strong>WATCH under high contention can starve.</strong> Optimistic concurrency retries on conflict; if a hot key gets constant writes, WATCH-based transactions may repeatedly abort. For truly hot counters, prefer <code>INCR</code>/<code>DECRBY</code> directly or a Lua script.</p>
+
+    <div class="qa">
+      <p class="q">Q: If Redis is single-threaded, how does it handle 100,000 concurrent clients?</p>
+      <p class="a">The <em>network</em> is concurrent — one thread polls thousands of sockets via epoll and services them in turn. Commands are cheap (sub-microsecond in RAM), so the queue drains fast. In-flight parallelism is not the goal; low latency and simple atomicity are.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: What's the difference between MULTI/EXEC and Lua?</p>
+      <p class="a">Both run as a single atomic step. MULTI/EXEC batches pre-declared commands with optional WATCH-based CAS but can't include conditional logic. Lua lets you branch, loop, and read intermediate values on the server — the right tool when you need "if X then do Y else do Z" in one atomic step.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: Is <code>SET NX PX</code> enough for a distributed lock?</p>
+      <p class="a">For efficiency locks (avoid duplicate work) — yes, plus a unique-token Lua release. For correctness locks (double-charging must not happen), no — replication is async so failover can lose the lock. Use Redlock (majority quorum) or, if the workload truly demands safety, a consensus system with fencing tokens the resource validates.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: How do Redis 6 I/O threads relate to concurrency?</p>
+      <p class="a">They parallelize socket reads/writes and parsing across multiple threads, so network-bound workloads get more RPS. Command execution remains single-threaded, so the atomicity model is unchanged — you don't need to worry about new race conditions.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "Redis is single-threaded for command execution — one command at a time on an epoll/kqueue event loop, sub-microsecond per op, no locks needed because nothing runs concurrently. That gives you free atomicity on every command like INCR or SET NX PX. For multi-step logic, MULTI/EXEC batches commands atomically, WATCH adds optimistic CAS for conditional writes, and Lua scripts run as a single atomic unit. Across nodes, a single-node SET NX PX with a unique-token Lua release is fine for efficiency locks; for safety under failover the Redlock quorum algorithm across N Redis masters exists, though Kleppmann argues correctness locks need real consensus plus fencing tokens on the resource. Redis Cluster shards data across 16,384 hash slots and each shard is still single-threaded."</div>
+    <h3>Numbers &amp; primitives to quote</h3>
+    <ul>
+      <li>Throughput: <strong>~100k+ ops/sec per core</strong>, sub-µs latency.</li>
+      <li>Model: <strong>single-threaded event loop</strong>, epoll/kqueue multiplexing.</li>
+      <li>Redis 6+: <strong>I/O threads</strong> parallelize sockets only, not execution.</li>
+      <li>Locks: <strong>SET key token NX PX ttl</strong> + Lua check-and-delete release.</li>
+      <li>Redlock: majority quorum across <strong>N Redis masters</strong> (typically 5, need 3).</li>
+      <li>Cluster: <strong>16,384 hash slots</strong>, up to <strong>1,000 nodes</strong>.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li><strong>Single-threaded = atomicity for free</strong> — every command is race-free, no user locks.</li>
+      <li><strong>MULTI/EXEC + WATCH</strong> — optimistic concurrency (CAS), no rollback, no interleaving.</li>
+      <li><strong>Lua scripts</strong> for atomic multi-step logic — the go-to for rate limiters and counters.</li>
+      <li><strong>SET NX PX + unique token</strong> — safe single-node lock; fine for efficiency, not correctness.</li>
+      <li><strong>Redlock &amp; the Kleppmann critique</strong> — know the algorithm and the fencing-token argument.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/latency/">Diagnosing latency issues</a> — Redis Docs: "Redis uses a mostly single threaded design" with multiplexing, why slow commands block all clients, and the checklist for keeping the event loop responsive.</li>
+      <li><a href="https://en.wikipedia.org/wiki/Redis">Redis</a> — Wikipedia: single-threaded execution, transactions with MULTI/EXEC isolation, Lua scripting, master-replica replication, and Redis Cluster scale ("up to 1,000 nodes, 'acceptable' write safety").</li>
+      <li><a href="https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html">How to do distributed locking</a> — Martin Kleppmann (2016): the efficiency-vs-correctness distinction, why Redlock is unsafe under GC pauses / clock jumps / network delays without fencing tokens, and the ZooKeeper/etcd alternative for correctness locks.</li>
+      <li>Salvatore Sanfilippo (antirez), <em>Distributed locks with Redis (Redlock)</em>: the original algorithm — SET NX PX per instance, N/2+1 quorum, TTL − Δ − drift for validity time, safe release via Lua.</li>
+      <li>Redis docs on <em>Transactions</em> and <em>Programmability (EVAL / EVALSHA)</em>: MULTI/EXEC/WATCH/DISCARD semantics, Lua script atomicity, no-rollback rationale.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

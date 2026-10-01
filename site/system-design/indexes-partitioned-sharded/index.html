@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Indexes on Partitioned & Sharded Data — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #2dc653;
+    --laymen-bg: #eaf7ee;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Indexes on Partitioned &amp; Sharded Data</h1>
+    <p>Why one index type makes reads free and writes cheap — and the other flips it. Local Secondary Indexes vs Global Secondary Indexes, scatter-gather, and the trade-offs that decide whether your query touches one shard or a hundred.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>When a dataset outgrows a single machine, we split it — <strong>partition</strong> by hash or range, then <strong>shard</strong> those partitions across nodes. The primary key lookup is easy: hash the key, jump to the right shard, done. The interesting problem is <em>secondary access</em>. If a table of 500 million movies is partitioned by <code>movie_id</code>, then a query like <code>WHERE genre = 'Crime'</code> has no idea where the data lives — the partition key isn't in the predicate. What now?</p>
+    <p>This is one of the most common real-world tension points in distributed databases, and interviewers love it because it forces you to reason about writes, reads, consistency, and latency all at once. The two answers are <strong>Local Secondary Index (LSI)</strong> and <strong>Global Secondary Index (GSI)</strong>, and picking wrong turns a 5 ms point read into a 200 ms scatter-gather nightmare.</p>
+    <p>Every serious partitioned system faces this: <strong>DynamoDB</strong> ships both LSI and GSI as first-class features. <strong>Cassandra</strong> and <strong>ScyllaDB</strong> only ship local indexes and warn you about the scatter-gather cost. <strong>MongoDB</strong> lets you build indexes on any field, but on a sharded collection those are per-shard indexes underneath. <strong>PostgreSQL</strong>'s partitioned tables build one child index per partition — no truly global index. <strong>Elasticsearch</strong>, <strong>Vitess</strong>, <strong>CockroachDB</strong>, <strong>Spanner</strong> — all have to answer this question. The pattern is universal.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms (for a beginner)</span>
+    <h2>Explaining this at a dinner party</h2>
+    <p>Imagine you own a <strong>huge library</strong> with 500 million books. One building can't hold that many, so you rent <strong>10 warehouses</strong> across the city and split the books by their catalog number — books 1 to 50 million go to warehouse 1, 50 to 100 million to warehouse 2, and so on. If someone asks for "book 137,842,301," you look at the catalog number, know instantly it's in warehouse 3, and drive straight there. Easy.</p>
+    <p>But then a librarian asks: <em>"give me all mystery novels."</em> Uh oh. Mystery novels aren't grouped together — they're scattered across all 10 warehouses. You have two choices, and this is the whole story.</p>
+    <p><strong>Choice A — the little card catalog in each warehouse.</strong> You put a small card index at every warehouse listing only the mysteries in <em>that</em> warehouse. Cheap to keep updated (a new mystery arrives at warehouse 4, you just update warehouse 4's index). But to answer "give me all mysteries," you have to <strong>send 10 messengers to 10 warehouses</strong>, wait for them all to come back, then combine the answers. Slow.</p>
+    <p><strong>Choice B — one giant master catalog for mysteries.</strong> You build a separate index in its own building, organized by genre. All the mysteries in the world are listed in one place. Now "give me all mysteries" is a <em>single trip</em> — fast. But every time a new book arrives at any warehouse, you must also send an update to the master catalog building. And if you demand this update happens <em>immediately</em>, every book delivery becomes slow.</p>
+    <p>That's the whole trade-off. Choice A = <strong>cheap writes, slow "search everywhere" reads</strong>. Choice B = <strong>fast reads, expensive writes</strong>. Real systems like <strong>Amazon's DynamoDB</strong> let you pick either one — and if you pick wrong, your app either can't keep up with new orders or takes forever to search.</p>
+    <p><strong>Concrete example:</strong> Netflix has a movies table split across 100 machines by <code>movie_id</code>. If Netflix wants to show you "all Crime movies released in 2024," a local-index setup would ask all 100 machines and merge — maybe 200 ms. A global-index setup keeps a separate table organized by <code>genre</code>, so the same query hits just one machine — 5 ms. But when Netflix adds a new movie, the global-index approach makes that write touch two places instead of one. You're literally trading write speed for read speed.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+    <p>This isn't a "design a product" question — it's a <em>design decision</em> that every partitioned data store must answer. So the requirements are framed around the query patterns and the write budget you're given.</p>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Support <strong>point queries</strong> on the primary/partition key with single-partition latency.</li>
+      <li>Support <strong>secondary queries</strong> on non-partition-key attributes (e.g. <code>genre</code>, <code>email</code>, <code>status</code>) without full-table scans.</li>
+      <li>Support both <em>combined</em> queries (partition key + secondary attr) and <em>pure secondary</em> queries (attr only).</li>
+      <li>Allow the operator to <em>choose</em> the consistency model — strong for financial data, eventual for social feeds.</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li>p50 read latency &lt; 10 ms, p99 &lt; 100 ms for indexed lookups.</li>
+      <li>Write amplification bounded — one logical write should not fan out to hundreds of shards synchronously.</li>
+      <li>Index freshness: strong for LSI, ≤ few seconds for GSI (typical eventual replication lag).</li>
+      <li>Horizontal scaling: adding shards must not require rebuilding a global index from scratch.</li>
+    </ul>
+
+    <h3>Capacity back-of-the-envelope</h3>
+    <table>
+      <tr><th>Quantity</th><th>Value</th><th>Note</th></tr>
+      <tr><td>Base table size</td><td>~500 million items × 1 KB = <strong>~500 GB</strong></td><td>Beyond one node — must partition.</td></tr>
+      <tr><td>Shard count</td><td><strong>100 shards</strong>, 5 GB each</td><td>Round number; hash-partitioned by primary key.</td></tr>
+      <tr><td>Writes / sec</td><td><strong>10,000 wps</strong></td><td>Steady-state write rate.</td></tr>
+      <tr><td>LSI write cost per logical write</td><td><strong>1 shard hit</strong></td><td>Index co-located; local update.</td></tr>
+      <tr><td>GSI write cost per logical write</td><td><strong>2 shard hits</strong></td><td>Base table + one GSI partition (repartitioned by the indexed attr).</td></tr>
+      <tr><td>Sync GSI cost</td><td><strong>2-phase commit / distributed txn</strong></td><td>Why most GSIs are async.</td></tr>
+      <tr><td>Scatter-gather read latency</td><td><strong>~ max(shard latency) + coordinator merge</strong></td><td>p99 of 100 shards dominates — tail latency amplification.</td></tr>
+      <tr><td>Async GSI lag</td><td><strong>~1 second typical, up to minutes under stress</strong></td><td>Per Arpit Bhayani's blog; DynamoDB targets sub-second in practice.</td></tr>
+      <tr><td>DynamoDB limits</td><td><strong>5 LSIs, 20 GSIs per table</strong></td><td>Default quotas.</td></tr>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The base table is hash-partitioned by its <strong>primary partition key</strong> across N shards. Every shard is a self-contained storage node with its own local B-tree/LSM. A <strong>Local Secondary Index (LSI)</strong> is another B-tree living <em>inside the same shard</em>, keyed on a non-primary attribute but scoped to that shard's data only. A <strong>Global Secondary Index (GSI)</strong> is essentially a separate <em>logical table</em>, re-partitioned by the indexed attribute — physically it lives on its own set of nodes (possibly overlapping with the base shards).</p>
+    <p>A query planner sits in front. When the predicate includes the base partition key, the planner routes to one shard. When the predicate is only on an indexed attribute, the planner either <em>fans out to all shards</em> (LSI) or <em>routes to the single GSI partition</em> that owns that value.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 480" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/>
+          </marker>
+          <marker id="arrRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f7567c"/>
+          </marker>
+          <marker id="arrGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/>
+          </marker>
+        </defs>
+        <style>
+          .box  { fill:#1b2940; stroke:#3a4a6a; stroke-width:1.2; rx:10; }
+          .base { fill:#1b2940; stroke:#4361ee; stroke-width:1.6; }
+          .gsi  { fill:#2a1f3d; stroke:#7048e8; stroke-width:1.6; }
+          .lsi  { fill:#1c2a24; stroke:#2dc653; stroke-width:1.4; stroke-dasharray:3 2; }
+          .txt  { fill:#e7ecf3; font: 700 12px -apple-system, Segoe UI; }
+          .txt2 { fill:#c6d0e0; font: 500 11px -apple-system, Segoe UI; }
+          .cap  { fill:#7fa2ff; font: 700 11px -apple-system, Segoe UI; letter-spacing:.05em; text-transform:uppercase;}
+          .flowRed   { stroke:#f7567c; stroke-width:2; fill:none; }
+          .flowGreen { stroke:#2dc653; stroke-width:2; fill:none; }
+          .flowBlue  { stroke:#7fa2ff; stroke-width:2; fill:none; }
+        </style>
+
+        <rect x="30" y="30" width="150" height="60" rx="10" class="box"/>
+        <text x="105" y="55" text-anchor="middle" class="txt">Client / App</text>
+        <text x="105" y="75" text-anchor="middle" class="txt2">WHERE id=… / genre=…</text>
+
+        <rect x="220" y="30" width="180" height="60" rx="10" class="box" style="stroke:#4361ee"/>
+        <text x="310" y="55" text-anchor="middle" class="txt">Query Router</text>
+        <text x="310" y="75" text-anchor="middle" class="txt2">picks LSI vs GSI vs PK</text>
+
+        <line x1="180" y1="60" x2="215" y2="60" class="flowBlue" marker-end="url(#arr)"/>
+
+        <text x="150" y="130" class="cap">Base table — sharded by id</text>
+        <g>
+          <rect x="30"  y="145" width="140" height="110" rx="10" class="base"/>
+          <text x="100" y="170" text-anchor="middle" class="txt">Shard 1</text>
+          <rect x="45" y="180" width="110" height="20" rx="4" fill="#0f1420" stroke="#4361ee"/>
+          <text x="100" y="194" text-anchor="middle" class="txt2">rows 1…</text>
+          <rect x="45" y="210" width="110" height="20" rx="4" fill="#0f1420" stroke="#2dc653" stroke-dasharray="3 2"/>
+          <text x="100" y="224" text-anchor="middle" class="txt2">LSI (genre)</text>
+        </g>
+        <g>
+          <rect x="180" y="145" width="140" height="110" rx="10" class="base"/>
+          <text x="250" y="170" text-anchor="middle" class="txt">Shard 2</text>
+          <rect x="195" y="180" width="110" height="20" rx="4" fill="#0f1420" stroke="#4361ee"/>
+          <text x="250" y="194" text-anchor="middle" class="txt2">rows 2…</text>
+          <rect x="195" y="210" width="110" height="20" rx="4" fill="#0f1420" stroke="#2dc653" stroke-dasharray="3 2"/>
+          <text x="250" y="224" text-anchor="middle" class="txt2">LSI (genre)</text>
+        </g>
+        <g>
+          <rect x="330" y="145" width="140" height="110" rx="10" class="base"/>
+          <text x="400" y="170" text-anchor="middle" class="txt">Shard 3</text>
+          <rect x="345" y="180" width="110" height="20" rx="4" fill="#0f1420" stroke="#4361ee"/>
+          <text x="400" y="194" text-anchor="middle" class="txt2">rows 3…</text>
+          <rect x="345" y="210" width="110" height="20" rx="4" fill="#0f1420" stroke="#2dc653" stroke-dasharray="3 2"/>
+          <text x="400" y="224" text-anchor="middle" class="txt2">LSI (genre)</text>
+        </g>
+        <g>
+          <rect x="480" y="145" width="140" height="110" rx="10" class="base"/>
+          <text x="550" y="170" text-anchor="middle" class="txt">Shard N</text>
+          <rect x="495" y="180" width="110" height="20" rx="4" fill="#0f1420" stroke="#4361ee"/>
+          <text x="550" y="194" text-anchor="middle" class="txt2">rows N…</text>
+          <rect x="495" y="210" width="110" height="20" rx="4" fill="#0f1420" stroke="#2dc653" stroke-dasharray="3 2"/>
+          <text x="550" y="224" text-anchor="middle" class="txt2">LSI (genre)</text>
+        </g>
+
+        <text x="740" y="130" class="cap" text-anchor="middle">GSI — repartitioned by genre</text>
+        <g>
+          <rect x="650" y="145" width="180" height="110" rx="10" class="gsi"/>
+          <text x="740" y="170" text-anchor="middle" class="txt">GSI partitions</text>
+          <rect x="665" y="180" width="150" height="20" rx="4" fill="#0f1420" stroke="#7048e8"/>
+          <text x="740" y="194" text-anchor="middle" class="txt2">Crime, Comedy, Drama…</text>
+          <rect x="665" y="210" width="150" height="20" rx="4" fill="#0f1420" stroke="#7048e8"/>
+          <text x="740" y="224" text-anchor="middle" class="txt2">separate node group</text>
+        </g>
+
+        <text x="90"  y="310" class="cap">🟥 Scatter-gather via LSI</text>
+        <path d="M310 90 Q 310 130 100 145" class="flowRed" marker-end="url(#arrRed)"/>
+        <path d="M310 90 Q 310 130 250 145" class="flowRed" marker-end="url(#arrRed)"/>
+        <path d="M310 90 Q 310 130 400 145" class="flowRed" marker-end="url(#arrRed)"/>
+        <path d="M310 90 Q 310 130 550 145" class="flowRed" marker-end="url(#arrRed)"/>
+
+        <text x="720" y="310" class="cap" text-anchor="middle">🟩 Pointed lookup via GSI</text>
+        <path d="M400 60 Q 600 60 740 145" class="flowGreen" marker-end="url(#arrGreen)"/>
+
+        <text x="30" y="380" class="cap">Write path (both must be updated on every logical write)</text>
+        <rect x="30" y="395" width="200" height="60" rx="10" class="box" style="stroke:#f4a259"/>
+        <text x="130" y="420" text-anchor="middle" class="txt">Write to Shard k</text>
+        <text x="130" y="440" text-anchor="middle" class="txt2">→ update local LSI (free)</text>
+        <rect x="270" y="395" width="200" height="60" rx="10" class="box" style="stroke:#f4a259"/>
+        <text x="370" y="420" text-anchor="middle" class="txt">Update GSI partition</text>
+        <text x="370" y="440" text-anchor="middle" class="txt2">= extra network hop</text>
+        <rect x="510" y="395" width="220" height="60" rx="10" class="box" style="stroke:#f4a259"/>
+        <text x="620" y="420" text-anchor="middle" class="txt">Async replication</text>
+        <text x="620" y="440" text-anchor="middle" class="txt2">≈ 1s lag (typical)</text>
+        <line x1="230" y1="425" x2="265" y2="425" class="flowBlue" marker-end="url(#arr)"/>
+        <line x1="470" y1="425" x2="505" y2="425" class="flowBlue" marker-end="url(#arr)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#4361ee"></span>base shard</span>
+        <span><span class="dot" style="background:#2dc653"></span>LSI (co-located)</span>
+        <span><span class="dot" style="background:#7048e8"></span>GSI (separate partitions)</span>
+        <span><span class="dot" style="background:#f7567c"></span>scatter-gather</span>
+        <span><span class="dot" style="background:#f4a259"></span>write amplification</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a query flow through LSI vs GSI</h2>
+    <p>This walkthrough runs the same query — <code>SELECT * FROM movies WHERE genre='Crime'</code> — through both index strategies. Watch how the <strong>LSI path fans out to every shard</strong> and waits for the slowest one, while the <strong>GSI path is a single pointed lookup</strong>. Then it flips to the write path and shows the cost that pays for that read speed.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 820 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+
+        <rect x="30" y="30" width="130" height="46" rx="10" fill="#1b2940" stroke="#4361ee" stroke-width="1.5"/>
+        <text x="95" y="50" text-anchor="middle" fill="#e7ecf3" font="700 12px -apple-system, Segoe UI">Query Router</text>
+        <text x="95" y="66" text-anchor="middle" fill="#c6d0e0" font="500 10px -apple-system, Segoe UI">genre='Crime'</text>
+
+        <text x="410" y="28" text-anchor="middle" fill="#7fa2ff" font="700 12px -apple-system" style="text-transform:uppercase; letter-spacing:.06em;">LSI path — scatter-gather</text>
+
+        <g id="shard1">
+          <rect x="200" y="55" width="120" height="60" rx="10" fill="#1b2940" stroke="#4361ee" stroke-width="1.4"/>
+          <text x="260" y="78" text-anchor="middle" fill="#e7ecf3" font="700 12px -apple-system">Shard 1</text>
+          <text x="260" y="96" text-anchor="middle" fill="#c6d0e0" font="500 10px -apple-system">LSI(genre): 2 hits</text>
+        </g>
+        <g id="shard2">
+          <rect x="340" y="55" width="120" height="60" rx="10" fill="#1b2940" stroke="#4361ee" stroke-width="1.4"/>
+          <text x="400" y="78" text-anchor="middle" fill="#e7ecf3" font="700 12px -apple-system">Shard 2</text>
+          <text x="400" y="96" text-anchor="middle" fill="#c6d0e0" font="500 10px -apple-system">LSI(genre): 1 hit</text>
+        </g>
+        <g id="shard3">
+          <rect x="480" y="55" width="120" height="60" rx="10" fill="#1b2940" stroke="#4361ee" stroke-width="1.4"/>
+          <text x="540" y="78" text-anchor="middle" fill="#e7ecf3" font="700 12px -apple-system">Shard 3</text>
+          <text x="540" y="96" text-anchor="middle" fill="#c6d0e0" font="500 10px -apple-system">LSI(genre): 0 hits</text>
+        </g>
+        <g id="shard4">
+          <rect x="620" y="55" width="120" height="60" rx="10" fill="#1b2940" stroke="#4361ee" stroke-width="1.4"/>
+          <text x="680" y="78" text-anchor="middle" fill="#e7ecf3" font="700 12px -apple-system">Shard 4</text>
+          <text x="680" y="96" text-anchor="middle" fill="#c6d0e0" font="500 10px -apple-system">LSI(genre): 3 hits ⏳</text>
+        </g>
+
+        <g id="fanArrows">
+          <path id="fan1" class="a-hidden a-el" d="M160 60 L200 75" stroke="#f7567c" stroke-width="2" fill="none" marker-end="url(#arrA)"/>
+          <path id="fan2" class="a-hidden a-el" d="M160 62 L340 78" stroke="#f7567c" stroke-width="2" fill="none" marker-end="url(#arrA)"/>
+          <path id="fan3" class="a-hidden a-el" d="M160 64 L480 82" stroke="#f7567c" stroke-width="2" fill="none" marker-end="url(#arrA)"/>
+          <path id="fan4" class="a-hidden a-el" d="M160 66 L620 86" stroke="#f7567c" stroke-width="2" fill="none" marker-end="url(#arrA)"/>
+        </g>
+
+        <g id="merge" class="a-hidden a-el">
+          <rect x="290" y="140" width="220" height="42" rx="10" fill="#3a1f2b" stroke="#f7567c" stroke-width="1.5"/>
+          <text x="400" y="160" text-anchor="middle" fill="#f7567c" font="700 12px -apple-system">Coordinator merges 4 results</text>
+          <text x="400" y="176" text-anchor="middle" fill="#c6d0e0" font="500 10px -apple-system">waits on slowest shard (≈p99)</text>
+        </g>
+
+        <text x="410" y="220" text-anchor="middle" fill="#c67aff" font="700 12px -apple-system" style="text-transform:uppercase; letter-spacing:.06em;">GSI path — one pointed lookup</text>
+
+        <g id="gsi">
+          <rect x="320" y="235" width="200" height="60" rx="10" fill="#2a1f3d" stroke="#7048e8" stroke-width="1.6"/>
+          <text x="420" y="258" text-anchor="middle" fill="#e7ecf3" font="700 12px -apple-system">GSI partition: Crime</text>
+          <text x="420" y="276" text-anchor="middle" fill="#c6d0e0" font="500 10px -apple-system">holds all 6 rows for genre='Crime'</text>
+        </g>
+
+        <path id="gsiArrow" class="a-hidden a-el" d="M95 76 Q 220 200 320 260" stroke="#2dc653" stroke-width="2.5" fill="none" marker-end="url(#arrA)"/>
+
+        <text x="410" y="325" text-anchor="middle" fill="#f4a259" font="700 12px -apple-system" style="text-transform:uppercase; letter-spacing:.06em;">Write path — the trade-off</text>
+
+        <g id="write1">
+          <rect x="60" y="345" width="180" height="50" rx="10" fill="#1b2940" stroke="#f4a259" stroke-width="1.4"/>
+          <text x="150" y="365" text-anchor="middle" fill="#e7ecf3" font="700 12px -apple-system">Write: new Crime movie</text>
+          <text x="150" y="381" text-anchor="middle" fill="#c6d0e0" font="500 10px -apple-system">lands on Shard 2</text>
+        </g>
+        <g id="write2" class="a-hidden a-el">
+          <rect x="280" y="345" width="180" height="50" rx="10" fill="#1c2a24" stroke="#2dc653" stroke-width="1.4"/>
+          <text x="370" y="365" text-anchor="middle" fill="#e7ecf3" font="700 12px -apple-system">LSI updated locally</text>
+          <text x="370" y="381" text-anchor="middle" fill="#c6d0e0" font="500 10px -apple-system">no network hop — free</text>
+        </g>
+        <g id="write3" class="a-hidden a-el">
+          <rect x="500" y="345" width="240" height="50" rx="10" fill="#2a1f3d" stroke="#7048e8" stroke-width="1.4"/>
+          <text x="620" y="365" text-anchor="middle" fill="#e7ecf3" font="700 12px -apple-system">GSI updated async (≈1s)</text>
+          <text x="620" y="381" text-anchor="middle" fill="#c6d0e0" font="500 10px -apple-system">extra hop + eventual consistency</text>
+        </g>
+
+        <path id="wArr1" class="a-hidden a-el" d="M240 370 L275 370" stroke="#f4a259" stroke-width="2" fill="none" marker-end="url(#arrA)"/>
+        <path id="wArr2" class="a-hidden a-el" d="M460 370 L495 370" stroke="#f4a259" stroke-width="2" fill="none" marker-end="url(#arrA)"/>
+
+        <g id="verdict" class="a-hidden a-el">
+          <rect x="40" y="415" width="740" height="30" rx="8" fill="#0f1420" stroke="#c6d0e0" stroke-dasharray="3 3"/>
+          <text x="410" y="435" text-anchor="middle" fill="#c6d0e0" font="700 12px -apple-system">
+            Verdict: LSI = cheap writes / slow "any genre" reads · GSI = fast reads / write amplification
+          </text>
+        </g>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'Same query. Watch how it flows through Local Secondary Index vs Global Secondary Index — then see the write path pay the bill.',
+          interval: 1900,
+          reset: (r) => {
+            ['#fan1','#fan2','#fan3','#fan4','#merge','#gsiArrow','#write2','#write3','#wArr1','#wArr2','#verdict']
+              .forEach(id => { const el = r.querySelector(id); if (el) el.classList.add('a-hidden'); });
+            ['#shard1','#shard2','#shard3','#shard4','#gsi','#write1']
+              .forEach(id => { const el = r.querySelector(id); if (el) el.classList.remove('a-glow','a-dim'); });
+          },
+          steps: [
+            { caption: 'LSI path: router fans out the query to ALL 4 shards. It has no idea which shards hold Crime movies.',
+              apply: (r) => { ['#fan1','#fan2','#fan3','#fan4'].forEach(id => r.querySelector(id).classList.remove('a-hidden'));
+                               ['#shard1','#shard2','#shard3','#shard4'].forEach(id => r.querySelector(id).classList.add('a-glow')); } },
+            { caption: 'Each shard scans its own local LSI. Shard 4 is the straggler with 3 hits — everyone waits for it.',
+              apply: (r) => { r.querySelector('#shard4').style.stroke = '#f7567c'; } },
+            { caption: 'Coordinator merges results. Wall-clock latency = slowest shard + merge. This is the "scatter-gather tax".',
+              apply: (r) => { r.querySelector('#merge').classList.remove('a-hidden'); } },
+            { caption: 'GSI path: same query, but the router knows exactly which GSI partition owns "Crime" — one hop.',
+              apply: (r) => { r.querySelector('#gsiArrow').classList.remove('a-hidden');
+                               r.querySelector('#gsi').classList.add('a-glow');
+                               ['#shard1','#shard2','#shard3','#shard4','#merge','#fan1','#fan2','#fan3','#fan4'].forEach(id => r.querySelector(id).classList.add('a-dim')); } },
+            { caption: 'Write path — a new Crime movie arrives and lands on Shard 2 based on its primary key.',
+              apply: (r) => { ['#shard1','#shard2','#shard3','#shard4','#merge','#fan1','#fan2','#fan3','#fan4','#gsi','#gsiArrow'].forEach(id => r.querySelector(id).classList.add('a-dim'));
+                               r.querySelector('#write1').classList.add('a-glow'); } },
+            { caption: 'LSI on Shard 2 is updated in the same transaction — no network hop, no distributed txn. Cheap.',
+              apply: (r) => { r.querySelector('#wArr1').classList.remove('a-hidden');
+                               r.querySelector('#write2').classList.remove('a-hidden'); } },
+            { caption: 'GSI partition for "Crime" lives on a different node group — write must cross the network, usually async.',
+              apply: (r) => { r.querySelector('#wArr2').classList.remove('a-hidden');
+                               r.querySelector('#write3').classList.remove('a-hidden'); } },
+            { caption: 'Two indexes, opposite trade-offs. Pick LSI when writes dominate; pick GSI when reads on the indexed attr dominate.',
+              apply: (r) => { r.querySelector('#verdict').classList.remove('a-hidden'); } }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>The partition-key contract</h3>
+    <p>The partition key is the <em>only</em> field the router uses to place a row on a shard. If you query with the partition key, the router does <code>hash(pk) mod N</code> and lands on exactly one shard. If you don't, the router has no locality signal and must broadcast — this is the entire origin of the LSI vs GSI question. Some systems (PostgreSQL, DynamoDB) let you add secondary indexes; others (Cassandra pre-3.0) essentially forced a scatter-gather.</p>
+
+    <h3>Local Secondary Index (LSI) — the co-located index</h3>
+    <p>An LSI is stored <strong>inside the same shard as the base row</strong> it points to. The index key is <code>(base_partition_key, secondary_attr)</code>, so lookups still need the base partition key to find the right shard. In DynamoDB, LSIs share the base table's storage partition — that's why the 10 GB per-partition-key limit applies to the sum of base + LSIs. Because the update happens in the same shard, the write is a <strong>local transaction</strong> — no distributed commit, no network amplification. Reads that supply the partition key hit one shard and are strongly consistent if you ask.</p>
+    <p>The catch: an LSI does nothing for a query that <em>only</em> supplies the secondary attribute. That degenerates to scatter-gather, which is what the animation shows above.</p>
+
+    <h3>Global Secondary Index (GSI) — the re-partitioned index</h3>
+    <p>A GSI is effectively a <strong>separate logical table</strong> keyed on the indexed attribute and physically distributed across its own partition set. In DynamoDB, the GSI has its own read/write capacity units, its own throughput, its own partitions. A query that filters only on the indexed attribute hashes that attribute's value and jumps directly to one GSI partition — no fanout, no coordinator merge.</p>
+    <p>The catch: every write to the base table must also flow to the correct GSI partition, which lives on a different node group. Doing this <em>synchronously</em> means every base write becomes a distributed transaction — 2× the latency, coordinator overhead, and a new failure mode where the GSI is down but the base isn't. Almost every production system takes the pragmatic escape hatch: <strong>update the GSI asynchronously</strong>. The base write commits fast, an internal replicator streams the change into the GSI, and readers accept eventual consistency (typically sub-second, up to minutes under load).</p>
+
+    <h3>The scatter-gather tax on LSI cross-partition reads</h3>
+    <p>Suppose we have 100 shards and each shard's p99 latency is 20 ms. The mean latency of a scatter-gather is not 20 ms — it's the <em>maximum</em> of 100 independent 20 ms samples. Tail-latency amplification means the actual observed p99 might be 80–120 ms because <em>somebody</em> in the fan-out is always slow. That's before you count coordinator merge time, network jitter, or partial failures forcing retries. This is why big-data engines like Elasticsearch aggressively cap the number of shards you can query in one request.</p>
+
+    <h3>Sync vs async GSI updates</h3>
+    <p>Synchronous GSI updates give you a globally consistent index but cost every write a 2PC. Async updates give you cheap writes but readers see stale index entries. Most real systems (DynamoDB GSIs, MongoDB sharded secondary indexes, Elasticsearch replicas) pick async. The correctness patch is either <em>read-your-writes</em> stickiness (route the writer's next few reads to the base table, not the GSI) or a hard product decision — "the search index is eventually consistent, the transactional store isn't."</p>
+
+    <h3>Hot partitions in a GSI</h3>
+    <p>Because a GSI is re-partitioned by the indexed attribute, an attribute with skewed values creates a hot spot in the GSI even if the base table is perfectly balanced. Example: partition a users table by <code>user_id</code> (uniform), then GSI on <code>country_code</code>. If 40% of your traffic is <code>US</code>, one GSI partition eats 40% of index writes and reads. Mitigations: composite index keys (<code>country_code#user_id</code>), sharded counters, or accepting the skew and provisioning the GSI more heavily than the base table.</p>
+
+    <h3>Where PostgreSQL sits</h3>
+    <p>PostgreSQL partitioned tables are more like the LSI model: a "partitioned index" on the parent is a logical wrapper over N child indexes, one per partition. There is no truly global index. Consequently, a <strong>unique constraint on a partitioned table must include every partition key column</strong> — the DB can't enforce uniqueness across partitions with only local indexes, so it structurally guarantees uniqueness by making the partition key part of the constraint. That is worth memorizing.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Under the surface, everything here is either a <strong>B-tree/LSM</strong> (the index structures), a <strong>consistent hash</strong> (the router), or a <strong>merge algorithm</strong> (the coordinator).</p>
+
+    <h3>Index structures</h3>
+    <ul>
+      <li><strong>B+ tree</strong> — used by PostgreSQL, MySQL, DynamoDB LSIs. O(log n) point + range reads, in-place updates. Good for read-heavy workloads.</li>
+      <li><strong>LSM tree (SSTable + memtable)</strong> — used by Cassandra, ScyllaDB, RocksDB, DynamoDB storage. Sequential appends → cheap writes, compaction handles cleanup. Good for write-heavy workloads.</li>
+      <li><strong>Hash index</strong> — DynamoDB partition selection. O(1) lookup, no range support.</li>
+    </ul>
+
+    <h3>Routing algorithms</h3>
+    <ul>
+      <li><strong>Consistent hashing</strong> (with virtual nodes) — maps partition keys → shards while minimizing rebalance on add/remove. Foundational to DynamoDB, Cassandra, Redis Cluster.</li>
+      <li><strong>Range partitioning</strong> — used by HBase, Bigtable, Spanner. Keeps range scans efficient but is more prone to hot spots.</li>
+    </ul>
+
+    <h3>Scatter-gather merge</h3>
+    <p>When a coordinator receives ordered result streams from N shards, merging is exactly a <strong>k-way merge</strong> problem — the same one you'd solve with a min-heap of size N. Complexity is O(K · log N) for K total results across N shards. This is why the query planner cares deeply about pushing filters and sorts down into each shard before merging.</p>
+
+    <h3>Complexity table</h3>
+    <table>
+      <tr><th>Operation</th><th>LSI</th><th>GSI</th><th>Notes</th></tr>
+      <tr><td>Point read on (PK, indexed attr)</td><td>O(log n) — 1 shard</td><td>O(log n) — 1 GSI partition</td><td>Tie. Both are single-partition lookups.</td></tr>
+      <tr><td>Read on indexed attr only</td><td>O(N · log n) — scatter to N shards</td><td>O(log n) — 1 GSI partition</td><td>GSI dominates. N shards → N× the p99.</td></tr>
+      <tr><td>Write (single logical row)</td><td>1 shard round-trip</td><td>2 shard round-trips (async → 1 for the client, 1 async)</td><td>LSI wins on write cost.</td></tr>
+      <tr><td>Range scan on indexed attr</td><td>Scatter + k-way merge — O(K·log N)</td><td>Range on the GSI partition — O(K + log n)</td><td>GSI is qualitatively better.</td></tr>
+      <tr><td>Cross-partition unique constraint</td><td>Impossible without distributed txn</td><td>Possible but 2PC on every write</td><td>Most systems refuse both and require PK inclusion.</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>DynamoDB is the reference implementation of both index types on a partitioned KV store — the terminology on the AWS page literally reads "Local Secondary Index" and "Global Secondary Index," and the design decisions map 1:1 to what we've discussed. For other patterns, you compose with OpenSearch, RDS, or Aurora.</p>
+
+    <table>
+      <tr><th>Concern</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Base partitioned KV store</td><td><strong>DynamoDB</strong></td><td>Hash-partitioned automatically. You give it the partition key; it handles sharding.</td></tr>
+      <tr><td>Local Secondary Index</td><td><strong>DynamoDB LSI</strong></td><td>Same partition key as base, different sort key. Up to 5 per table. Created at table creation only.</td></tr>
+      <tr><td>Global Secondary Index</td><td><strong>DynamoDB GSI</strong></td><td>Any partition + sort key. Up to 20 per table. Can be added/removed on a live table. Eventual consistency only.</td></tr>
+      <tr><td>Cross-region GSI replication</td><td><strong>DynamoDB Global Tables</strong></td><td>Extends indexes across regions; consumes "replicated write capacity units."</td></tr>
+      <tr><td>Read cache for hot GSI partitions</td><td><strong>DAX</strong></td><td>Microsecond in-memory cache in front of DynamoDB; helps when a GSI has a hot partition.</td></tr>
+      <tr><td>Full-text / analytics search on secondary attrs</td><td><strong>OpenSearch Service</strong></td><td>When you need multi-attribute search, ranking, or aggregations that a GSI can't do. Kept in sync via DynamoDB Streams → Lambda.</td></tr>
+      <tr><td>Change data capture to a GSI-like target</td><td><strong>DynamoDB Streams + Lambda</strong></td><td>The canonical way to fan out to OpenSearch, S3, Kinesis, or another table used as a manual "GSI."</td></tr>
+      <tr><td>Relational partitioning with local indexes</td><td><strong>Aurora / RDS PostgreSQL</strong></td><td>Native declarative partitioning + per-partition indexes. Enforces the "PK must include partition key" rule.</td></tr>
+      <tr><td>Router / query layer</td><td><strong>API Gateway → Lambda / ECS</strong></td><td>Wraps the read pattern selection (LSI vs GSI vs OpenSearch) behind a stable API.</td></tr>
+    </table>
+
+    <h3>DynamoDB specifics worth quoting in an interview</h3>
+    <ul>
+      <li><strong>LSI:</strong> must share the base table's partition key; can only be defined at table creation; consumes the base table's throughput; supports <strong>strong or eventual consistency</strong>.</li>
+      <li><strong>GSI:</strong> can use any attribute as partition key; created/deleted online; has <strong>its own throughput budget</strong>; supports <strong>eventual consistency only</strong>.</li>
+      <li><strong>Size limits:</strong> LSI adds to the 10 GB per-partition-key limit; GSIs have no such limit because they re-partition.</li>
+      <li><strong>Projected attributes:</strong> GSI queries can only read projected attrs (no base-table fetch); LSI queries can fetch non-projected attrs from the base table on the fly.</li>
+    </ul>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>Below is a small reference showing how you'd model both index types against DynamoDB using the AWS SDK for .NET. The important part is <em>which query you send</em>: a base-table <code>QueryAsync</code>, an LSI query (same partition key, different sort key), or a GSI query (repartitioned attribute).</p>
+
+    <pre><code><span class="cmt">// Movie table example — see how LSI vs GSI change the query shape.</span>
+<span class="cmt">// Base table:  PK = MovieId (S), SK = ReleaseDate (S)</span>
+<span class="cmt">// LSI:         PK = MovieId (SAME), SK = Genre       — local, co-located, cheap writes.</span>
+<span class="cmt">// GSI:         PK = Genre,          SK = ReleaseDate — global, own partitions, fast "by genre" reads.</span>
+
+<span class="kw">using</span> Amazon.DynamoDBv2;
+<span class="kw">using</span> Amazon.DynamoDBv2.Model;
+
+<span class="kw">public sealed class</span> <span class="typ">MovieIndexRepo</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IAmazonDynamoDB</span> _db;
+    <span class="kw">private const string</span> Table = <span class="str">"Movies"</span>;
+
+    <span class="kw">public</span> <span class="fn">MovieIndexRepo</span>(<span class="typ">IAmazonDynamoDB</span> db) =&gt; _db = db;
+
+    <span class="cmt">// 1) POINT READ using the BASE table partition key. One shard. Cheapest read possible.</span>
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">List</span>&lt;<span class="typ">Movie</span>&gt;&gt; <span class="fn">GetMovieHistory</span>(<span class="kw">string</span> movieId)
+    {
+        <span class="kw">var</span> req = <span class="kw">new</span> <span class="typ">QueryRequest</span>
+        {
+            TableName              = Table,
+            KeyConditionExpression = <span class="str">"MovieId = :m"</span>,
+            ExpressionAttributeValues = <span class="kw">new</span>() { [<span class="str">":m"</span>] = <span class="kw">new</span>(movieId) }
+        };
+        <span class="kw">var</span> res = <span class="kw">await</span> _db.<span class="fn">QueryAsync</span>(req);
+        <span class="kw">return</span> res.Items.<span class="fn">Select</span>(Movie.From).<span class="fn">ToList</span>();
+    }
+
+    <span class="cmt">// 2) LSI query — same partition key as base, but sorted/filtered by Genre.</span>
+    <span class="cmt">//    Still lands on ONE shard because MovieId (base PK) is in the predicate.</span>
+    <span class="cmt">//    Strongly consistent by default (LSIs support strong consistency).</span>
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">List</span>&lt;<span class="typ">Movie</span>&gt;&gt; <span class="fn">GetGenresForMovie</span>(<span class="kw">string</span> movieId, <span class="kw">string</span> genre)
+    {
+        <span class="kw">var</span> req = <span class="kw">new</span> <span class="typ">QueryRequest</span>
+        {
+            TableName              = Table,
+            IndexName              = <span class="str">"MovieId-Genre-LSI"</span>,
+            KeyConditionExpression = <span class="str">"MovieId = :m AND Genre = :g"</span>,
+            ConsistentRead         = <span class="kw">true</span>,   <span class="cmt">// LSI supports it; GSI would refuse.</span>
+            ExpressionAttributeValues = <span class="kw">new</span>()
+            {
+                [<span class="str">":m"</span>] = <span class="kw">new</span>(movieId),
+                [<span class="str">":g"</span>] = <span class="kw">new</span>(genre)
+            }
+        };
+        <span class="kw">return</span> (<span class="kw">await</span> _db.<span class="fn">QueryAsync</span>(req)).Items.<span class="fn">Select</span>(Movie.From).<span class="fn">ToList</span>();
+    }
+
+    <span class="cmt">// 3) GSI query — pure secondary lookup by Genre, no base PK required.</span>
+    <span class="cmt">//    Router jumps to the ONE GSI partition that owns "Crime".</span>
+    <span class="cmt">//    Eventually consistent — reads may lag base writes by ~1 sec.</span>
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">List</span>&lt;<span class="typ">Movie</span>&gt;&gt; <span class="fn">GetMoviesByGenre</span>(<span class="kw">string</span> genre, <span class="typ">DateOnly</span> since)
+    {
+        <span class="kw">var</span> req = <span class="kw">new</span> <span class="typ">QueryRequest</span>
+        {
+            TableName              = Table,
+            IndexName              = <span class="str">"Genre-ReleaseDate-GSI"</span>,
+            KeyConditionExpression = <span class="str">"Genre = :g AND ReleaseDate &gt;= :d"</span>,
+            <span class="cmt">// ConsistentRead = true would THROW — GSIs are eventual-only.</span>
+            ExpressionAttributeValues = <span class="kw">new</span>()
+            {
+                [<span class="str">":g"</span>] = <span class="kw">new</span>(genre),
+                [<span class="str">":d"</span>] = <span class="kw">new</span>(since.<span class="fn">ToString</span>(<span class="str">"O"</span>))
+            }
+        };
+        <span class="kw">return</span> (<span class="kw">await</span> _db.<span class="fn">QueryAsync</span>(req)).Items.<span class="fn">Select</span>(Movie.From).<span class="fn">ToList</span>();
+    }
+
+    <span class="cmt">// 4) The anti-pattern: NO index on Genre. This is a scatter-gather Scan.</span>
+    <span class="cmt">//    Reads every partition of the base table. Never do this in production.</span>
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">List</span>&lt;<span class="typ">Movie</span>&gt;&gt; <span class="fn">ScatterGatherByGenre_DoNotDoThis</span>(<span class="kw">string</span> genre)
+    {
+        <span class="kw">var</span> req = <span class="kw">new</span> <span class="typ">ScanRequest</span>
+        {
+            TableName        = Table,
+            FilterExpression = <span class="str">"Genre = :g"</span>,     <span class="cmt">// FilterExpression runs AFTER the scan — you pay for every read.</span>
+            ExpressionAttributeValues = <span class="kw">new</span>() { [<span class="str">":g"</span>] = <span class="kw">new</span>(genre) }
+        };
+        <span class="kw">var</span> results = <span class="kw">new</span> <span class="typ">List</span>&lt;<span class="typ">Movie</span>&gt;();
+        <span class="kw">string</span>? cursor = <span class="kw">null</span>;
+        <span class="kw">do</span>
+        {
+            req.ExclusiveStartKey = cursor <span class="kw">is null</span> ? <span class="kw">null</span> : <span class="fn">DecodeCursor</span>(cursor);
+            <span class="kw">var</span> page = <span class="kw">await</span> _db.<span class="fn">ScanAsync</span>(req);
+            results.<span class="fn">AddRange</span>(page.Items.<span class="fn">Select</span>(Movie.From));
+            cursor = page.LastEvaluatedKey?.<span class="fn">Count</span> &gt; 0 ? <span class="fn">EncodeCursor</span>(page.LastEvaluatedKey) : <span class="kw">null</span>;
+        } <span class="kw">while</span> (cursor <span class="kw">is not null</span>);
+        <span class="kw">return</span> results;
+    }
+}</code></pre>
+
+    <p>Notes worth mentioning verbally in an interview:</p>
+    <ul>
+      <li><strong>Same query semantics, three latencies.</strong> The <em>only</em> thing that changes across #1–#3 is which index name we pass — but the routing (one shard vs one GSI partition vs scatter-gather) is entirely determined by which attributes are in the <code>KeyConditionExpression</code>.</li>
+      <li><strong><code>ConsistentRead = true</code> throws on a GSI.</strong> The SDK enforces this at request time — a clean interview-friendly example of the eventual-consistency contract.</li>
+      <li><strong>Never Scan with a filter in prod</strong> unless you're an admin tool. FilterExpression runs after the read, so you pay full RCU cost for every item scanned. It's the "no index at all" version of scatter-gather.</li>
+    </ul>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>The core trade-off in one sentence</h3>
+    <p><strong>LSI</strong> makes writes cheap and pure-secondary reads expensive (scatter-gather). <strong>GSI</strong> makes writes expensive (or eventually consistent) and pure-secondary reads cheap. There is no free lunch — you're moving the cost around, not eliminating it.</p>
+
+    <h3>Failure modes</h3>
+    <ul>
+      <li><strong>Straggler shards on LSI reads.</strong> One slow shard drags the whole query to its p99. Mitigation: hedged requests (send to a replica after 95 ms), circuit-break slow shards, or degrade to partial results with an explicit "incomplete" flag.</li>
+      <li><strong>GSI backfill lag under bursty writes.</strong> Async replicators fall behind, and the "1-second lag" turns into a "5-minute lag." Mitigation: rate-limit writes into the GSI, over-provision the GSI's throughput, or read from the base table for read-your-writes.</li>
+      <li><strong>Hot GSI partition.</strong> Skewed indexed attribute → one GSI partition eats all traffic. Mitigation: composite key (append a bucket/user hash to the indexed attr), or shard the GSI writes explicitly.</li>
+      <li><strong>Index corruption drift.</strong> If a GSI async pipeline drops a message, the index disagrees with the base table silently. Mitigation: periodic reconciliation jobs, an idempotent replayer keyed by base-table version.</li>
+    </ul>
+
+    <h3>Likely interviewer follow-ups</h3>
+
+    <div class="qa">
+      <p class="q">Why is a scatter-gather query on 100 shards slower than 100× a single-shard read?</p>
+      <p class="a">Because latency is dominated by the <em>slowest</em> shard, not the average. Even if the mean shard responds in 20 ms, the max of 100 samples has a much fatter tail — often 3–5×. Add coordinator merge overhead and network jitter, and the "parallel" fanout is bottlenecked by tail latency.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">If GSIs are eventually consistent, when would you ever want an LSI?</p>
+      <p class="a">When you need strong consistency on a secondary read but always have the partition key in the query. Example: fetching an order's payment attempts by <code>orderId</code> + <code>attemptStatus</code>. The partition key is always known, and you can't afford a stale read of "payment successful" that hasn't propagated to a GSI yet.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Why does PostgreSQL force the unique constraint to include the partition key?</p>
+      <p class="a">Because PostgreSQL only supports local indexes on partitioned tables. It can enforce uniqueness inside a single partition (its local index will refuse duplicates), but it has no global index to enforce uniqueness across partitions. Forcing the constraint to include the partition key means two duplicate rows would necessarily land on the same partition, where the local index catches the collision.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Could you build a synchronous GSI? What's the cost?</p>
+      <p class="a">Yes — every base write becomes a distributed 2-phase commit across the base partition and the GSI partition. You get strong consistency but roughly 2× the write latency and a new failure mode: if the GSI is unavailable, the base write blocks. DynamoDB deliberately chose eventual consistency for GSIs to preserve base-table write availability.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">How would you handle a query needing multiple indexed attributes — say <code>genre AND year</code>?</p>
+      <p class="a">Options: (1) build a composite GSI with partition key <code>genre</code> and sort key <code>year</code> — one hop, no fanout. (2) fall back to two lookups + intersection (expensive and pointless if either result set is large). (3) push the workload to a search engine like OpenSearch, which is designed for multi-attribute queries. The rule: if it's a hot query, model the composite key upfront; DynamoDB rewards single-purpose indexes over general-purpose ones.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Where do you see this in Cassandra?</p>
+      <p class="a">Cassandra's native secondary indexes are effectively LSIs — an index per node covering only that node's data. That's why the community warns against them for high-cardinality attributes: a query without the partition key becomes a coordinator-driven fanout to every node. The preferred pattern is a <em>manual denormalized table</em> keyed on the query attribute — literally hand-building a GSI. SASI and Materialized Views moved the needle but still don't give you a true global index.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch">
+      <strong>The 30-second pitch:</strong> Once you partition a table by a primary key, any query that doesn't include that key has no locality. Two answers: <strong>Local Secondary Index</strong> co-locates a small index inside every shard — cheap writes, but pure secondary queries scatter-gather across all shards. <strong>Global Secondary Index</strong> re-partitions the table by the indexed attribute onto its own node group — pointed reads, but writes now touch two shards and must be async or 2PC. Pick LSI when writes dominate or the partition key is always in the query; pick GSI when the indexed attribute is your dominant read path.
+    </div>
+    <ul>
+      <li><strong>The words that win the round:</strong> "scatter-gather," "tail latency amplification," "write amplification," "eventual consistency," "hot partition on the GSI."</li>
+      <li><strong>Numbers to quote:</strong> DynamoDB allows <strong>5 LSIs, 20 GSIs</strong> per table. LSI adds to the <strong>10 GB per-partition-key</strong> limit. Async GSI lag is typically <strong>sub-second</strong> but can stretch to minutes under stress.</li>
+      <li><strong>The 5 talking points:</strong> (1) partition key contract, (2) LSI = local, GSI = repartitioned, (3) scatter-gather cost, (4) sync vs async GSI updates, (5) hot-partition mitigation.</li>
+      <li><strong>The clean escape:</strong> when they ask "why not both?" say "you can, and often should — LSIs for strongly-consistent (PK + attr) reads, GSIs for pure-attr reads, and OpenSearch for anything multi-dimensional or full-text."</li>
+      <li><strong>The gotcha to mention proactively:</strong> "Postgres partitioned tables don't have a true global index — that's why unique constraints must include the partition key."</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://arpitbhayani.me/blogs/how-indexes-work-on-partitioned-and-sharded-data" target="_blank" rel="noopener">Arpit Bhayani — How Indexes work on Partitioned and Sharded data</a> (primary source; movies-by-genre example, sync vs async GSI cost)</li>
+      <li><a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/SecondaryIndexes.html" target="_blank" rel="noopener">AWS DynamoDB — Improving data access with secondary indexes</a> (LSI vs GSI feature matrix, quotas, consistency)</li>
+      <li><a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GSI.html" target="_blank" rel="noopener">AWS DynamoDB — Global Secondary Indexes</a></li>
+      <li><a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LSI.html" target="_blank" rel="noopener">AWS DynamoDB — Local Secondary Indexes</a></li>
+      <li><a href="https://www.postgresql.org/docs/current/ddl-partitioning.html" target="_blank" rel="noopener">PostgreSQL Documentation — Table Partitioning</a> (local index behavior, unique constraint rule)</li>
+      <li><a href="https://cassandra.apache.org/doc/latest/cassandra/data_modeling/data_modeling_queries.html" target="_blank" rel="noopener">Cassandra Documentation — Data modeling and query patterns</a> (native secondary indexes as node-local)</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

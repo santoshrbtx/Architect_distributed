@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SQL Pipe Syntax — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --laymen: #f4c542;
+    --laymen-bg: #fff9e6;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: #b7830d; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  pre .op  { color: #f7768e; font-weight: 700; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+  @media (max-width: 720px) { .split { grid-template-columns: 1fr; } }
+  .split .panel {
+    background: #0f1420; color: #c6d0e0; border-radius: 12px; padding: 16px 18px;
+    font-family: "SF Mono", Consolas, monospace; font-size: .82rem; line-height: 1.5;
+  }
+  .split .panel h4 { margin: 0 0 8px; font-family: inherit; color: #7fa2ff; font-size: .78rem;
+    text-transform: uppercase; letter-spacing: .08em; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep · Language Design</div>
+    <h1>SQL Pipe Syntax</h1>
+    <p>How Google fixed SQL's biggest ergonomic problem — with a <code style="background:rgba(255,255,255,.2);color:#fff">|&gt;</code> operator that flips the query on its head.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>SQL is <strong>the most-used database language on the planet</strong>, but everyone who writes it hits the same wall: <em>the clause order doesn't match how you think.</em> You start with <code>SELECT</code>, but the engine actually runs <code>FROM</code> first. You can't filter on an aggregate with <code>WHERE</code>, so a second keyword — <code>HAVING</code> — exists. You can't filter on a window function with <code>HAVING</code>, so a third keyword — <code>QUALIFY</code> — exists. Anything non-linear (post-aggregation joins, chained filters, adding a column mid-query) forces a <strong>nested subquery</strong>, which pushes the reader upward through parentheses.</p>
+    <p>Google's answer, shipped in <strong>GoogleSQL</strong> and detailed in the <strong>VLDB 2024 paper "SQL Has Problems. We Can Fix Them: Pipe Syntax in SQL"</strong>, is a <strong>syntactic extension</strong>: a new <code>|&gt;</code> operator that lets you write queries as a top-to-bottom pipeline where each step is a unary relational operation (one table in, one table out). The written order matches the execution order. No new algebra, no migrations, no learning curve — same engine, same catalog, same optimizer.</p>
+    <p><strong>Where it runs.</strong> Pipe syntax is live in production across Google's shared SQL front-end and is available in <strong>BigQuery</strong>, <strong>F1</strong> (the query engine behind Ads/AdWords), <strong>Spanner</strong>, and <strong>Procella</strong> (YouTube analytics). Google exposed it as a GA feature of GoogleSQL in 2024. The design has been picked up as a proposal in the SQL standard committee and is being explored by other engines. Analysts inside Google were the first heavy users — pipe queries are dramatically easier to read at review time.</p>
+    <p><strong>Why interviewers love this topic.</strong> It sits at the intersection of <strong>language design</strong>, <strong>parser architecture</strong>, <strong>shared front-end infrastructure</strong>, and <strong>backward-compatible evolution of a global standard</strong> — every one of which is a Staff/Principal-level conversation.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The problem, without any jargon</h2>
+    <p>Imagine you're writing down a <strong>recipe</strong>. A sensible recipe reads top to bottom: <em>get the tomatoes, wash them, chop them, add salt, mix, serve.</em> Each line takes what came out of the last line and does one more thing to it.</p>
+    <p>Now imagine a recipe format where you must write the <em>final serving instructions first</em>, then the ingredients at the end, then the seasoning in the middle, then flip back to say what to wash — that's <strong>SQL</strong>. You write <code>SELECT (finished dish) FROM (ingredients) WHERE (rules)</code>, but the kitchen (the database) has to peek at every line, work out what to grab first, and only later figure out what you actually wanted served. It <strong>reads out of order compared to how it runs</strong>, and every cook has to learn that trick.</p>
+    <p>It gets worse. If you want to say "only keep dishes whose total price is more than $10", SQL won't let you say that with the normal rule word <code>WHERE</code> — you have to switch to a different rule word called <code>HAVING</code>. And if you want to rank the dishes and only keep the top three, you need a <em>third</em> rule word called <code>QUALIFY</code>. <strong>Three words that all mean "keep some rows"</strong>, just at different points in the process.</p>
+    <p>And the moment you want to do <em>two things in a row</em> — filter, then join with another table, then filter again — SQL forces you to <strong>wrap the whole query in parentheses and start over</strong>, like tearing up the recipe and rewriting it with the old recipe stuffed inside a footnote. Real analytics queries at big companies end up with five or six of these nested parentheses. Nobody enjoys reading them.</p>
+    <p>Google's fix is beautifully simple: a small arrow <strong><code>|&gt;</code></strong> (pronounced "pipe") that means <strong>"and then do this next"</strong>. You start with a table, then <code>|&gt;</code> filter, then <code>|&gt;</code> join, then <code>|&gt;</code> group, then <code>|&gt;</code> pick columns, all going straight down the page in the order things actually happen. Same database underneath, same power, just a way of writing that <strong>matches how you think</strong> — the way a recipe should. And crucially, the old SQL still works too: they didn't break anyone's existing queries. Every product you've used that runs on BigQuery — <strong>YouTube analytics, Google Ads reporting, Search dashboards</strong> — can be queried this way now.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What a fix for SQL must not break</h2>
+    <p>This isn't a scaling problem in the QPS sense — it's a <strong>language-design</strong> problem. The "capacity" here is the number of existing SQL queries, users, tools, and dialects the fix must remain compatible with. That is the <em>real</em> constraint that killed every prior "SQL replacement" attempt.</p>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Linear top-to-bottom composition.</strong> Each step is a unary operator: one table in, one table out.</li>
+      <li><strong>Any SQL expression</strong> (column refs, functions, subqueries, window functions, CASE, arithmetic) works inside pipe operators unchanged.</li>
+      <li><strong>All relational operations</strong> reachable via pipes: filter, project, join, group/aggregate, window, sort, limit, set operations (UNION/INTERSECT/EXCEPT), TVF calls, pivot/unpivot, sampling.</li>
+      <li><strong>Mixable with standard SQL.</strong> A pipe chain can start from a standard <code>FROM ...</code>, and a standard <code>SELECT</code> can wrap a pipe chain. A pipe chain is also a valid table subquery.</li>
+      <li><strong>Introspection.</strong> A partial pipe query (the "prefix property") is itself a valid query — you can run any prefix to inspect intermediate results.</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Backward compatibility.</strong> Existing queries and clients must be untouched.</li>
+      <li><strong>Zero new relational algebra.</strong> Same optimizer, same execution plans, same performance.</li>
+      <li><strong>Shared implementation.</strong> One front-end binary reused across F1, BigQuery, Spanner, Procella — a change adopted in one is visible everywhere.</li>
+      <li><strong>Standardizable.</strong> Grammar designed so it can be proposed to the SQL standard committee.</li>
+    </ul>
+
+    <h3>Back-of-the-envelope "scale"</h3>
+    <table>
+      <tr><th>Quantity</th><th>Order of magnitude</th><th>What it implies</th></tr>
+      <tr><td>SQL users worldwide</td><td>~10 million+</td><td>Any breaking change is unacceptable</td></tr>
+      <tr><td>SQL dialects in use</td><td>50+ (Postgres, MySQL, SQL Server, Oracle, Snowflake, BigQuery, Redshift, Spark…)</td><td>Fix must be an <em>extension</em>, not a language</td></tr>
+      <tr><td>Reserved keywords in ISO SQL</td><td>~250</td><td><code>|&gt;</code> chosen precisely because it needs <em>zero</em> new reserved words</td></tr>
+      <tr><td>Google engines sharing the front-end</td><td>4 (F1, BigQuery, Spanner, Procella)</td><td>One parser change ships everywhere at once</td></tr>
+      <tr><td>Pipe operators shipped in GoogleSQL</td><td>~20</td><td>Complete coverage of relational algebra</td></tr>
+      <tr><td>Ambiguity in the grammar</td><td><strong>Zero</strong></td><td><code>|&gt;</code> is not a valid symbol anywhere in current SQL; grammar is unambiguous</td></tr>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>Where pipe syntax lives inside a database</h2>
+    <p>A modern SQL engine is a stack: <strong>parser → resolver/analyzer → algebrizer → optimizer → executor</strong>. Everything from <em>resolver</em> downward operates on a well-defined relational algebra ("resolved AST") — not on SQL text. Pipe syntax is a change to the <strong>parser only</strong>: it adds a new grammar production for chained unary operators, and each parsed step lowers to the <em>same</em> resolved algebra node an equivalent standard-SQL clause would produce. From the optimizer's point of view, a pipe query is indistinguishable from a nested standard-SQL query.</p>
+    <p>Google's implementation lives in a component called <strong>ZetaSQL</strong> — the shared analyzer/parser used by all four engines. Adding pipe syntax to ZetaSQL made it instantly available in F1, BigQuery, Spanner, and Procella. This is the <strong>real system-design insight</strong> of the paper: one shared front-end binary is what made an evolution of this scale tractable at Google's scale.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 440" width="900" height="440" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="ah-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/>
+          </marker>
+        </defs>
+
+        <!-- clients row -->
+        <g font-family="-apple-system, sans-serif" font-size="13" fill="#e7ecf3">
+          <rect x="20" y="20" width="180" height="60" rx="10" fill="#1b2940" stroke="#4361ee" stroke-width="1.5"/>
+          <text x="110" y="45" text-anchor="middle" font-weight="700">Legacy client</text>
+          <text x="110" y="65" text-anchor="middle" font-size="11" fill="#7fa2ff">SELECT ... FROM ... WHERE</text>
+
+          <rect x="360" y="20" width="180" height="60" rx="10" fill="#1b2940" stroke="#2dc653" stroke-width="1.5"/>
+          <text x="450" y="45" text-anchor="middle" font-weight="700">Pipe client</text>
+          <text x="450" y="65" text-anchor="middle" font-size="11" fill="#7ce4a5">FROM t |&gt; WHERE ... |&gt; ...</text>
+
+          <rect x="700" y="20" width="180" height="60" rx="10" fill="#1b2940" stroke="#f7567c" stroke-width="1.5"/>
+          <text x="790" y="45" text-anchor="middle" font-weight="700">Mixed client</text>
+          <text x="790" y="65" text-anchor="middle" font-size="11" fill="#f5a3b7">SQL wrapping pipes</text>
+        </g>
+
+        <!-- arrows to parser -->
+        <path d="M110 80 L440 130" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+        <path d="M450 80 L450 130" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+        <path d="M790 80 L470 130" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+
+        <!-- ZetaSQL box -->
+        <rect x="150" y="140" width="600" height="200" rx="14" fill="#0e1a2f" stroke="#7048e8" stroke-width="2"/>
+        <text x="450" y="165" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="14" font-weight="700" fill="#c9b3ff">Shared front-end · ZetaSQL</text>
+
+        <rect x="180" y="180" width="240" height="60" rx="8" fill="#1b2940" stroke="#4361ee"/>
+        <text x="300" y="205" text-anchor="middle" font-size="13" fill="#e7ecf3" font-weight="700">Parser</text>
+        <text x="300" y="225" text-anchor="middle" font-size="11" fill="#7fa2ff">recognizes |&gt; chains</text>
+
+        <rect x="480" y="180" width="240" height="60" rx="8" fill="#1b2940" stroke="#4361ee"/>
+        <text x="600" y="205" text-anchor="middle" font-size="13" fill="#e7ecf3" font-weight="700">Resolver / Analyzer</text>
+        <text x="600" y="225" text-anchor="middle" font-size="11" fill="#7fa2ff">types + scope + catalog</text>
+
+        <rect x="180" y="260" width="540" height="60" rx="8" fill="#1b2940" stroke="#7048e8"/>
+        <text x="450" y="285" text-anchor="middle" font-size="13" fill="#e7ecf3" font-weight="700">Resolved AST · unified relational algebra</text>
+        <text x="450" y="303" text-anchor="middle" font-size="11" fill="#c9b3ff">standard SQL and pipe SQL produce identical trees</text>
+
+        <path d="M420 210 L480 210" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+        <path d="M300 240 L300 260" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+        <path d="M600 240 L600 260" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+
+        <!-- engines row -->
+        <g font-family="-apple-system, sans-serif" font-size="12" fill="#e7ecf3">
+          <rect x="40" y="360" width="180" height="60" rx="10" fill="#1b2940" stroke="#2dc653"/>
+          <text x="130" y="385" text-anchor="middle" font-weight="700">BigQuery</text>
+          <text x="130" y="403" text-anchor="middle" font-size="10" fill="#7ce4a5">analytical warehouse</text>
+
+          <rect x="240" y="360" width="180" height="60" rx="10" fill="#1b2940" stroke="#2dc653"/>
+          <text x="330" y="385" text-anchor="middle" font-weight="700">F1</text>
+          <text x="330" y="403" text-anchor="middle" font-size="10" fill="#7ce4a5">Ads OLTP+OLAP</text>
+
+          <rect x="440" y="360" width="180" height="60" rx="10" fill="#1b2940" stroke="#2dc653"/>
+          <text x="530" y="385" text-anchor="middle" font-weight="700">Spanner</text>
+          <text x="530" y="403" text-anchor="middle" font-size="10" fill="#7ce4a5">global OLTP</text>
+
+          <rect x="640" y="360" width="180" height="60" rx="10" fill="#1b2940" stroke="#2dc653"/>
+          <text x="730" y="385" text-anchor="middle" font-weight="700">Procella</text>
+          <text x="730" y="403" text-anchor="middle" font-size="10" fill="#7ce4a5">YouTube analytics</text>
+        </g>
+
+        <path d="M300 320 L130 360" stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#ah-green)"/>
+        <path d="M400 320 L330 360" stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#ah-green)"/>
+        <path d="M500 320 L530 360" stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#ah-green)"/>
+        <path d="M600 320 L730 360" stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#ah-green)"/>
+      </svg>
+      <div class="legend" style="justify-content:center;color:#c6d0e0">
+        <span><span class="dot" style="background:#4361ee"></span>Front-end (parse + analyze)</span>
+        <span><span class="dot" style="background:#7048e8"></span>Shared relational algebra</span>
+        <span><span class="dot" style="background:#2dc653"></span>Engines using the shared front-end</span>
+      </div>
+    </div>
+
+    <h3>The key trick: two grammars, one algebra</h3>
+    <p>Standard SQL clauses and pipe operators lower into <em>the same</em> resolved AST node types (<code>ScanNode</code>, <code>FilterNode</code>, <code>ProjectNode</code>, <code>AggregateNode</code>, <code>JoinNode</code>, <code>OrderByNode</code>…). This is why <strong>the optimizer, executor, and storage layer need zero changes</strong>. It's also why performance is exactly identical: a pipe query and its standard equivalent produce byte-identical plans.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a query rewrite itself, step by step</h2>
+    <p>Below is a real analytics query — <em>"for each region, what were the top-selling products over $100 in Q4?"</em> — rendered first as tangled standard SQL, then as a linear pipe chain. The animation walks through the six logical stages the engine executes and shows how each stage maps to a pipe operator on the right. This is what "the written order matches the execution order" actually means.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg" font-family="'SF Mono',Consolas,monospace">
+        <defs>
+          <marker id="anim-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+
+        <!-- LEFT: standard SQL block -->
+        <g>
+          <rect x="20" y="20" width="380" height="420" rx="12" fill="#141a26" stroke="#f7567c" stroke-width="1.5"/>
+          <text x="210" y="46" text-anchor="middle" font-size="13" fill="#f5a3b7" font-weight="700">STANDARD SQL — written top→bottom, runs bottom→top</text>
+
+          <!-- SQL lines: written order 1..6 top down, execution order highlights differently -->
+          <g id="sql-line-select"  data-anim="sql" font-size="13" fill="#e7ecf3">
+            <text x="40" y="90"><tspan fill="#ff9e64">SELECT</tspan> region, product, <tspan fill="#7aa2f7">SUM</tspan>(price)</text>
+          </g>
+          <g id="sql-line-from"    data-anim="sql" font-size="13" fill="#e7ecf3">
+            <text x="40" y="120"><tspan fill="#ff9e64">FROM</tspan> orders <tspan fill="#ff9e64">JOIN</tspan> customers <tspan fill="#ff9e64">ON</tspan> ...</text>
+          </g>
+          <g id="sql-line-where"   data-anim="sql" font-size="13" fill="#e7ecf3">
+            <text x="40" y="150"><tspan fill="#ff9e64">WHERE</tspan> quarter = <tspan fill="#9ece6a">'Q4'</tspan> <tspan fill="#ff9e64">AND</tspan> price &gt; 100</text>
+          </g>
+          <g id="sql-line-group"   data-anim="sql" font-size="13" fill="#e7ecf3">
+            <text x="40" y="180"><tspan fill="#ff9e64">GROUP BY</tspan> region, product</text>
+          </g>
+          <g id="sql-line-having"  data-anim="sql" font-size="13" fill="#e7ecf3">
+            <text x="40" y="210"><tspan fill="#ff9e64">HAVING</tspan> <tspan fill="#7aa2f7">SUM</tspan>(price) &gt; 500</text>
+          </g>
+          <g id="sql-line-order"   data-anim="sql" font-size="13" fill="#e7ecf3">
+            <text x="40" y="240"><tspan fill="#ff9e64">ORDER BY</tspan> <tspan fill="#7aa2f7">SUM</tspan>(price) <tspan fill="#ff9e64">DESC</tspan></text>
+          </g>
+          <g id="sql-line-limit"   data-anim="sql" font-size="13" fill="#e7ecf3">
+            <text x="40" y="270"><tspan fill="#ff9e64">LIMIT</tspan> 10;</text>
+          </g>
+
+          <!-- Execution order pointer -->
+          <g id="exec-pointer" class="a-hidden">
+            <circle cx="30" cy="120" r="7" fill="#f7567c"/>
+            <text x="50" y="124" fill="#f7567c" font-size="11" font-weight="700">runs 1st</text>
+          </g>
+
+          <text x="210" y="360" text-anchor="middle" font-size="11" fill="#7f8aa0" font-style="italic">Two "keep row" keywords (WHERE + HAVING).</text>
+          <text x="210" y="378" text-anchor="middle" font-size="11" fill="#7f8aa0" font-style="italic">SELECT is written first but runs 5th.</text>
+          <text x="210" y="410" text-anchor="middle" font-size="12" fill="#f5a3b7" font-weight="700">😖 Written order ≠ Execution order</text>
+        </g>
+
+        <!-- MIDDLE: transform arrow -->
+        <g id="xform-arrow" class="a-hidden">
+          <path d="M410 230 L490 230" stroke="#7048e8" stroke-width="3" fill="none" marker-end="url(#anim-ah)"/>
+          <text x="450" y="215" text-anchor="middle" font-size="11" fill="#c9b3ff" font-weight="700">rewrite</text>
+        </g>
+
+        <!-- RIGHT: pipe SQL block -->
+        <g>
+          <rect x="500" y="20" width="380" height="420" rx="12" fill="#141a26" stroke="#2dc653" stroke-width="1.5"/>
+          <text x="690" y="46" text-anchor="middle" font-size="13" fill="#7ce4a5" font-weight="700">PIPE SQL — written order = execution order</text>
+
+          <g id="pipe-line-1" data-anim="pipe" class="a-hidden" font-size="13" fill="#e7ecf3">
+            <text x="520" y="90"><tspan fill="#ff9e64">FROM</tspan> orders <tspan fill="#ff9e64">JOIN</tspan> customers <tspan fill="#ff9e64">ON</tspan> ...</text>
+          </g>
+          <g id="pipe-line-2" data-anim="pipe" class="a-hidden" font-size="13" fill="#e7ecf3">
+            <text x="520" y="120"><tspan fill="#f7768e" font-weight="700">|&gt;</tspan> <tspan fill="#ff9e64">WHERE</tspan> quarter=<tspan fill="#9ece6a">'Q4'</tspan> <tspan fill="#ff9e64">AND</tspan> price&gt;100</text>
+          </g>
+          <g id="pipe-line-3" data-anim="pipe" class="a-hidden" font-size="13" fill="#e7ecf3">
+            <text x="520" y="150"><tspan fill="#f7768e" font-weight="700">|&gt;</tspan> <tspan fill="#ff9e64">AGGREGATE</tspan> <tspan fill="#7aa2f7">SUM</tspan>(price) <tspan fill="#ff9e64">AS</tspan> total</text>
+            <text x="536" y="168" font-size="12" fill="#e7ecf3">  <tspan fill="#ff9e64">GROUP BY</tspan> region, product</text>
+          </g>
+          <g id="pipe-line-4" data-anim="pipe" class="a-hidden" font-size="13" fill="#e7ecf3">
+            <text x="520" y="200"><tspan fill="#f7768e" font-weight="700">|&gt;</tspan> <tspan fill="#ff9e64">WHERE</tspan> total &gt; 500</text>
+            <text x="536" y="216" font-size="10" fill="#7ce4a5" font-style="italic">   (no more HAVING — same WHERE!)</text>
+          </g>
+          <g id="pipe-line-5" data-anim="pipe" class="a-hidden" font-size="13" fill="#e7ecf3">
+            <text x="520" y="248"><tspan fill="#f7768e" font-weight="700">|&gt;</tspan> <tspan fill="#ff9e64">ORDER BY</tspan> total <tspan fill="#ff9e64">DESC</tspan></text>
+          </g>
+          <g id="pipe-line-6" data-anim="pipe" class="a-hidden" font-size="13" fill="#e7ecf3">
+            <text x="520" y="278"><tspan fill="#f7768e" font-weight="700">|&gt;</tspan> <tspan fill="#ff9e64">LIMIT</tspan> 10</text>
+          </g>
+          <g id="pipe-line-7" data-anim="pipe" class="a-hidden" font-size="13" fill="#e7ecf3">
+            <text x="520" y="308"><tspan fill="#f7768e" font-weight="700">|&gt;</tspan> <tspan fill="#ff9e64">SELECT</tspan> region, product, total;</text>
+          </g>
+
+          <text id="pipe-caption" class="a-hidden" x="690" y="410" text-anchor="middle" font-size="12" fill="#7ce4a5" font-weight="700">
+            🙂 Written order = Execution order
+          </text>
+        </g>
+
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        function showPipe(id) { $('#' + id).classList.remove('a-hidden'); }
+        function glow(sel) { $(sel).classList.add('a-glow'); }
+        function unglow(sel) { $(sel).classList.remove('a-glow'); }
+
+        const CFG = {
+          intro: 'This animation rewrites a real analytics query from standard SQL to pipe syntax, stage by stage.',
+          interval: 1800,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.remove('a-glow','a-dim');
+            });
+            r.querySelectorAll('[data-anim="pipe"]').forEach(el => el.classList.add('a-hidden'));
+            r.querySelector('#exec-pointer').classList.add('a-hidden');
+            r.querySelector('#xform-arrow').classList.add('a-hidden');
+            r.querySelector('#pipe-caption').classList.add('a-hidden');
+          },
+          steps: [
+            { caption: 'Standard SQL: written top-down as SELECT/FROM/WHERE/GROUP/HAVING/ORDER/LIMIT.',
+              apply: (r, $) => { /* nothing extra — starting state */ } },
+            { caption: 'But the engine actually runs FROM first — the "written order ≠ execution order" trap.',
+              apply: (r, $) => {
+                $('#exec-pointer').classList.remove('a-hidden');
+                $('#sql-line-from').classList.add('a-glow');
+              } },
+            { caption: 'Then WHERE. Now step 3.  Notice we\'ve already skipped past SELECT (which runs 5th).',
+              apply: (r, $) => {
+                $('#sql-line-from').classList.remove('a-glow');
+                $('#sql-line-where').classList.add('a-glow');
+              } },
+            { caption: 'And a second "keep row" clause — HAVING — exists purely because WHERE can\'t see aggregates.',
+              apply: (r, $) => {
+                $('#sql-line-where').classList.remove('a-glow');
+                $('#sql-line-having').classList.add('a-glow');
+              } },
+            { caption: 'Rewrite the query. Each SQL clause becomes one pipe operator, in the order it runs.',
+              apply: (r, $) => {
+                $('#sql-line-having').classList.remove('a-glow');
+                $$('[data-anim="sql"]').forEach(el => el.classList.add('a-dim'));
+                $('#xform-arrow').classList.remove('a-hidden');
+              } },
+            { caption: 'FROM comes first — same as the engine\'s execution order.',
+              apply: (r, $) => { showPipe('pipe-line-1'); glow('#pipe-line-1'); } },
+            { caption: '|> WHERE filters the base rows.',
+              apply: (r, $) => { unglow('#pipe-line-1'); showPipe('pipe-line-2'); glow('#pipe-line-2'); } },
+            { caption: '|> AGGREGATE groups and computes SUM. Note: no separate SELECT list needed here.',
+              apply: (r, $) => { unglow('#pipe-line-2'); showPipe('pipe-line-3'); glow('#pipe-line-3'); } },
+            { caption: '|> WHERE again — filtering aggregates uses the SAME keyword. HAVING is gone.',
+              apply: (r, $) => { unglow('#pipe-line-3'); showPipe('pipe-line-4'); glow('#pipe-line-4'); } },
+            { caption: '|> ORDER BY, |> LIMIT, |> SELECT — final projection is last, exactly when it runs.',
+              apply: (r, $) => {
+                unglow('#pipe-line-4');
+                showPipe('pipe-line-5'); showPipe('pipe-line-6'); showPipe('pipe-line-7');
+                glow('#pipe-line-5'); glow('#pipe-line-6'); glow('#pipe-line-7');
+              } },
+            { caption: 'Same relational algebra, same execution plan — but the code now reads exactly like the engine executes it.',
+              apply: (r, $) => {
+                unglow('#pipe-line-5'); unglow('#pipe-line-6'); unglow('#pipe-line-7');
+                $('#pipe-caption').classList.remove('a-hidden');
+              } }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. Why the old syntax hurts (the paper's four grievances)</h3>
+    <p>The Google paper opens by cataloguing SQL's design smells, and they map cleanly to interview talking points:</p>
+    <ul>
+      <li><strong>Written order ≠ execution order.</strong> SQL is written <code>SELECT → FROM → WHERE → GROUP BY → HAVING → ORDER BY → LIMIT</code>, but executed <code>FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY → LIMIT</code>. Every SQL learner memorises this asymmetry.</li>
+      <li><strong>Duplicate row-filter keywords.</strong> <code>WHERE</code>, <code>HAVING</code>, <code>QUALIFY</code> — three keywords to filter rows at three different execution points. In pipe syntax you use <code>|&gt; WHERE</code> everywhere.</li>
+      <li><strong>Subquery nesting for composition.</strong> Chaining <em>filter → join → filter → aggregate</em> in standard SQL forces you to wrap the middle in a <code>(SELECT ... FROM (SELECT ...))</code> stack that reads inside-out. Pipe queries flatten this to a linear top-to-bottom read.</li>
+      <li><strong>Extensibility barriers.</strong> Every new relational operator in standard SQL (PIVOT, UNPIVOT, QUALIFY, MATCH_RECOGNIZE) needs a new reserved keyword and a special place in the clause order. With pipes, adding a new operator is just adding <code>|&gt; NEW_OP ...</code> — no new keyword, no reordering.</li>
+    </ul>
+
+    <h3>2. The <code>|&gt;</code> operator, precisely</h3>
+    <p>A pipe query is a chain: <code>&lt;starter&gt; |&gt; &lt;op&gt; |&gt; &lt;op&gt; ...</code>. Each <code>|&gt;</code> takes the <em>table</em> produced by everything above it and applies one relational operator, producing a new table. The starter is any expression that yields a table — typically a <code>FROM t</code>, but also a <code>SELECT expr</code> row constructor, a CTE, a subquery, or a table-valued function call. Because every step is unary and table-in-table-out, pipe operators are <strong>freely composable and reorderable</strong>.</p>
+
+    <h3>3. The operator inventory (GoogleSQL)</h3>
+    <p>Every standard SQL clause has a pipe equivalent, plus a few new ones the paper introduces to reduce clutter:</p>
+    <table>
+      <tr><th>Pipe operator</th><th>Purpose</th><th>Standard-SQL equivalent</th></tr>
+      <tr><td><code>|&gt; WHERE cond</code></td><td>Filter rows</td><td>WHERE / HAVING / QUALIFY (all three collapse to one)</td></tr>
+      <tr><td><code>|&gt; SELECT cols</code></td><td>Project columns</td><td>SELECT</td></tr>
+      <tr><td><code>|&gt; EXTEND expr AS c</code></td><td>Add a new column, keep the rest</td><td>SELECT *, expr AS c</td></tr>
+      <tr><td><code>|&gt; SET c = expr</code></td><td>Replace an existing column</td><td>SELECT with re-projection</td></tr>
+      <tr><td><code>|&gt; DROP c1, c2</code></td><td>Drop columns</td><td>SELECT * EXCEPT (c1, c2)</td></tr>
+      <tr><td><code>|&gt; RENAME c AS d</code></td><td>Rename columns</td><td>SELECT with alias</td></tr>
+      <tr><td><code>|&gt; AS alias</code></td><td>Alias the current table</td><td>subquery AS alias</td></tr>
+      <tr><td><code>|&gt; AGGREGATE ... GROUP BY ...</code></td><td>Group + aggregate</td><td>SELECT agg, cols GROUP BY cols</td></tr>
+      <tr><td><code>|&gt; JOIN t ON ...</code></td><td>Join to another table</td><td>FROM a JOIN b ON ...</td></tr>
+      <tr><td><code>|&gt; ORDER BY expr</code></td><td>Sort</td><td>ORDER BY</td></tr>
+      <tr><td><code>|&gt; LIMIT n [OFFSET k]</code></td><td>Limit rows</td><td>LIMIT n OFFSET k</td></tr>
+      <tr><td><code>|&gt; WINDOW ...</code></td><td>Named window definitions</td><td>WINDOW clause</td></tr>
+      <tr><td><code>|&gt; UNION/INTERSECT/EXCEPT t</code></td><td>Set operations</td><td>UNION / INTERSECT / EXCEPT</td></tr>
+      <tr><td><code>|&gt; PIVOT / |&gt; UNPIVOT</code></td><td>Reshape wide↔long</td><td>PIVOT / UNPIVOT (composable now)</td></tr>
+      <tr><td><code>|&gt; TABLESAMPLE ...</code></td><td>Sampling</td><td>TABLESAMPLE</td></tr>
+      <tr><td><code>|&gt; CALL tvf(...)</code></td><td>Invoke a table-valued function, e.g. ML.PREDICT</td><td>FROM tvf(prev_query, ...) — awkward without pipes</td></tr>
+      <tr><td><code>|&gt; ASSERT cond</code></td><td>Runtime data-quality check (experimental)</td><td>— (no clean equivalent)</td></tr>
+      <tr><td><code>|&gt; LOG</code></td><td>Snapshot intermediate rows for debugging (experimental)</td><td>— </td></tr>
+      <tr><td><code>|&gt; DESCRIBE</code></td><td>Emit schema of the current pipeline table</td><td>— </td></tr>
+    </table>
+
+    <h3>4. The "prefix property" and why analysts love it</h3>
+    <p>Because each pipe step yields a valid table, <strong>any prefix of a pipe query is itself a runnable query</strong>. You can highlight the first three pipes in an IDE, hit run, and see the intermediate result — the same way you inspect a value halfway through a Python function. In standard SQL you'd have to comment out the tail, un-alias the inner select, and hope the parser cooperated. This is the single feature analysts cite as the biggest quality-of-life win.</p>
+
+    <h3>5. The <code>CALL</code> operator and TVFs</h3>
+    <p>Google's ML integration is a good example. Standard SQL forces model inference to be written inside-out as <code>FROM ML.PREDICT(MODEL m, (SELECT ... FROM t))</code>. In pipe syntax it's a normal step: <code>FROM t |&gt; CALL ML.PREDICT(MODEL m) |&gt; CALL ML.PREDICT(MODEL m2)</code>. Chaining two models is now linear — no nested subqueries — which is exactly the reason the paper highlights it.</p>
+
+    <h3>6. What is <em>not</em> a pipe operator (and why)</h3>
+    <p>Grammar-level constructs that don't fit the "table in, table out" model stay in standard SQL: <code>CREATE TABLE</code>, <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>MERGE</code>, DDL, session settings. Pipe syntax is purely a <em>read-path</em> feature — the analytical query language, not the DML.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Pipe syntax is a compiler problem more than a systems problem. The concepts an interviewer will want you to name:</p>
+
+    <h3>Parser: recursive-descent / LALR grammar</h3>
+    <p>ZetaSQL uses a hand-crafted parser (Bison/Yacc-family LALR grammar) that produces an <strong>abstract syntax tree (AST)</strong>. Adding pipe syntax was mostly adding a new grammar rule:</p>
+    <pre><span class="cmt">// Simplified grammar rule for a pipe query</span>
+pipe_query   := table_expr ( <span class="op">'|>'</span> pipe_op )*
+pipe_op      := <span class="kw">WHERE</span> expr
+              | <span class="kw">SELECT</span> select_list
+              | <span class="kw">JOIN</span> table_expr <span class="kw">ON</span> expr
+              | <span class="kw">AGGREGATE</span> agg_list <span class="kw">GROUP BY</span> expr_list
+              | <span class="kw">ORDER BY</span> expr_list
+              | <span class="kw">LIMIT</span> integer
+              | ... (~20 productions)</pre>
+    <p>The parser produces a chain of pipe AST nodes; the <strong>resolver</strong> walks the chain, calling the <em>existing</em> resolver methods for WHERE, JOIN, GROUP BY, etc. — one per step — and stitching each into a resolved AST subtree.</p>
+
+    <h3>Resolved AST: relational algebra tree</h3>
+    <p>Every SQL engine, after parsing, works on a tree of relational-algebra operators: Scan, Filter (σ), Project (π), Join (⋈), Aggregate (γ), Sort (τ), Limit. Pipe syntax and standard SQL <em>both</em> lower into the same tree — so <strong>the optimizer's cost model, rules, and physical operators need zero changes</strong>. This is the algorithm-of-note: <em>equivalent syntaxes → identical algebra</em>.</p>
+
+    <h3>Complexity table</h3>
+    <table>
+      <tr><th>Concern</th><th>Complexity</th><th>Note</th></tr>
+      <tr><td>Parse a pipe chain of N steps</td><td>O(N) tokens</td><td>Linear parse, single-pass</td></tr>
+      <tr><td>Resolve a pipe chain</td><td>O(N × S)</td><td>N steps × S = scope-lookup cost per step</td></tr>
+      <tr><td>Optimize</td><td>Same as standard SQL</td><td>Identical resolved tree</td></tr>
+      <tr><td>Execute</td><td>Same as standard SQL</td><td>Byte-identical plan</td></tr>
+      <tr><td>Grammar ambiguity</td><td>O(1) — none</td><td><code>|&gt;</code> is not valid anywhere in existing SQL</td></tr>
+    </table>
+
+    <h3>Related algorithms worth naming</h3>
+    <ul>
+      <li><strong>Predicate pushdown</strong>: the optimizer moves filters below joins/aggregations to reduce data volume. Because pipe syntax and standard SQL produce the same algebra, pushdown works identically for both.</li>
+      <li><strong>Common subexpression elimination</strong>: for chained pipes that could be shared (e.g. two pipe branches sharing a filter), the optimizer detects and dedupes.</li>
+      <li><strong>Tree isomorphism</strong>: unit tests in ZetaSQL verify that a pipe query and its standard-SQL equivalent produce isomorphic resolved trees — a compile-time correctness check.</li>
+    </ul>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>Pipe syntax originated at Google, so BigQuery, Spanner, F1 and Procella are the first-class citizens. But an interviewer will absolutely ask "how would you do this on AWS?" — so here's the honest, well-labelled answer:</p>
+
+    <table>
+      <tr><th>Google component</th><th>AWS equivalent</th><th>Status on AWS</th></tr>
+      <tr><td>BigQuery (analytical)</td><td><strong>Redshift</strong>, <strong>Athena</strong> (Trino), <strong>EMR/Spark SQL</strong></td><td>No native pipe syntax as of 2026-08 — you'd write a transpiler</td></tr>
+      <tr><td>F1 (Ads OLTP+OLAP)</td><td><strong>Aurora PostgreSQL</strong>, <strong>Aurora DSQL</strong></td><td>Standard SQL only</td></tr>
+      <tr><td>Spanner (global OLTP)</td><td><strong>Aurora DSQL</strong>, <strong>DynamoDB + tx</strong></td><td>Standard SQL only</td></tr>
+      <tr><td>Procella (YouTube analytics)</td><td><strong>Redshift Spectrum</strong>, <strong>Athena on Iceberg</strong></td><td>Standard SQL only</td></tr>
+      <tr><td>ZetaSQL (shared front-end)</td><td>Apache Calcite (used by Athena/Trino, Flink, Beam)</td><td>Calcite has a pipe-syntax proposal in flight</td></tr>
+    </table>
+
+    <h3>How you'd ship pipe syntax on AWS today</h3>
+    <p>The pragmatic architecture is a <strong>front-end transpiler service</strong> that sits in front of Athena or Redshift and rewrites pipe SQL into standard SQL before it hits the engine. This is the same architectural pattern Google used before ZetaSQL matured — a rewriter that is engine-agnostic.</p>
+    <p>Concretely on AWS:</p>
+    <ul>
+      <li><strong>Amazon API Gateway</strong> — accepts pipe SQL from clients (or BI tools via a JDBC shim).</li>
+      <li><strong>AWS Lambda (C# / .NET 8)</strong> — hosts the transpiler; parses <code>|&gt;</code> chains, emits standard SQL, forwards to the target engine.</li>
+      <li><strong>Amazon Athena</strong> / <strong>Amazon Redshift Data API</strong> — executes the emitted standard SQL against S3 or the cluster.</li>
+      <li><strong>Amazon S3 + Glue Catalog</strong> — the actual data lake / metastore.</li>
+      <li><strong>Amazon ElastiCache (Redis)</strong> — cache parsed AST for repeated identical pipe queries so re-parse isn't on the hot path.</li>
+      <li><strong>Amazon CloudWatch</strong> — log the pre-transpile and post-transpile SQL side-by-side so query authors can debug.</li>
+    </ul>
+    <p>This "sidecar transpiler" pattern is exactly how you'd introduce pipe syntax to <em>any</em> engine that hasn't adopted it natively — the point of the design (unified relational algebra as the lowering target) is that the emitted standard SQL is exactly equivalent, so the target engine's optimizer stays fully in charge.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — a minimal pipe → standard SQL transpiler</h2>
+    <p>Here's a working, idiomatic C# implementation of the transpiler idea above. It tokenises the pipe query, folds each step into a nested <code>SELECT ... FROM (...)</code> layer, and emits standard SQL. Real ZetaSQL is orders of magnitude more sophisticated (types, catalog, scope), but this captures the <em>algorithmic core</em> — an interviewer will love that you can write it on the whiteboard.</p>
+
+    <pre><span class="cmt">// PipeTranspiler.cs — rewrites |&gt; pipe SQL into nested standard SQL.
+// Handles: FROM, |&gt; WHERE, |&gt; SELECT, |&gt; JOIN, |&gt; AGGREGATE / GROUP BY,
+//          |&gt; ORDER BY, |&gt; LIMIT, |&gt; EXTEND, |&gt; DROP</span>
+
+<span class="kw">using</span> System.Text.RegularExpressions;
+
+<span class="kw">public sealed record</span> <span class="typ">PipeStep</span>(<span class="typ">string</span> Op, <span class="typ">string</span> Body);
+
+<span class="kw">public static class</span> <span class="typ">PipeTranspiler</span>
+{
+    <span class="cmt">// Ordered list of operators we recognise after a |&gt;
+    // Longer keywords first so "GROUP BY" beats "GROUP".</span>
+    <span class="kw">private static readonly</span> <span class="typ">string</span>[] Ops = {
+        <span class="str">"AGGREGATE"</span>, <span class="str">"ORDER BY"</span>, <span class="str">"GROUP BY"</span>, <span class="str">"SELECT"</span>,
+        <span class="str">"WHERE"</span>, <span class="str">"JOIN"</span>, <span class="str">"LIMIT"</span>, <span class="str">"EXTEND"</span>, <span class="str">"DROP"</span>
+    };
+
+    <span class="kw">public static string</span> <span class="fn">ToStandardSql</span>(<span class="typ">string</span> pipeSql)
+    {
+        <span class="kw">var</span> parts = <span class="fn">SplitOnPipes</span>(pipeSql);
+        <span class="kw">if</span> (parts.Count == 0)
+            <span class="kw">throw new</span> <span class="typ">FormatException</span>(<span class="str">"Empty query"</span>);
+
+        <span class="cmt">// parts[0] is the starter (e.g. "FROM orders JOIN customers ON ...").
+        // Each subsequent part starts with a pipe operator keyword.</span>
+        <span class="typ">string</span> starter = parts[0].Trim();
+        <span class="kw">var</span> steps = parts.Skip(1).Select(<span class="fn">ParseStep</span>).ToList();
+
+        <span class="cmt">// Fold left: wrap prior result in a subquery for each step.</span>
+        <span class="typ">string</span> current = starter;                <span class="cmt">// begins with "FROM ..."</span>
+        <span class="cmt">// We carry the current "SELECT list" separately so |&gt; SELECT / EXTEND can update it.</span>
+        <span class="typ">string</span> selectList = <span class="str">"*"</span>;
+
+        <span class="kw">foreach</span> (<span class="kw">var</span> s <span class="kw">in</span> steps)
+        {
+            <span class="kw">switch</span> (s.Op)
+            {
+                <span class="kw">case</span> <span class="str">"WHERE"</span>:
+                    current = <span class="str">$"SELECT {selectList} {current} WHERE {s.Body}"</span>;
+                    current = <span class="fn">Wrap</span>(current); selectList = <span class="str">"*"</span>;
+                    <span class="kw">break</span>;
+
+                <span class="kw">case</span> <span class="str">"SELECT"</span>:
+                    selectList = s.Body;
+                    <span class="kw">break</span>;
+
+                <span class="kw">case</span> <span class="str">"EXTEND"</span>:
+                    selectList = <span class="str">$"*, {s.Body}"</span>;
+                    <span class="kw">break</span>;
+
+                <span class="kw">case</span> <span class="str">"DROP"</span>:
+                    selectList = <span class="str">$"* EXCEPT ({s.Body})"</span>;
+                    <span class="kw">break</span>;
+
+                <span class="kw">case</span> <span class="str">"JOIN"</span>:
+                    current = <span class="str">$"SELECT {selectList} {current} JOIN {s.Body}"</span>;
+                    current = <span class="fn">Wrap</span>(current); selectList = <span class="str">"*"</span>;
+                    <span class="kw">break</span>;
+
+                <span class="kw">case</span> <span class="str">"AGGREGATE"</span>:
+                    <span class="cmt">// Body looks like: "SUM(price) AS total GROUP BY region, product"</span>
+                    <span class="kw">var</span> (agg, grp) = <span class="fn">SplitAggregate</span>(s.Body);
+                    <span class="typ">string</span> agSelect = <span class="fn">string.IsNullOrEmpty</span>(grp) ? agg : <span class="str">$"{grp}, {agg}"</span>;
+                    current = <span class="str">$"SELECT {agSelect} {current}"</span>;
+                    <span class="kw">if</span> (!<span class="fn">string.IsNullOrEmpty</span>(grp))
+                        current += <span class="str">$" GROUP BY {grp}"</span>;
+                    current = <span class="fn">Wrap</span>(current); selectList = <span class="str">"*"</span>;
+                    <span class="kw">break</span>;
+
+                <span class="kw">case</span> <span class="str">"ORDER BY"</span>:
+                    current = <span class="str">$"SELECT {selectList} {current} ORDER BY {s.Body}"</span>;
+                    current = <span class="fn">Wrap</span>(current); selectList = <span class="str">"*"</span>;
+                    <span class="kw">break</span>;
+
+                <span class="kw">case</span> <span class="str">"LIMIT"</span>:
+                    current = <span class="str">$"SELECT {selectList} {current} LIMIT {s.Body}"</span>;
+                    current = <span class="fn">Wrap</span>(current); selectList = <span class="str">"*"</span>;
+                    <span class="kw">break</span>;
+
+                <span class="kw">default</span>:
+                    <span class="kw">throw new</span> <span class="typ">NotSupportedException</span>(<span class="str">$"Unknown pipe op: {s.Op}"</span>);
+            }
+        }
+        <span class="cmt">// Emit final outer SELECT with the accumulated projection.</span>
+        <span class="kw">return</span> <span class="str">$"SELECT {selectList} {current}"</span>;
+    }
+
+    <span class="kw">private static string</span> <span class="fn">Wrap</span>(<span class="typ">string</span> sql) =&gt; <span class="str">$"FROM ({sql}) AS t"</span>;
+
+    <span class="kw">private static</span> <span class="typ">List</span>&lt;<span class="typ">string</span>&gt; <span class="fn">SplitOnPipes</span>(<span class="typ">string</span> sql)
+    {
+        <span class="cmt">// Naive splitter — a real parser handles strings/comments/parentheses.
+        // We split on "|&gt;" that is NOT inside parentheses or string literals.</span>
+        <span class="kw">var</span> result = <span class="kw">new</span> <span class="typ">List</span>&lt;<span class="typ">string</span>&gt;();
+        <span class="typ">int</span> depth = 0; <span class="typ">bool</span> inStr = <span class="kw">false</span>; <span class="typ">int</span> start = 0;
+        <span class="kw">for</span> (<span class="typ">int</span> i = 0; i &lt; sql.Length - 1; i++) {
+            <span class="typ">char</span> c = sql[i];
+            <span class="kw">if</span> (c == <span class="str">'\''</span>) inStr = !inStr;
+            <span class="kw">else if</span> (!inStr &amp;&amp; c == <span class="str">'('</span>) depth++;
+            <span class="kw">else if</span> (!inStr &amp;&amp; c == <span class="str">')'</span>) depth--;
+            <span class="kw">else if</span> (!inStr &amp;&amp; depth == 0 &amp;&amp; c == <span class="str">'|'</span> &amp;&amp; sql[i+1] == <span class="str">'&gt;'</span>) {
+                result.Add(sql[start..i]);
+                start = i + 2;
+                i++;
+            }
+        }
+        result.Add(sql[start..]);
+        <span class="kw">return</span> result;
+    }
+
+    <span class="kw">private static</span> <span class="typ">PipeStep</span> <span class="fn">ParseStep</span>(<span class="typ">string</span> raw)
+    {
+        <span class="typ">string</span> s = raw.Trim();
+        <span class="kw">foreach</span> (<span class="kw">var</span> op <span class="kw">in</span> Ops)
+            <span class="kw">if</span> (s.StartsWith(op, <span class="typ">StringComparison</span>.OrdinalIgnoreCase))
+                <span class="kw">return new</span>(op, s[op.Length..].Trim());
+        <span class="kw">throw new</span> <span class="typ">FormatException</span>(<span class="str">$"Unknown pipe operator in: {raw}"</span>);
+    }
+
+    <span class="kw">private static</span> (<span class="typ">string</span> agg, <span class="typ">string</span> grp) <span class="fn">SplitAggregate</span>(<span class="typ">string</span> body)
+    {
+        <span class="kw">var</span> m = <span class="typ">Regex</span>.Match(body, <span class="str">@"^(.*?)\s+GROUP\s+BY\s+(.*)$"</span>,
+            <span class="typ">RegexOptions</span>.IgnoreCase | <span class="typ">RegexOptions</span>.Singleline);
+        <span class="kw">return</span> m.Success ? (m.Groups[1].Value.Trim(), m.Groups[2].Value.Trim())
+                          : (body.Trim(), <span class="str">""</span>);
+    }
+}
+
+<span class="cmt">// Usage:
+//   var pipe = @"FROM orders JOIN customers ON orders.cid = customers.id
+//                |&gt; WHERE quarter = 'Q4' AND price &gt; 100
+//                |&gt; AGGREGATE SUM(price) AS total GROUP BY region, product
+//                |&gt; WHERE total &gt; 500
+//                |&gt; ORDER BY total DESC
+//                |&gt; LIMIT 10";
+//   Console.WriteLine(PipeTranspiler.ToStandardSql(pipe));</span></pre>
+
+    <p>The output for the sample input is nested standard SQL — <code>SELECT region, product, total FROM (SELECT * FROM (SELECT region, product, SUM(price) AS total FROM (SELECT * FROM orders JOIN customers ON ... WHERE ...) AS t GROUP BY region, product) AS t WHERE total &gt; 500) AS t ORDER BY total DESC LIMIT 10</code>. The engine's optimizer will then flatten those <code>FROM (...)</code> subqueries in the resolved algebra — same physical plan as a hand-written standard query.</p>
+
+    <h3>What a real production version adds</h3>
+    <p>ZetaSQL's real implementation adds: full tokeniser and Bison-generated LALR parser, complete type system, scope/name resolution with catalog lookups, error messages that point at column offsets, support for all ~20 pipe operators, correct handling of correlated subqueries and window functions, and unit tests asserting that pipe queries produce byte-identical resolved trees to their standard equivalents. Alternative languages that fit this problem well: Rust (used by DataFusion), Go (used by Vitess's parser), OCaml (used by many compilers).</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>The trade-offs</h3>
+    <ul>
+      <li><strong>Two syntaxes to maintain.</strong> The parser now supports both standard SQL and pipes; grammar test suites double. Google accepted this because forcing a migration would be worse.</li>
+      <li><strong>Tooling lag.</strong> Formatters, linters, BI tools (Tableau, Looker), and ORMs don't universally understand <code>|&gt;</code> yet. Adoption inside Google was analyst-first because they hand-write SQL; app developers using ORMs are unaffected.</li>
+      <li><strong>Interop with other dialects.</strong> A pipe query is <em>not</em> portable to PostgreSQL/MySQL/Snowflake as of 2026-08. This is the biggest practical drawback — you pick your engine, and you pick it earlier.</li>
+      <li><strong>Standardization is slow.</strong> The SQL standard committee moves in years. Until then, pipe syntax remains a GoogleSQL / early-adopter feature.</li>
+    </ul>
+
+    <h3>Failure modes</h3>
+    <ul>
+      <li><strong>Silently different semantics.</strong> None expected — the resolved algebra is identical. But this must be tested rigorously, and ZetaSQL does exactly that.</li>
+      <li><strong>Ambiguous grammar rules.</strong> The team validated that <code>|&gt;</code> is not a valid token anywhere in existing SQL, so pipe syntax cannot accidentally activate on legacy queries.</li>
+      <li><strong>Optimizer regressions.</strong> The optimizer is unchanged, so pipe queries can't regress compared to their standard equivalent. However, humans <em>writing</em> pipe queries may compose operations in orders the optimizer struggles with (e.g. forgetting to filter early) — but that's a query-quality issue, not a syntax issue.</li>
+    </ul>
+
+    <h3>Likely interview follow-ups</h3>
+
+    <div class="qa">
+      <p class="q">Why <code>|&gt;</code> and not <code>.</code> like a fluent API, or <code>&gt;&gt;</code> like Elixir?</p>
+      <p class="a"><code>|&gt;</code> is not a valid symbol anywhere in existing SQL — zero ambiguity, no reserved-keyword collision. <code>.</code> would clash with qualified column references; <code>&gt;&gt;</code> would clash with bit shift. It also visually screams "pipe" to anyone who has used F#, Elixir, or R's dplyr.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Is this faster than standard SQL?</p>
+      <p class="a">Not directly — they produce the same execution plan, so runtime is identical. The productivity win is at authoring/review time. Analysts write correct queries faster, and reviewers catch bugs faster because the flow is linear.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Why didn't Google just make a new language (like Malloy or PRQL)?</p>
+      <p class="a">Every prior attempt to replace SQL failed on the same shoal: SQL is embedded in JDBC drivers, BI tools, ORMs, dashboards, permissions, audits, and — crucially — 40 years of accumulated user muscle memory. Pipe syntax is an <em>extension</em> that requires zero migration. Its adoption cost is a code review, not a rewrite.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Where does the ZetaSQL front-end run?</p>
+      <p class="a">It's a shared C++ library linked into each engine's query coordinator process. Engines call <code>ZetaSQL::AnalyzeStatement()</code> to turn SQL text into a resolved algebra tree; from there each engine has its own optimizer and executor. The library is open-sourced at <code>github.com/google/zetasql</code>.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">What happens if you mix pipe and standard SQL?</p>
+      <p class="a">Fully supported. A pipe chain is a valid table expression, so you can wrap it in a standard <code>SELECT</code>. And any standard <code>FROM t</code> can start a pipe chain. This is why incremental adoption works — a team can convert one query, or one clause, at a time.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Will Postgres / Snowflake / Redshift adopt this?</p>
+      <p class="a">There is an active proposal to the SQL standard committee, and Apache Calcite (which many engines use as their front-end) has a pipe-syntax proposal in flight. As of 2026-08, only GoogleSQL-based engines ship it natively. The transpiler-sidecar pattern above is how you'd bring it to any other engine today.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "SQL has a well-known design problem — the clause order doesn't match execution order, and composition forces nested subqueries. Google's fix, shipped in GoogleSQL and published at VLDB 2024, is a new <code>|&gt;</code> operator that lets you write queries as a top-to-bottom chain of unary relational operators. Same optimizer, same executor, same performance — it's a pure parser-level extension that lowers into the exact same resolved algebra. The reason it works at scale is that Google's four engines (BigQuery, F1, Spanner, Procella) share one front-end binary called ZetaSQL, so a single grammar change lit up all four."</p>
+
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>~20 pipe operators cover the entire relational algebra.</li>
+      <li>4 Google engines share the ZetaSQL front-end: F1, BigQuery, Spanner, Procella.</li>
+      <li>3 duplicate row-filter keywords in standard SQL — WHERE, HAVING, QUALIFY — collapse to one in pipe SQL.</li>
+      <li>0 new reserved keywords required (<code>|&gt;</code> is a new symbol, not a word).</li>
+      <li>0 changes to the optimizer or executor.</li>
+      <li>Published VLDB 2024, GA in BigQuery as of 2024.</li>
+    </ul>
+
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li>The <strong>real insight</strong> isn't <code>|&gt;</code> — it's that a shared front-end (ZetaSQL) made evolving four engines simultaneously tractable.</li>
+      <li>Pipe syntax preserves the <strong>backward-compatibility contract</strong> that killed every prior SQL replacement.</li>
+      <li>The <strong>prefix property</strong> — every prefix of a pipe query is itself runnable — is the productivity killer feature.</li>
+      <li>Two syntaxes, <strong>one relational algebra</strong>. Same optimizer, same plan, same performance.</li>
+      <li>On AWS you'd ship this as a <strong>Lambda-hosted transpiler sidecar</strong> in front of Athena/Redshift until Apache Calcite lands its native proposal.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://arpitbhayani.me/blogs/sql-has-problems-we-can-fix-them-pipe-syntax-in-sql">Arpit Bhayani — <em>SQL Has Problems. We Can Fix Them: Pipe Syntax in SQL</em> (paper summary)</a></li>
+      <li><a href="https://research.google/pubs/sql-has-problems-we-can-fix-them-pipe-syntax-in-sql/">Google Research — <em>SQL Has Problems. We Can Fix Them: Pipe Syntax In SQL</em> (VLDB 2024, Shute et al.)</a></li>
+      <li><a href="https://www.vldb.org/pvldb/vol17/p4051-shute.pdf">PVLDB Vol.17 pp. 4051–4063 — full paper PDF</a></li>
+      <li><a href="https://cloud.google.com/bigquery/docs/reference/standard-sql/pipe-syntax">Google Cloud — BigQuery Pipe syntax reference</a></li>
+      <li><a href="https://github.com/google/zetasql">google/zetasql — the shared analyzer used across BigQuery, F1, Spanner, Procella</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

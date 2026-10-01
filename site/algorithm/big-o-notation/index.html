@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Big O Notation — Explained</title>
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --card: #ffffff;
+    --ink: #1f2733;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --kid: #ff8c42;
+    --kid-bg: #fff6ee;
+    --pro: #4361ee;
+    --pro-bg: #eef2ff;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(31,39,51,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 40px 36px;
+    box-shadow: var(--shadow);
+    margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .92; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 28px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .9rem;
+    padding: 6px 12px; border-radius: 999px; transition: .15s;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 30px; margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+  section.kid { border-left: 6px solid var(--kid); background: var(--kid-bg); }
+  section.pro { border-left: 6px solid var(--pro); background: var(--pro-bg); }
+  section.focus { border-left: 6px solid var(--accent); background: #effaf3; }
+  .badge {
+    display: inline-block; font-size: .78rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .kid .badge { background: var(--kid); color: #fff; }
+  .pro .badge { background: var(--pro); color: #fff; }
+  .focus .badge { background: var(--accent); color: #fff; }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.1rem; }
+  p, li { color: var(--ink); }
+  .kid p, .kid li { font-size: 1.08rem; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .95rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .tag { display:inline-block; padding:2px 10px; border-radius:999px; font-size:.8rem; font-weight:700; color:#fff; }
+  .t-great { background:#2dc653; }
+  .t-good { background:#4361ee; }
+  .t-ok { background:#f4a259; }
+  .t-bad { background:#f7567c; }
+  .t-awful { background:#9b2226; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 30px;
+    box-shadow: var(--shadow);
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; color: #fff; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>⏱️ Big O Notation <small style="font-weight:500;opacity:.8;">(Time Complexity)</small></h1>
+    <p>A way to describe <strong>how the work an algorithm does grows as the input grows</strong> — ignoring the small stuff, so you can compare algorithms at a glance.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#kid">🧒 For a 10-year-old</a>
+    <a href="#why2n">💡 Why O(2N) = O(N)</a>
+    <a href="#pro">👨‍💻 For a veteran</a>
+    <a href="#classes">📈 The Big O classes</a>
+    <a href="#steps">🔁 How to find it</a>
+    <a href="#cheat">📌 Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+  </nav>
+
+  <section id="kid" class="card kid">
+    <span class="badge">🧒 Explain it like I'm 10</span>
+    <h2>The simple story</h2>
+    <p>Imagine your teacher gives you a stack of homework sheets and asks, <em>"How long will this take?"</em> You don't answer in exact minutes — you answer with <strong>the pattern</strong>: "It depends on how many sheets there are."</p>
+    <p>Big O is just that: a way to say <strong>"if the pile gets bigger, how much MORE work do I have to do?"</strong> Let's say you have <strong>N</strong> sheets.</p>
+    <ul>
+      <li>If you just grab the <strong>top sheet</strong> and read its title — that's <strong>always one action</strong>, no matter how big the pile is. We call that <strong>O(1)</strong>. Super fast. 🎉</li>
+      <li>If you have to <strong>read every sheet once</strong> — 10 sheets = 10 reads, 100 sheets = 100 reads. The work grows in step with the pile. That's <strong>O(N)</strong>.</li>
+      <li>If for <strong>every</strong> sheet you must compare it to <strong>every other</strong> sheet (like checking everyone shook hands with everyone) — that explodes fast. 10 sheets = 100 checks, 100 sheets = 10,000 checks. That's <strong>O(N²)</strong>. Yikes. 😅</li>
+      <li>If you can <strong>throw away half the pile every time</strong> (like a guessing game: "higher or lower?") you finish in just a few steps even for a huge pile. That's <strong>O(log N)</strong>. Magic. ✨</li>
+    </ul>
+    <p>The big idea: Big O <strong>doesn't care about the exact number of minutes</strong> — it cares about the <strong>shape of how the work grows</strong> when things get bigger.</p>
+  </section>
+
+  <section id="why2n" class="card focus">
+    <span class="badge">💡 Your question: why is O(2N) still O(N)?</span>
+    <h2>Why O(N), O(2N), and O(N + 100) are all just O(N)</h2>
+    <p>This is the heart of Big O, and you already spotted it. Big O answers <strong>only one question: how does the work grow as N gets HUGE?</strong> It throws away two things on purpose:</p>
+    <ul>
+      <li><strong>Constant multipliers</strong> (the "2" in 2N) — because doing the loop twice is still a <em>straight line</em> shape, just a slightly steeper one. Whether you read the pile once or twice, doubling the pile still doubles your work. The <em>growth pattern</em> is identical.</li>
+      <li><strong>Lower-order / smaller terms</strong> (the "+100", or the "+N" next to an "N²") — because once N is gigantic, the biggest term completely drowns out the rest.</li>
+    </ul>
+    <div class="viz">Think about N = 1,000,000 (one million):
+
+   O(N)        →   1,000,000 steps
+   O(2N)       →   2,000,000 steps   ← only 2× bigger, SAME straight-line shape
+   O(N + 100)  →   1,000,100 steps   ← the +100 is invisible at this scale
+   O(N²)       →   1,000,000,000,000 steps   ← a MILLION times worse!
+
+The gap between O(N) and O(2N) is tiny and fixed (×2).
+The gap between O(N) and O(N²) grows without limit.
+Big O only cares about that second kind of gap.</div>
+    <p><strong>The rule in plain words:</strong> "Keep only the fastest-growing term, and drop any number multiplied in front of it." So <code>3N² + 5N + 800</code> becomes <strong>O(N²)</strong>. <code>2N</code> becomes <strong>O(N)</strong>. We don't write O(2N) because the <strong>2 doesn't change the category</strong> — and Big O is about <em>categories of growth</em>, not exact step counts.</p>
+    <p><strong>Why ignore the constant in practice?</strong> A "2×" difference can be wiped out by a faster CPU, a better compiler, or a different language. But a difference in <em>shape</em> — O(N) vs O(N²) — can <strong>never</strong> be fixed by faster hardware once N is big enough. That's the difference Big O is built to capture.</p>
+  </section>
+
+  <section id="pro" class="card pro">
+    <span class="badge">👨‍💻 For 15 years of IT experience</span>
+    <h2>The engineer's view</h2>
+    <p><strong>Big O</strong> gives an <em>asymptotic upper bound</em> on the growth rate of an algorithm's running time as input size <code>n → ∞</code>. Formally, <code>f(n) = O(g(n))</code> iff there exist constants <code>c &gt; 0</code> and <code>n₀</code> such that <code>0 ≤ f(n) ≤ c·g(n)</code> for all <code>n ≥ n₀</code>. That definition is precisely <em>why</em> constant factors and lower-order terms vanish: they're absorbed into <code>c</code> and become irrelevant past <code>n₀</code>.</p>
+    <p>Big O is the <strong>upper bound</strong>; its siblings are <strong>Ω (omega)</strong> for the lower bound and <strong>Θ (theta)</strong> for a tight bound (when upper and lower match). In interviews "Big O" is used loosely to mean the tight worst-case bound. We also distinguish <strong>best / average / worst case</strong>, and <strong>amortized</strong> cost (average over a sequence of operations, e.g. dynamic-array append is amortized O(1) despite occasional O(n) resizes).</p>
+
+    <h3>Why we drop constants & lower-order terms</h3>
+    <ul>
+      <li><strong>Constant factors</strong> (the <code>c</code>) are platform-dependent — CPU, cache, language, compiler — and not a property of the algorithm. Asymptotic analysis deliberately abstracts them away.</li>
+      <li><strong>Lower-order terms</strong> are dominated: <code>lim<sub>n→∞</sub> (3n² + 5n + 800)/n² = 3</code>, a constant, so the function is <code>Θ(n²)</code>.</li>
+      <li><strong>Caveat:</strong> constants <em>do</em> matter in the real world for small/medium <code>n</code>. An O(n²) algorithm can beat an O(n log n) one for tiny inputs (why hybrid sorts like introsort/Timsort switch to insertion sort under ~16 elements).</li>
+    </ul>
+
+    <h3>The common time-complexity classes (best → worst)</h3>
+    <table>
+      <tr><th>Big O</th><th>Name</th><th>n=10</th><th>n=1,000,000</th><th>Typical source</th></tr>
+      <tr><td>O(1)</td><td>Constant</td><td>1</td><td>1</td><td>array index, hash lookup, push/pop</td></tr>
+      <tr><td>O(log n)</td><td>Logarithmic</td><td>~3</td><td>~20</td><td>binary search, balanced-tree ops</td></tr>
+      <tr><td>O(n)</td><td>Linear</td><td>10</td><td>1,000,000</td><td>single loop / scan</td></tr>
+      <tr><td>O(n log n)</td><td>Linearithmic</td><td>~33</td><td>~20,000,000</td><td>mergesort, heapsort, good sorts</td></tr>
+      <tr><td>O(n²)</td><td>Quadratic</td><td>100</td><td>10¹²</td><td>nested loops, bubble/insertion sort</td></tr>
+      <tr><td>O(n³)</td><td>Cubic</td><td>1,000</td><td>10¹⁸</td><td>triple nested loops, naive matrix mult.</td></tr>
+      <tr><td>O(2ⁿ)</td><td>Exponential</td><td>1,024</td><td>astronomical</td><td>subset/brute-force, naive recursion</td></tr>
+      <tr><td>O(n!)</td><td>Factorial</td><td>3,628,800</td><td>—</td><td>permutations, brute-force TSP</td></tr>
+    </table>
+
+    <h3>How to derive it (rules of thumb)</h3>
+    <ul>
+      <li><strong>Sequential</strong> blocks add: O(a) then O(b) → O(a + b) → keep the bigger.</li>
+      <li><strong>Nested</strong> loops multiply: a loop inside a loop over n → O(n²).</li>
+      <li><strong>Halving</strong> the problem each step → a <code>log n</code> factor.</li>
+      <li><strong>Drop</strong> constants and non-dominant terms at the end.</li>
+    </ul>
+
+    <h3>Quick reference: code → complexity (C#)</h3>
+    <pre><code><span class="cmt">// O(1) — one operation regardless of n</span>
+<span class="kw">int</span> <span class="fn">First</span>(<span class="kw">int</span>[] a) => a[<span class="str">0</span>];
+
+<span class="cmt">// O(n) — one pass. (Two separate passes = O(2n) = O(n).)</span>
+<span class="kw">int</span> <span class="fn">Sum</span>(<span class="kw">int</span>[] a) {
+    <span class="kw">int</span> s = <span class="str">0</span>;
+    <span class="kw">foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> a) s += x;   <span class="cmt">// n steps</span>
+    <span class="kw">foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> a) s += x;   <span class="cmt">// + n steps  → still O(n)</span>
+    <span class="kw">return</span> s;
+}
+
+<span class="cmt">// O(n²) — nested loop over the same input</span>
+<span class="kw">bool</span> <span class="fn">HasDuplicate</span>(<span class="kw">int</span>[] a) {
+    <span class="kw">for</span> (<span class="kw">int</span> i = <span class="str">0</span>; i &lt; a.Length; i++)
+        <span class="kw">for</span> (<span class="kw">int</span> j = i + <span class="str">1</span>; j &lt; a.Length; j++)
+            <span class="kw">if</span> (a[i] == a[j]) <span class="kw">return true</span>;  <span class="cmt">// ~n²/2 pairs → O(n²)</span>
+    <span class="kw">return false</span>;
+}
+
+<span class="cmt">// O(log n) — halve the search space each step (binary search)</span>
+<span class="kw">int</span> <span class="fn">BinarySearch</span>(<span class="kw">int</span>[] a, <span class="kw">int</span> target) {
+    <span class="kw">int</span> lo = <span class="str">0</span>, hi = a.Length - <span class="str">1</span>;
+    <span class="kw">while</span> (lo &lt;= hi) {
+        <span class="kw">int</span> mid = lo + (hi - lo) / <span class="str">2</span>;   <span class="cmt">// throw away half each loop</span>
+        <span class="kw">if</span> (a[mid] == target) <span class="kw">return</span> mid;
+        <span class="kw">if</span> (a[mid] &lt; target) lo = mid + <span class="str">1</span>;
+        <span class="kw">else</span> hi = mid - <span class="str">1</span>;
+    }
+    <span class="kw">return</span> -<span class="str">1</span>;
+}</code></pre>
+  </section>
+
+  <section id="classes" class="card">
+    <h2>📈 The different Big O classes, ranked</h2>
+    <p>From fastest-growing-the-least (love these) to fastest-growing-the-most (avoid for large n):</p>
+    <table>
+      <tr><th>Complexity</th><th>Rating</th><th>In plain words</th></tr>
+      <tr><td><code>O(1)</code></td><td><span class="tag t-great">Excellent</span></td><td>Same work no matter the input size. Grab one item.</td></tr>
+      <tr><td><code>O(log n)</code></td><td><span class="tag t-great">Excellent</span></td><td>Doubling the input adds just one more step. Halving games.</td></tr>
+      <tr><td><code>O(n)</code></td><td><span class="tag t-good">Good</span></td><td>Work grows in lockstep with input. One honest pass.</td></tr>
+      <tr><td><code>O(n log n)</code></td><td><span class="tag t-good">Good</span></td><td>The best you can do for general sorting. Slightly worse than linear.</td></tr>
+      <tr><td><code>O(n²)</code></td><td><span class="tag t-ok">Fair</span></td><td>Every item vs every item. Fine for small n, painful past a few thousand.</td></tr>
+      <tr><td><code>O(n³)</code></td><td><span class="tag t-bad">Poor</span></td><td>Triple nesting. Only ok for tiny n.</td></tr>
+      <tr><td><code>O(2ⁿ)</code></td><td><span class="tag t-awful">Terrible</span></td><td>Each extra element doubles the work. Brute-forcing all subsets.</td></tr>
+      <tr><td><code>O(n!)</code></td><td><span class="tag t-awful">Terrible</span></td><td>All orderings. Unusable beyond ~10–12 items.</td></tr>
+    </table>
+    <div class="viz">Growth at a glance (steps as n increases):
+
+ n      O(1)   O(log n)   O(n)     O(n log n)   O(n²)        O(2ⁿ)
+ 1        1       0         1          0           1            2
+ 8        1       3         8         24          64          256
+ 64       1       6        64        384       4,096    1.8×10¹⁹
+ 1024     1      10      1024     10,240   1,048,576   ~astronomical
+
+Notice: O(1) and O(log n) barely move. O(n²) and O(2ⁿ) erupt.</div>
+  </section>
+
+  <section id="steps" class="card">
+    <h2>🔁 How to find the Big O of a piece of code</h2>
+    <p>Walk this recipe on the example below.</p>
+    <ol class="steps">
+      <li><strong>Count the work in terms of n</strong> for each part of the code.</li>
+      <li><strong>Loops add or multiply:</strong> sequential loops add; nested loops multiply.</li>
+      <li><strong>Drop the constant multipliers</strong> (the 2 in 2n, the ½ in n²/2).</li>
+      <li><strong>Drop the lower-order terms</strong> (keep only the biggest).</li>
+      <li><strong>What remains is your Big O.</strong></li>
+    </ol>
+    <pre><code><span class="kw">void</span> <span class="fn">Example</span>(<span class="kw">int</span>[] a) {
+    <span class="typ">Console</span>.<span class="fn">WriteLine</span>(a[<span class="str">0</span>]);            <span class="cmt">// (A) O(1)</span>
+
+    <span class="kw">foreach</span> (<span class="kw">var</span> x <span class="kw">in</span> a)                <span class="cmt">// (B) O(n)</span>
+        <span class="typ">Console</span>.<span class="fn">WriteLine</span>(x);
+
+    <span class="kw">for</span> (<span class="kw">int</span> i = <span class="str">0</span>; i &lt; a.Length; i++)   <span class="cmt">// (C) nested → O(n²)</span>
+        <span class="kw">for</span> (<span class="kw">int</span> j = <span class="str">0</span>; j &lt; a.Length; j++)
+            <span class="typ">Console</span>.<span class="fn">WriteLine</span>(a[i] + a[j]);
+}</code></pre>
+    <div class="viz">Total = (A) + (B) + (C)
+      = O(1) + O(n) + O(n²)
+      = 1 + n + n²
+
+Step 3 — drop constants:  nothing to drop here.
+Step 4 — keep the biggest term:  n²  dominates n and 1.
+
+      ⇒  O(n²)
+
+(Same logic turns 2n + 100 into O(n): drop the 2, drop the 100.)</div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>📌 Cheat sheet</h2>
+    <ul>
+      <li><strong>What it is:</strong> how an algorithm's work grows as input <code>n</code> grows — not exact time.</li>
+      <li><strong>Golden rule:</strong> keep the biggest term, drop constants &amp; smaller terms. So <code>2n → O(n)</code>, <code>3n²+5n+9 → O(n²)</code>.</li>
+      <li><strong>Why drop the 2?</strong> It's a fixed multiplier (and hardware/compiler-dependent); it never changes the growth <em>shape</em>. Big O compares shapes.</li>
+      <li><strong>Order (best→worst):</strong> O(1) &lt; O(log n) &lt; O(n) &lt; O(n log n) &lt; O(n²) &lt; O(n³) &lt; O(2ⁿ) &lt; O(n!).</li>
+      <li><strong>Loops:</strong> sequential add, nested multiply, halving adds a <code>log n</code>.</li>
+      <li><strong>O / Ω / Θ:</strong> upper bound / lower bound / tight bound.</li>
+      <li><strong>Reality check:</strong> constants matter for small n — that's why real sorts switch to insertion sort on tiny chunks.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this algorithm</h2>
+    <div class="faq-item">
+      <p class="q">If O(n) and O(2n) are the same, is it fair to also consider O(100n) as O(n)?</p>
+      <p class="a">Yes — completely correct. O(n), O(2n), O(100n), even O(1,000,000n) are all the same class: <strong>O(n)</strong>. Big O drops <em>any</em> constant multiplier because it's a <strong>fixed</strong> number that doesn't change as n grows — so the growth <em>shape</em> (a straight line) stays the same; only its steepness changes. The mental test: "does the multiplier stay constant as n changes?" If yes (2, 100, …) drop it → O(n); if it depends on n (like n·n or n·log n) keep it, because then it changes the category. Real-world caveat: in theory O(100n)=O(n), but for a given input a 100-pass algorithm really is 100× slower — Big O measures <em>scalability/growth</em>, not raw speed on one machine.</p>
+      <p class="meta">asked 2026-06-28</p>
+    </div>
+  </section>
+
+  <footer>Generated by the <strong>explain-algo</strong> skill · open in your browser via localhost</footer>
+</div>
+  <script src="../../nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Instagram DAU with HyperLogLog — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #ffb703;
+    --laymen-bg: #fff8e1;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #7048e8 0%, #4361ee 55%, #00b4d8 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.15rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.1rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 26px 30px; margin-bottom: 20px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 12px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); color: #3b2b00; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 12px; font-size: 1.42rem; letter-spacing: -.3px; }
+  h3 { margin: 20px 0 8px; font-size: 1.1rem; }
+  h4 { margin: 14px 0 6px; font-size: 1rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: .93rem; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 16px 18px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .87rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 20px; margin: 16px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 16px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 12px 0; white-space: pre; font-size: .85rem; line-height: 1.5;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: .84rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .callout {
+    border-radius: 12px; padding: 12px 16px; margin: 12px 0; font-size: .93rem;
+    border-left: 4px solid var(--arch); background: #eef2ff;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 14px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 24px 30px;
+    box-shadow: var(--shadow); margin-bottom: 20px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 12px 16px; margin: 0 0 12px;
+    font-size: 1.02rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 24px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 20px 20px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 12px 4px 20px; margin-top: 12px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 7px 14px; font: 700 .85rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .8rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 84px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .92rem; flex: 1 1 240px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep · Meta / Instagram</div>
+    <h1>Estimating Daily Active Users with HyperLogLog</h1>
+    <p>How Instagram counts <strong>billions</strong> of unique daily visitors using a probabilistic sketch that fits in <strong>~12 KB</strong> — with mergeable per-shard HLLs, ~1% error, and constant memory regardless of scale.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Problem</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Intuition</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <!-- ============================ PROBLEM ============================ -->
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 The problem</span>
+    <h2>Two billion Instagram users a day — count the unique ones</h2>
+    <p>Instagram has ~2 B monthly active users and roughly 1–1.5 B <strong>daily</strong> active users. Product, growth, ranking, and infra teams all want the same number: <em>how many distinct people opened the app today?</em> The naive answer — put every <code>userId</code> in a <code>HashSet</code> and read <code>set.size()</code> — is correct but expensive at this scale. Even a compact 64-bit <code>long</code> per user is <code>1.5 B × 8 bytes ≈ 12 GB</code> of RAM for a <em>single day's</em> DAU on <em>one</em> counter. Multiply by every dimension the business cares about (per country, per feature, per app version) and you're gigabytes-per-dimension-per-day.</p>
+    <p>The interview trick is not the memory number — it's the observation that we don't need <em>exactness</em>. Reporting "1.42 B DAU ± 12 M" is indistinguishable from "1.418 B DAU" for every downstream decision. This is the exact use case for <strong>HyperLogLog</strong>: a probabilistic cardinality sketch that gives ~1% error in <strong>constant 12 KB regardless of scale</strong>, is <strong>mergeable</strong> across shards and regions, and is a <strong>one-line command</strong> in Redis (<code>PFADD</code> / <code>PFCOUNT</code> / <code>PFMERGE</code>). Used in production at Meta, Google, Twitter/X, Reddit, Cloudflare — anywhere "how many unique?" is asked at web scale.</p>
+  </section>
+
+  <!-- ============================ LAYMEN ============================ -->
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Guess the crowd size from the rarest coin-flip streak</h2>
+    <p>Imagine you're standing at the door of a stadium and you want to know how many <strong>different</strong> people walked in today. The obvious way is to write everyone's name on a list. If two billion people walk in, your list is huge — and most of the space is wasted because you're really only interested in the <em>size</em>, not the names.</p>
+    <p>Here's a magic trick. When each person walks in, you flip a coin repeatedly until you get tails, and you write down only <strong>the longest run of heads you have ever seen so far</strong>. If the longest streak you see all day is "8 heads in a row", that's a very rare event — about <code>1-in-256</code> — which suggests <em>you must have seen around 256 different people</em>. If the streak is 20 heads long, you've probably seen about a million people. The <strong>rarity of the rarest streak</strong> tells you the crowd size, and you only need to remember one small number.</p>
+    <p>One streak is noisy — you might get lucky or unlucky. So instead you split the incoming crowd into, say, <strong>16 384 lines</strong> (buckets), each line runs its own coin game, and you combine the answers with a bit of statistics. That's HyperLogLog. It uses about <strong>12 KB of memory total</strong>, works for a hundred users or a hundred billion, and gives an answer within ~1% of the true count. Repeatedly seeing the <em>same</em> user just re-computes the same streak — the max doesn't change, so duplicates cost nothing.</p>
+    <p>The killer feature: two stadiums running the same game can <strong>merge</strong> their answer by taking the max streak per bucket. That's how Instagram counts DAU across dozens of regions and hundreds of shards without ever putting all user IDs in one place.</p>
+  </section>
+
+  <!-- ============================ REQUIREMENTS ============================ -->
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What we're designing for</h2>
+
+    <h3>Functional</h3>
+    <ul>
+      <li>Report <strong>DAU</strong> for a given day: <code>dau:2026-08-22</code>.</li>
+      <li>Report DAU per dimension: country, feature, app version, story vs reel.</li>
+      <li>Merge across shards, regions, and time (weekly = 7-day merge).</li>
+      <li>Freshness: hourly rollup is fine; real-time within ~1 minute for ops dashboards.</li>
+    </ul>
+
+    <h3>Non-functional</h3>
+    <ul>
+      <li><strong>Scale</strong>: 1–1.5 B distinct users/day, 100 K+ events/sec at peak.</li>
+      <li><strong>Memory</strong>: constant per counter, not proportional to user count.</li>
+      <li><strong>Accuracy</strong>: ≤ 1% standard error is acceptable for DAU.</li>
+      <li><strong>Mergeable</strong>: sharded ingest must combine losslessly.</li>
+    </ul>
+
+    <h3>Back-of-envelope — HashSet vs HLL</h3>
+    <table>
+      <tr><th>Approach</th><th>Memory / counter</th><th>Insert / query</th><th>Mergeable?</th><th>Error</th></tr>
+      <tr><td><code>HashSet&lt;long&gt;</code></td><td>~8 B/user → <strong>12 GB</strong> at 1.5 B</td><td>O(1)</td><td>Yes (set union)</td><td>0 — exact</td></tr>
+      <tr><td>Sorted string set</td><td>&gt; 20 B/user → 30 GB+</td><td>O(1) amortized</td><td>Yes (heavy)</td><td>0</td></tr>
+      <tr><td>DB <code>COUNT(DISTINCT)</code></td><td>None kept</td><td>Full scan</td><td>N/A</td><td>0 — but expensive</td></tr>
+      <tr><td><strong>HyperLogLog</strong></td><td><strong>~12 KB</strong> — regardless of scale</td><td>O(1)</td><td>Yes (max per register)</td><td>~0.81% std error</td></tr>
+    </table>
+    <p>That's the case in one table. 12 GB → 12 KB is a <strong>10⁶× memory saving</strong> for a 1% error budget. Every unique-count problem at web scale ends here.</p>
+  </section>
+
+  <!-- ============================ ARCHITECTURE ============================ -->
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>Ingest → partition → per-shard HLL → merge → single DAU number</h2>
+    <p>Events fan out from every app server into a partitioned event stream (Kafka / Kinesis). Each partition owns a per-day HLL sketch. At query time (or continuously on a hourly rollup) we <code>PFMERGE</code> the per-partition sketches into one and read the count. The keys carry the date so yesterday's answer is a stable, immutable object.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7aa2f7"/>
+          </marker>
+        </defs>
+        <g font-family="sans-serif" font-size="12" fill="#e7ecf3">
+          <!-- App servers -->
+          <rect x="30"  y="30" width="150" height="50" rx="10" fill="#2a3652" stroke="#7aa2f7"/>
+          <text x="105" y="52" text-anchor="middle" font-weight="700">App server A</text>
+          <text x="105" y="70" text-anchor="middle" font-size="10" fill="#a3b1c8">user opens app</text>
+          <rect x="30" y="100" width="150" height="50" rx="10" fill="#2a3652" stroke="#7aa2f7"/>
+          <text x="105" y="122" text-anchor="middle" font-weight="700">App server B</text>
+          <text x="105" y="140" text-anchor="middle" font-size="10" fill="#a3b1c8">userId event</text>
+          <rect x="30" y="170" width="150" height="50" rx="10" fill="#2a3652" stroke="#7aa2f7"/>
+          <text x="105" y="192" text-anchor="middle" font-weight="700">App server C</text>
+          <text x="105" y="210" text-anchor="middle" font-size="10" fill="#a3b1c8">…hundreds</text>
+
+          <!-- Stream -->
+          <rect x="230" y="80" width="180" height="140" rx="12" fill="#1a1a2e" stroke="#ffb703" stroke-width="2"/>
+          <text x="320" y="104" text-anchor="middle" font-weight="700" fill="#ffb703">Event Stream</text>
+          <text x="320" y="122" text-anchor="middle" font-size="10" fill="#a3b1c8">Kafka / Kinesis</text>
+          <text x="320" y="146" text-anchor="middle" font-size="10" fill="#c6d0e0">partition-by hash(userId)</text>
+          <text x="320" y="172" text-anchor="middle" font-size="10" fill="#c6d0e0">P1  P2  P3  …  PN</text>
+          <text x="320" y="196" text-anchor="middle" font-size="10" fill="#a3b1c8">idempotent, replayable</text>
+
+          <!-- Per-partition HLLs -->
+          <rect x="460" y="30"  width="180" height="52" rx="10" fill="#12331d" stroke="#2dc653"/>
+          <text x="550" y="52"  text-anchor="middle" font-weight="700" fill="#9be7a3">HLL: dau:2026-08-22:p1</text>
+          <text x="550" y="70"  text-anchor="middle" font-size="10" fill="#a3b1c8">~12 KB — PFADD hash(uid)</text>
+
+          <rect x="460" y="100" width="180" height="52" rx="10" fill="#12331d" stroke="#2dc653"/>
+          <text x="550" y="122" text-anchor="middle" font-weight="700" fill="#9be7a3">HLL: dau:2026-08-22:p2</text>
+          <text x="550" y="140" text-anchor="middle" font-size="10" fill="#a3b1c8">~12 KB</text>
+
+          <rect x="460" y="170" width="180" height="52" rx="10" fill="#12331d" stroke="#2dc653"/>
+          <text x="550" y="192" text-anchor="middle" font-weight="700" fill="#9be7a3">HLL: dau:2026-08-22:pN</text>
+          <text x="550" y="210" text-anchor="middle" font-size="10" fill="#a3b1c8">~12 KB</text>
+
+          <!-- Merge -->
+          <rect x="690" y="100" width="180" height="120" rx="12" fill="#3a2a12" stroke="#ff9900" stroke-width="2"/>
+          <text x="780" y="126" text-anchor="middle" font-weight="700" fill="#ffb703">PFMERGE</text>
+          <text x="780" y="146" text-anchor="middle" font-size="10" fill="#a3b1c8">register-wise max</text>
+          <text x="780" y="170" text-anchor="middle" font-weight="700" fill="#ffb703">PFCOUNT</text>
+          <text x="780" y="188" text-anchor="middle" font-size="11" fill="#9be7a3">≈ 1.418 B DAU</text>
+          <text x="780" y="206" text-anchor="middle" font-size="10" fill="#a3b1c8">± ~11 M (0.81%)</text>
+
+          <!-- Historical -->
+          <rect x="230" y="290" width="640" height="60" rx="10" fill="#151a2e" stroke="#4361ee"/>
+          <text x="550" y="315" text-anchor="middle" font-weight="700" fill="#7fa2ff">Daily rollup → S3 / Warehouse (snapshot the merged HLL)</text>
+          <text x="550" y="335" text-anchor="middle" font-size="10" fill="#a3b1c8">any date range = PFMERGE across per-day HLLs → weekly/monthly UV</text>
+
+          <rect x="230" y="370" width="640" height="60" rx="10" fill="#151a2e" stroke="#4361ee"/>
+          <text x="550" y="395" text-anchor="middle" font-weight="700" fill="#7fa2ff">Dashboard / API — DAU by country, feature, cohort</text>
+          <text x="550" y="415" text-anchor="middle" font-size="10" fill="#a3b1c8">one HLL per (dimension, day) — same 12 KB each</text>
+        </g>
+        <g stroke="#7aa2f7" stroke-width="1.6" fill="none" marker-end="url(#arr)">
+          <path d="M 180,55 L 230,120"/>
+          <path d="M 180,125 L 230,150"/>
+          <path d="M 180,195 L 230,180"/>
+          <path d="M 410,120 L 460,55"/>
+          <path d="M 410,145 L 460,125"/>
+          <path d="M 410,180 L 460,195"/>
+          <path d="M 640,55 L 690,140"/>
+          <path d="M 640,125 L 690,150"/>
+          <path d="M 640,195 L 690,170"/>
+        </g>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7aa2f7"></span>App ingest</span>
+        <span><span class="dot" style="background:#ffb703"></span>Partitioned stream</span>
+        <span><span class="dot" style="background:#2dc653"></span>Per-shard HLL (Redis)</span>
+        <span><span class="dot" style="background:#ff9900"></span>Merge → single answer</span>
+      </div>
+    </div>
+    <p>Why partition first, HLL second: consumers can scale independently, hot Redis keys don't bottleneck, and a bad node loses at most one partition's sketch — replay from Kafka rebuilds it. The <em>same</em> pattern works for weekly / monthly by merging per-day HLLs on the read path, so nothing is recomputed.</p>
+  </section>
+
+  <!-- ============================ ANIMATION ============================ -->
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch one HLL sketch two users, then merge across shards</h2>
+    <p>Each user's ID is hashed to a 64-bit value. The first few bits pick a register (bucket); the remaining bits are scanned for the longest run of leading zeros — that run count is written into the register only if it exceeds the current maximum. Two shards each keep their own array of registers; a merge takes the per-register max, then a fancy harmonic-mean formula reads off the estimated cardinality.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="mA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7aa2f7"/>
+          </marker>
+        </defs>
+        <g font-family="sans-serif" font-size="11" fill="#e7ecf3">
+          <!-- User A -->
+          <g id="uA" class="a-el">
+            <rect x="30" y="30" width="120" height="34" rx="8" fill="#2a3652" stroke="#7aa2f7"/>
+            <text x="90" y="52" text-anchor="middle" font-weight="700">user_id=42</text>
+          </g>
+          <!-- Hash -->
+          <g id="hA" class="a-el a-hidden">
+            <rect x="30" y="80" width="440" height="30" rx="6" fill="#1a1a2e" stroke="#ffb703"/>
+            <text x="250" y="100" text-anchor="middle" fill="#ffd166" font-family="monospace" font-size="11">hash(42) = 0b 0011  |  0000101110…10</text>
+          </g>
+          <g id="hAlabel" class="a-el a-hidden">
+            <text x="55" y="127" fill="#a3b1c8" font-family="monospace" font-size="10">bucket bits: 3</text>
+            <text x="220" y="127" fill="#a3b1c8" font-family="monospace" font-size="10">→ zeros run: 4 → register[3] = max(reg[3], 4)</text>
+          </g>
+
+          <!-- User B -->
+          <g id="uB" class="a-el a-hidden">
+            <rect x="30" y="150" width="120" height="34" rx="8" fill="#2a3652" stroke="#7aa2f7"/>
+            <text x="90" y="172" text-anchor="middle" font-weight="700">user_id=42 (again)</text>
+          </g>
+          <g id="hB" class="a-el a-hidden">
+            <rect x="30" y="200" width="440" height="30" rx="6" fill="#1a1a2e" stroke="#ffb703"/>
+            <text x="250" y="220" text-anchor="middle" fill="#ffd166" font-family="monospace" font-size="11">hash(42) = 0b 0011  |  0000101110…10  (same!)</text>
+          </g>
+          <g id="hBlabel" class="a-el a-hidden">
+            <text x="55" y="247" fill="#a3b1c8" font-family="monospace" font-size="10">register[3] = max(4, 4) = 4  → duplicate is free</text>
+          </g>
+
+          <!-- Registers Shard 1 -->
+          <g id="reg1" class="a-el">
+            <rect x="500" y="30" width="380" height="80" rx="10" fill="#12331d" stroke="#2dc653"/>
+            <text x="690" y="52" text-anchor="middle" fill="#9be7a3" font-weight="700">Shard 1 registers (excerpt)</text>
+            <g font-family="monospace" font-size="11" fill="#c6d0e0">
+              <text x="520" y="76">r[0]=1</text>
+              <text x="580" y="76">r[1]=2</text>
+              <text x="640" y="76">r[2]=3</text>
+              <text id="r3s1" x="700" y="76" fill="#9be7a3">r[3]=<tspan id="r3s1Val">0</tspan></text>
+              <text x="760" y="76">r[4]=2</text>
+              <text x="820" y="76">…</text>
+              <text x="520" y="100" fill="#a3b1c8">total: 16 384 registers · ~12 KB</text>
+            </g>
+          </g>
+
+          <!-- Shard 2 -->
+          <g id="reg2" class="a-el a-hidden">
+            <rect x="500" y="150" width="380" height="80" rx="10" fill="#12331d" stroke="#2dc653"/>
+            <text x="690" y="172" text-anchor="middle" fill="#9be7a3" font-weight="700">Shard 2 registers (different users)</text>
+            <g font-family="monospace" font-size="11" fill="#c6d0e0">
+              <text x="520" y="196">r[0]=3</text>
+              <text x="580" y="196">r[1]=1</text>
+              <text x="640" y="196">r[2]=5</text>
+              <text x="700" y="196">r[3]=6</text>
+              <text x="760" y="196">r[4]=2</text>
+              <text x="820" y="196">…</text>
+            </g>
+          </g>
+
+          <!-- Merge -->
+          <g id="merge" class="a-el a-hidden">
+            <rect x="500" y="260" width="380" height="80" rx="10" fill="#3a2a12" stroke="#ff9900"/>
+            <text x="690" y="282" text-anchor="middle" fill="#ffb703" font-weight="700">MERGE — max per register</text>
+            <g font-family="monospace" font-size="11" fill="#c6d0e0">
+              <text x="520" y="306">r[0]=3</text>
+              <text x="580" y="306">r[1]=2</text>
+              <text x="640" y="306">r[2]=5</text>
+              <text x="700" y="306">r[3]=6</text>
+              <text x="760" y="306">r[4]=2</text>
+              <text x="820" y="306">…</text>
+              <text x="520" y="330" fill="#ffb703">PFCOUNT ≈ 1.42 B (± 0.81%)</text>
+            </g>
+          </g>
+
+          <!-- Formula -->
+          <g id="form" class="a-el a-hidden">
+            <rect x="30" y="290" width="440" height="60" rx="10" fill="#151a2e" stroke="#4361ee"/>
+            <text x="250" y="313" text-anchor="middle" fill="#7fa2ff" font-family="monospace" font-size="11">estimate = α_m · m² / Σ 2^(-r[i])</text>
+            <text x="250" y="335" text-anchor="middle" fill="#a3b1c8" font-family="monospace" font-size="10">harmonic-mean sum over registers</text>
+          </g>
+        </g>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+    (function () {
+      const root = document.getElementById('anim1');
+      if (!root) return;
+      const $  = (sel) => root.querySelector(sel);
+      const label = $('.anim-step-label');
+      const cap   = $('.anim-step-caption');
+      const btnPlay = root.querySelector('[data-act="play"]');
+      const btnNext = root.querySelector('[data-act="next"]');
+      const btnPrev = root.querySelector('[data-act="prev"]');
+      const btnReset= root.querySelector('[data-act="reset"]');
+
+      const CFG = {
+        intro: 'Follow one userId through the hash → bucket → run-of-zeros → register update, then merge two shards.',
+        interval: 1800,
+        reset: (r) => {
+          ['#hA','#hAlabel','#uB','#hB','#hBlabel','#reg2','#merge','#form'].forEach(id => r.querySelector(id).classList.add('a-hidden'));
+          r.querySelector('#r3s1Val').textContent = '0';
+        },
+        steps: [
+          { caption: 'A user hits the app. The event carries their userId.',
+            apply: () => {} },
+          { caption: 'Hash the userId with a good 64-bit hash. Bits split into a bucket prefix + a payload.',
+            apply: () => { $('#hA').classList.remove('a-hidden'); } },
+          { caption: 'Prefix 0011 = bucket 3. Payload starts with 4 leading zeros → run length = 4.',
+            apply: () => { $('#hAlabel').classList.remove('a-hidden'); } },
+          { caption: 'Update register[3] to the max of its current value and 4. Only the max is kept per bucket.',
+            apply: () => { $('#r3s1Val').textContent = '4'; } },
+          { caption: 'Same user comes back — same hash, same bucket, same run. Register stays 4. Duplicates cost nothing.',
+            apply: () => {
+              $('#uB').classList.remove('a-hidden');
+              $('#hB').classList.remove('a-hidden');
+              $('#hBlabel').classList.remove('a-hidden');
+            } },
+          { caption: 'Shard 2 has seen different users; its registers hold different maxima.',
+            apply: () => { $('#reg2').classList.remove('a-hidden'); } },
+          { caption: 'Merge: for each of the 16 384 registers, take the max across shards.',
+            apply: () => { $('#merge').classList.remove('a-hidden'); } },
+          { caption: 'Cardinality ≈ αm · m² / Σ 2^(-r[i]) — a harmonic-mean formula on the register values.',
+            apply: () => { $('#form').classList.remove('a-hidden'); } }
+        ]
+      };
+
+      let idx = -1, playing = false, timer = null;
+      function goto(i) {
+        if (i < 0 || i >= CFG.steps.length) return;
+        CFG.reset(root);
+        for (let k = 0; k <= i; k++) CFG.steps[k].apply(root);
+        idx = i;
+        label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+        cap.textContent = CFG.steps[i].caption;
+      }
+      function reset() {
+        idx = -1; playing = false;
+        if (timer) { clearTimeout(timer); timer = null; }
+        CFG.reset(root);
+        label.textContent = 'Ready';
+        cap.textContent = CFG.intro;
+        btnPlay.textContent = '▶ Play';
+      }
+      function play() {
+        if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; return; }
+        if (idx >= CFG.steps.length - 1) reset();
+        playing = true; btnPlay.textContent = '⏸ Pause';
+        function tick() {
+          if (!playing) return;
+          if (idx + 1 < CFG.steps.length) goto(idx + 1);
+          if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+          else { playing = false; btnPlay.textContent = '▶ Replay'; }
+        }
+        timer = setTimeout(tick, 400);
+      }
+      btnPlay.addEventListener('click', play);
+      btnReset.addEventListener('click', reset);
+      btnNext && btnNext.addEventListener('click', () => {
+        if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+        goto(idx + 1);
+      });
+      btnPrev && btnPrev.addEventListener('click', () => {
+        if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+        goto(idx - 1);
+      });
+      reset();
+    })();
+    </script>
+  </section>
+
+  <!-- ============================ DEEP DIVE ============================ -->
+  <section id="deep" class="card">
+    <h2>🔍 Intuition &amp; production details</h2>
+
+    <h3>Why the "run of zeros" trick works</h3>
+    <p>A good uniform hash function turns a userId into a uniformly random 64-bit string. The probability of the first bit being zero is 1/2. Two zeros in a row is 1/4. Three is 1/8. In general, seeing a run of <em>k</em> leading zeros happens with probability <code>1/2^k</code>. Turn that around: if the <strong>longest run you've ever seen</strong> is <em>k</em>, a plausible estimate for how many distinct hashes you've drawn is <strong>2^k</strong>.</p>
+    <div class="viz">P(1 leading zero)   ≈ 1/2
+P(2 leading zeros)  ≈ 1/4
+P(3 leading zeros)  ≈ 1/8
+…
+Seen max-run k  →  crowd size  ≈  2^k</div>
+    <p>One counter is noisy — a lucky streak in a small crowd inflates the estimate massively. So HLL uses <strong>m = 2^p registers</strong> (Redis uses <code>p = 14</code>, giving <code>m = 16 384</code>), routes each hash to a register by its first <em>p</em> bits, and stores the max run seen in the <em>remaining</em> bits. The final estimate is a <strong>harmonic mean</strong> across the registers — much more robust than an arithmetic mean because outlier registers don't dominate.</p>
+
+    <h3>Why duplicates are free</h3>
+    <p>The same userId hashes to the same bucket and the same run length. Updating a register with <code>max(r, r) = r</code> is a no-op. Regardless of whether user 42 opens Instagram 1 time or 1 000 times today, they contribute at most one register write — and only if their run happens to exceed the register's current max.</p>
+
+    <h3>Memory footprint at a glance</h3>
+    <table>
+      <tr><th>Structure</th><th>Registers</th><th>Bits/register</th><th>Total memory</th><th>Std. error</th></tr>
+      <tr><td>HLL (Redis default)</td><td>16 384</td><td>6</td><td><strong>~12 KB</strong></td><td><strong>0.81%</strong></td></tr>
+      <tr><td>HLL (smaller)</td><td>4 096</td><td>6</td><td>~3 KB</td><td>1.6%</td></tr>
+      <tr><td>HashSet at 1.5 B users</td><td>—</td><td>—</td><td>~12 GB</td><td>0</td></tr>
+    </table>
+
+    <h3>Merging — the killer feature</h3>
+    <p>Two HLLs with the same register layout merge trivially: for each register index take the max across the two sketches. That single operation preserves the guarantee that each register holds "the longest run seen across the union of both input streams". Formally:</p>
+    <div class="viz">merge(A, B).register[i] = max(A.register[i], B.register[i])
+                                     for i in 0..m-1</div>
+    <p>Consequences: shard the ingest any way you like (by <code>userId</code>, by region, by hour), then merge on demand. Weekly UV = <code>PFMERGE dau:2026-08-16 .. dau:2026-08-22</code>. Monthly = merge 30 keys. All constant memory, all fast.</p>
+
+    <h3>Daily key strategy</h3>
+    <p>One HLL per <strong>(dimension, day)</strong>. Namespacing:</p>
+    <div class="viz">dau:2026-08-22                        <span style="color:#a3b1c8">-- global</span>
+dau:2026-08-22:country=IN             <span style="color:#a3b1c8">-- country-level</span>
+dau:2026-08-22:feature=reels          <span style="color:#a3b1c8">-- feature-level</span>
+dau:2026-08-22:cohort=android-14      <span style="color:#a3b1c8">-- cohort-level</span>
+dau:2026-08-22:region=us-east-1:p7    <span style="color:#a3b1c8">-- per-partition, per-region</span></div>
+    <p>All 12 KB each. Even 10 000 such keys is 120 MB total — trivial for one Redis node. Set TTL of a few weeks and archive daily snapshots to S3/warehouse.</p>
+
+    <h3>When to use HLL — and when not</h3>
+    <table>
+      <tr><th>Situation</th><th>Recommendation</th></tr>
+      <tr><td>DAU / WAU / MAU counts for product dashboards</td><td>✅ HLL — cheap, mergeable, ~1% error is invisible</td></tr>
+      <tr><td>Unique visits to a page / video / song</td><td>✅ HLL — one sketch per resource per period</td></tr>
+      <tr><td>"How many unique IPs hit our WAF this hour"</td><td>✅ HLL — Cloudflare literally uses this</td></tr>
+      <tr><td>Exact number of paying customers this month</td><td>❌ Exact set / DB <code>DISTINCT</code> — finance requires 0 error</td></tr>
+      <tr><td>Fraud/security "did we see this exact ID before?"</td><td>❌ Membership test — HLL cannot answer that; use a Bloom filter or a real set</td></tr>
+      <tr><td>Very small cardinalities (&lt; 100)</td><td>⚠️ HLL has larger relative error here; Redis uses a "sparse" encoding to help. Exact set is fine too.</td></tr>
+      <tr><td>Intersection sizes (users active on both days)</td><td>⚠️ HLL intersection via inclusion–exclusion is noisy at large scale. Consider MinHash or exact for critical intersections.</td></tr>
+    </table>
+
+    <div class="callout"><strong>Interview one-liner.</strong> "HLL answers <em>how many distinct?</em> — not <em>was this one seen?</em>. For membership tests reach for a Bloom filter; for exact revenue-critical counts stay with a real set or a DB <code>DISTINCT</code>."</div>
+  </section>
+
+  <!-- ============================ DSA ============================ -->
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; complexity</h2>
+    <ul>
+      <li><strong>Hashing.</strong> Uniform 64-bit hash (MurmurHash3 in Redis's HLL). Same input → same output → duplicates absorbed for free.</li>
+      <li><strong>Register array.</strong> Fixed <code>m = 2^p</code> small counters (6 bits each in Redis). Constant memory regardless of cardinality.</li>
+      <li><strong>Max-over-registers.</strong> Each register stores <code>max(rank(payload))</code> — a monotone accumulator. Merging is register-wise max, which is associative and commutative → arbitrary partitioning is safe.</li>
+      <li><strong>Harmonic-mean estimator.</strong> Final estimate <code>E = α_m · m² / Σ 2^(-r[i])</code> where <code>α_m</code> is a bias-correction constant. Small-range and large-range corrections handle the tails.</li>
+    </ul>
+    <table>
+      <tr><th>Operation</th><th>Complexity</th><th>Memory</th></tr>
+      <tr><td><code>PFADD</code> (insert)</td><td>O(1)</td><td>0 extra</td></tr>
+      <tr><td><code>PFCOUNT</code> (estimate)</td><td>O(m) ≈ O(1) for fixed m</td><td>0 extra</td></tr>
+      <tr><td><code>PFMERGE k HLLs</code></td><td>O(k · m)</td><td>Output is one 12 KB HLL</td></tr>
+      <tr><td>HashSet cardinality</td><td>O(1) query, O(n) memory</td><td>~8–24 B per element</td></tr>
+    </table>
+  </section>
+
+  <!-- ============================ AWS ============================ -->
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping to AWS</h2>
+    <table>
+      <tr><th>Layer</th><th>Service</th><th>Role</th></tr>
+      <tr><td>Event ingest</td><td><strong>Amazon Kinesis Data Streams</strong> or <strong>MSK (Kafka)</strong></td><td>Partition by <code>hash(userId)</code>; replayable; ordered per key</td></tr>
+      <tr><td>Consumer</td><td><strong>Kinesis Consumer / ECS Fargate / Lambda</strong></td><td>One process per shard doing <code>PFADD</code></td></tr>
+      <tr><td>HLL store</td><td><strong>ElastiCache for Redis</strong></td><td>Native <code>PFADD</code>/<code>PFCOUNT</code>/<code>PFMERGE</code>; 12 KB per counter</td></tr>
+      <tr><td>Daily snapshot</td><td><strong>S3</strong> (Parquet with HLL bytes) or <strong>DynamoDB</strong></td><td><code>GET</code> the HLL binary, store; immutable per-day sketch</td></tr>
+      <tr><td>Analytics</td><td><strong>Amazon Redshift</strong> (<code>APPROX_COUNT_DISTINCT</code>) or <strong>Athena</strong> (Presto <code>approx_distinct</code>)</td><td>Native HLL support in both — merge across dates in SQL</td></tr>
+      <tr><td>Dashboard</td><td>Grafana / QuickSight</td><td>Reads pre-aggregated counts, not raw events</td></tr>
+    </table>
+    <div class="callout"><strong>Nice detail:</strong> Redshift's <code>APPROX_COUNT_DISTINCT</code> and Athena/Presto's <code>approx_distinct</code> are both HLL under the hood. So the same sketch strategy is available at the SQL layer, not just Redis.</div>
+  </section>
+
+  <!-- ============================ C# CODE ============================ -->
+  <section id="code" class="card">
+    <h2>💻 C# — StackExchange.Redis</h2>
+    <pre><span class="cmt">// Package: StackExchange.Redis</span>
+<span class="kw">using</span> StackExchange.Redis;
+
+<span class="kw">public class</span> <span class="typ">DauCounter</span>(<span class="typ">IDatabase</span> db)
+{
+    <span class="cmt">// Called once per app-open event (idempotent on repeat).</span>
+    <span class="kw">public</span> <span class="typ">Task</span> <span class="fn">RecordVisitAsync</span>(<span class="typ">Guid</span> userId, <span class="typ">DateOnly</span> day, <span class="typ">string</span>? country = <span class="kw">null</span>)
+    {
+        <span class="kw">var</span> key       = $<span class="str">"dau:{day:yyyy-MM-dd}"</span>;
+        <span class="kw">var</span> countryKey = country <span class="kw">is null</span> ? <span class="kw">null</span> : $<span class="str">"{key}:country={country}"</span>;
+
+        <span class="cmt">// PFADD returns 1 if the sketch changed. We don't need the result.</span>
+        <span class="kw">var</span> uid = userId.ToString(<span class="str">"N"</span>);
+        <span class="kw">var</span> t1 = db.HyperLogLogAddAsync(key, uid);
+        <span class="kw">var</span> t2 = countryKey <span class="kw">is null</span> ? <span class="typ">Task</span>.CompletedTask
+                                : db.HyperLogLogAddAsync(countryKey, uid);
+        <span class="kw">return</span> <span class="typ">Task</span>.WhenAll(t1, t2);
+    }
+
+    <span class="cmt">// Global DAU for a day.</span>
+    <span class="kw">public</span> <span class="typ">Task</span>&lt;<span class="kw">long</span>&gt; <span class="fn">GetDauAsync</span>(<span class="typ">DateOnly</span> day) =&gt;
+        db.HyperLogLogLengthAsync($<span class="str">"dau:{day:yyyy-MM-dd}"</span>);
+
+    <span class="cmt">// Weekly unique visitors — merge 7 daily HLLs into a scratch key.</span>
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="kw">long</span>&gt; <span class="fn">GetWeeklyUvAsync</span>(<span class="typ">DateOnly</span> weekStart)
+    {
+        <span class="kw">var</span> keys = <span class="typ">Enumerable</span>.Range(0, 7)
+            .Select(i =&gt; (<span class="typ">RedisKey</span>)$<span class="str">"dau:{weekStart.AddDays(i):yyyy-MM-dd}"</span>).ToArray();
+        <span class="kw">var</span> scratch = (<span class="typ">RedisKey</span>)$<span class="str">"wau:{weekStart:yyyy-MM-dd}:scratch"</span>;
+        <span class="kw">await</span> db.HyperLogLogMergeAsync(scratch, keys);
+        <span class="kw">try</span> { <span class="kw">return await</span> db.HyperLogLogLengthAsync(scratch); }
+        <span class="kw">finally</span> { <span class="kw">await</span> db.KeyDeleteAsync(scratch); }
+    }
+}</pre>
+    <p>That's it — the entire per-event write path is one Redis command, and every rollup is <code>PFMERGE</code> + <code>PFCOUNT</code>. No custom state, no math on our side.</p>
+  </section>
+
+  <!-- ============================ TRADE-OFFS ============================ -->
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs &amp; follow-ups</h2>
+    <ul>
+      <li><strong>Memory vs accuracy.</strong> Redis's <code>p=14 / 12 KB / 0.81%</code> is the sweet spot; lower <code>p</code> saves memory at higher error. Choose per counter.</li>
+      <li><strong>Not a membership test.</strong> HLL cannot answer "did user 42 log in today?" — use a Bloom/cuckoo filter or a real set for that.</li>
+      <li><strong>Intersection noise.</strong> "Users active both Monday <em>and</em> Tuesday" via <code>|A|+|B|−|A∪B|</code> compounds error. If intersections are business-critical, use MinHash or Theta sketches.</li>
+      <li><strong>Bot / duplicate hashing.</strong> Same botnet using different userIds inflates the count. Filter upstream (WAF / auth checks) rather than in the sketch.</li>
+      <li><strong>Hash quality.</strong> Requires a well-mixing hash. MurmurHash3 (Redis's choice) is the standard; do not use a weak hash like Java's <code>String.hashCode</code>.</li>
+    </ul>
+    <div class="qa"><p class="q">Why not just <code>SELECT COUNT(DISTINCT user_id) FROM events WHERE date = today</code>?</p><p class="a">Works at low scale. At Instagram scale it is a multi-hundred-GB scan, blocks other work, and can't be merged across regions without pushing all the data to one place. HLL is 12 KB and merges by max.</p></div>
+    <div class="qa"><p class="q">Why is the error ~0.81%?</p><p class="a">It's the standard error of the harmonic-mean estimator over <em>m</em> registers: <code>≈ 1.04/√m</code>. For <code>m = 16 384</code> that's ~0.81%.</p></div>
+    <div class="qa"><p class="q">What if I have two HLLs from different <code>p</code>?</p><p class="a">You can't merge them directly. Pick one <code>p</code> for the whole system. Downgrading a larger HLL to a smaller one requires re-partitioning registers.</p></div>
+    <div class="qa"><p class="q">Same user opens the app 500 times today — is that a problem?</p><p class="a">No. Same hash → same register → <code>max(r, r) = r</code>. Duplicates are free by construction.</p></div>
+    <div class="qa"><p class="q">How would you shard the writes?</p><p class="a">Partition the event stream by <code>hash(userId) % N</code>. Each partition owns its own HLL (<code>dau:2026-08-22:pN</code>). At read time <code>PFMERGE</code> them.</p></div>
+    <div class="qa"><p class="q">What about privacy / GDPR?</p><p class="a">Bonus win — HLL is one-way. You cannot recover a userId from the sketch. Meta uses this for anonymised counts (Cloudflare and others too).</p></div>
+  </section>
+
+  <!-- ============================ CHEAT SHEET ============================ -->
+  <section id="cheat" class="cheat">
+    <h2>🗣️ How I'd explain this in a Meta interview</h2>
+    <p class="pitch"><strong>Framing.</strong> "The naive answer is a HashSet of userIds. It's exact but memory-linear in the number of users — for Instagram's ~1.5 B DAU that's roughly 12 GB per counter, times every dimension the product team wants (country, feature, cohort). I'd propose HyperLogLog: constant 12 KB per counter, ~0.81% error, mergeable across shards. For a DAU number the error is invisible, and the memory savings are ~10⁶×."</p>
+    <p class="pitch"><strong>Intuition.</strong> "The trick is that a uniform hash gives a uniform bit string. The probability of seeing a run of <em>k</em> leading zeros is <code style="color:#fff;background:rgba(255,255,255,.2)">1/2^k</code>, so if the longest run you've ever observed is <em>k</em>, you've plausibly drawn <code style="color:#fff;background:rgba(255,255,255,.2)">2^k</code> distinct values. A single counter is noisy, so HLL splits into 2^14 = 16 384 registers by the first 14 hash bits, keeps the max run per register, and combines with a harmonic mean. Same userId always hits the same register with the same run, so duplicates cost nothing — which is exactly what we want for DAU."</p>
+    <p class="pitch"><strong>Architecture.</strong> "App events go into Kafka partitioned by <code style="color:#fff;background:rgba(255,255,255,.2)">hash(userId)</code>. Each consumer owns one HLL per <em>(day, dimension, partition)</em> in Redis via <code style="color:#fff;background:rgba(255,255,255,.2)">PFADD</code>. Reads do <code style="color:#fff;background:rgba(255,255,255,.2)">PFMERGE</code> across partitions and <code style="color:#fff;background:rgba(255,255,255,.2)">PFCOUNT</code>. Weekly and monthly are just merges of the daily keys — nothing recomputed. Daily HLLs snapshot to S3 for retention; Redshift and Athena both have <code style="color:#fff;background:rgba(255,255,255,.2)">approx_count_distinct</code> so the same sketch idea lives at the warehouse layer too."</p>
+    <p class="pitch"><strong>Trade-offs I'd volunteer.</strong> "HLL is not a membership test — use Bloom filters for that. It's not for finance-grade exact counts — use a real set. Intersections are noisy — use MinHash for that. And bot traffic must be filtered upstream, not in the sketch."</p>
+    <ul>
+      <li><strong>The 3 numbers to quote:</strong> 12 KB, 0.81% error, 16 384 registers.</li>
+      <li><strong>The 3 commands:</strong> PFADD, PFCOUNT, PFMERGE.</li>
+      <li><strong>The killer property:</strong> mergeable across shards / regions / time, register-wise max.</li>
+      <li><strong>The one boundary:</strong> HLL answers "how many distinct?" — not "was this one seen?".</li>
+    </ul>
+  </section>
+
+  <!-- ============================ FAQ ============================ -->
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <!-- ============================ SOURCES ============================ -->
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://redis.io/docs/latest/develop/data-types/probabilistic/hyperloglogs/">Redis — HyperLogLog docs</a> — <code>PFADD</code> / <code>PFCOUNT</code> / <code>PFMERGE</code>, 12 KB / 0.81% guarantee, use cases.</li>
+      <li><a href="http://antirez.com/news/75">antirez — "Redis new data structure: the HyperLogLog"</a> — original design notes from the Redis author, sparse vs dense encoding.</li>
+      <li><a href="https://research.google/pubs/pub40671/">Heule, Nunkesser, Hall — "HyperLogLog in Practice"</a> — Google's improved estimator (bias correction, sparse representation) that Redis implements.</li>
+      <li><a href="https://engineering.fb.com/2018/12/13/data-infrastructure/hyperloglog/">Meta Engineering — HyperLogLog at Facebook</a> — production use across data pipelines.</li>
+      <li><a href="https://blog.cloudflare.com/hyperloglog/">Cloudflare — "HyperLogLog"</a> — using HLL for unique-visitor counts at edge scale.</li>
+      <li><a href="https://docs.aws.amazon.com/redshift/latest/dg/r_APPROXIMATE_PERCENTILE_DISC.html">Redshift <code>APPROX_COUNT_DISTINCT</code></a> — HLL in AWS Redshift SQL.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

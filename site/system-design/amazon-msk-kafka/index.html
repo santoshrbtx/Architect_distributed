@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How Amazon MSK (Kafka) Works Internally — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg [data-anim] {
+    transition: transform .8s cubic-bezier(.4,0,.2,1),
+                opacity .45s ease, fill .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.15); }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>How Amazon MSK (Kafka) Works Internally</h1>
+    <p>The partitioned commit log, leader/follower replication &amp; ISR, sequential-I/O + zero-copy throughput, and what MSK's managed control plane, KRaft &amp; tiered storage add on top of Apache Kafka.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS / MSK</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p><strong>Amazon MSK (Managed Streaming for Apache Kafka)</strong> is a fully managed service that runs <em>open-source</em> Apache Kafka for you. So "how MSK works internally" is really two layers: <strong>(1) Kafka's internals</strong> — the distributed, replicated, append-only commit log that is the heart of the system — and <strong>(2) the managed layer MSK wraps around it</strong> — provisioning brokers across Availability Zones, running the ZooKeeper/KRaft metadata quorum, auto-recovering failed brokers, encryption, IAM auth, and tiered storage. MSK owns the <em>control plane</em> (create/update/delete clusters); you use the standard Kafka <em>data plane</em> (produce/consume) unchanged.</p>
+    <p>Kafka is the backbone of event-driven and streaming architectures: it's the durable, replayable "central nervous system" that decouples producers from consumers. Real uses everywhere — <strong>LinkedIn</strong> (where Kafka was born) for activity streams; <strong>Uber</strong> and <strong>Netflix</strong> for trillions of events/day of telemetry and real-time pipelines; log aggregation, change-data-capture, metrics, stream processing, and microservice event buses. Companies pick <em>MSK</em> specifically to avoid the operational pain of self-managing Kafka + ZooKeeper — patching, broker replacement, AZ-aware placement, and scaling storage.</p>
+    <p>Why it's a great interview topic: Kafka forces you to reason about the single most important primitive in distributed systems — <strong>the replicated log</strong> — plus partitioning for scale, the ISR replication protocol for durability, consumer groups for parallel consumption, and the clever throughput tricks (sequential disk I/O, page cache, zero-copy) that let one cluster push millions of messages per second on commodity disks.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The busy restaurant with a never-ending ticket rail</h2>
+    <p>Imagine a huge, busy restaurant kitchen. Waiters keep taking orders and the cooks keep cooking. If a waiter had to walk each order over to the exact cook, hand it to them, and wait — the whole kitchen would grind to a halt. So instead, they use a long <strong>metal rail above the pass</strong>: waiters just clip the order tickets onto the rail in the order they took them, and cooks grab the next ticket whenever they're free. Everyone works at their own speed, and nobody blocks anybody else. That rail is exactly what this system is.</p>
+    <p>Now imagine the restaurant is so busy that one rail isn't enough. So they put up <strong>many rails side by side</strong>, and every table is assigned to a specific rail — table 7's tickets always go on rail 3, table 12's on rail 5. This way many cooks can work in parallel, and the tickets for any one table still stay in the right order.</p>
+    <p>Two more clever ideas make it magical. First, the rail <strong>never forgets a ticket</strong> — even after the food is served, a copy stays on the rail for a week. If a new cook joins tomorrow, they can look back and see everything that happened. Second, every ticket is <strong>photocopied onto two backup rails in two other buildings</strong>. If one whole building loses power, the kitchen keeps going without missing an order.</p>
+    <p>This is how <strong>LinkedIn</strong>, <strong>Uber</strong>, and <strong>Netflix</strong> move billions of little events every day — every tap, click, ride request, or "video started" is just another ticket clipped onto the rail, waiting to be picked up by whoever needs it. Amazon's version simply promises: <strong>we'll put up the rails, replace them when they break, and you just clip and grab</strong>.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Publish/subscribe</strong> — producers append messages to <em>topics</em>; many consumers read independently at their own position.</li>
+      <li><strong>Durable &amp; replayable</strong> — messages persist by retention policy (time/size) regardless of consumption; consumers can rewind to any offset.</li>
+      <li><strong>Ordered within a partition</strong> — strict order per partition (not across a topic).</li>
+      <li><strong>Horizontal scale</strong> — add partitions and brokers to scale throughput; add consumers to scale reads.</li>
+      <li><strong>At-least-once / exactly-once</strong> delivery semantics, configurable.</li>
+    </ul>
+
+    <h3>Non-functional requirements (the ones that shape the design)</h3>
+    <ul>
+      <li><strong>High throughput</strong> — millions of messages/sec on modest hardware via sequential I/O + batching.</li>
+      <li><strong>Durability</strong> — survive broker and whole-AZ failure via replication (typically RF=3 across 3 AZs).</li>
+      <li><strong>Low, predictable latency</strong> — single-digit ms produce/consume from the page cache.</li>
+      <li><strong>Elastic storage</strong> — retain data for days to forever without over-provisioning brokers (tiered storage).</li>
+      <li><strong>Availability</strong> — automatic broker recovery; no single point of failure in the data path.</li>
+    </ul>
+
+    <h3>Capacity estimation (a mid-large streaming cluster)</h3>
+    <table>
+      <tr><th>Quantity</th><th>Estimate</th><th>Reasoning</th></tr>
+      <tr><td>Ingest</td><td>~1,000,000 msg/s</td><td>1 KB avg ⇒ ~1 GB/s write; spread over many partitions.</td></tr>
+      <tr><td>Partitions</td><td>hundreds–thousands</td><td>Partition count = unit of parallelism; ≥ number of consumers in a group.</td></tr>
+      <tr><td>Replication factor</td><td><strong>3</strong> (1 leader + 2 followers)</td><td>Placed across 3 AZs; tolerates one broker <em>and</em> one AZ loss.</td></tr>
+      <tr><td>min.insync.replicas</td><td><strong>2</strong> with acks=all</td><td>Write acked only when ≥2 replicas have it ⇒ no data loss on single failure.</td></tr>
+      <tr><td>Raw : usable storage</td><td>3 : 1</td><td>RF=3 means 3× on-broker disk; tiered storage offloads cold data cheaply.</td></tr>
+      <tr><td>Retention</td><td>7 days local, ∞ tiered</td><td>Hot data on EBS; cold segments auto-moved to low-cost remote tier (KIP-405).</td></tr>
+      <tr><td>Brokers</td><td>multiple per AZ, ≥1 min</td><td>MSK creates N brokers per AZ, each in its own VPC subnet.</td></tr>
+    </table>
+    <p><strong>The number to volunteer:</strong> "With replication factor 3 across 3 AZs and <code>acks=all</code> + <code>min.insync.replicas=2</code>, a write is only acknowledged once at least two replicas have it — so you survive losing a whole AZ with zero data loss, and the third replica gives you headroom during maintenance."</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>A Kafka cluster is a set of <strong>brokers</strong> (servers) that store <strong>partitions</strong>. A <strong>topic</strong> is a logical stream split into N partitions; each partition is an <strong>append-only commit log</strong> living on one broker as the <em>leader</em>, with <strong>follower replicas</strong> on other brokers. Producers append to the tail of a partition; each message gets a monotonically increasing <strong>offset</strong>. Consumers track their own offset and read forward — reads don't destroy data, so many independent consumers can replay the same log. A <strong>metadata quorum</strong> (ZooKeeper in older versions, now <strong>KRaft</strong> — Kafka's built-in Raft controllers) tracks cluster membership, partition leadership, and configuration, and elects the controller.</p>
+    <p>MSK wraps this: it <strong>provisions brokers across AZs</strong> (each AZ in its own VPC subnet, minimum one broker per AZ), runs the ZooKeeper/KRaft nodes for you at no extra cost, and <strong>auto-detects and replaces failed brokers</strong> — reusing the old broker's storage where possible so Kafka has less data to re-replicate, and keeping the same broker endpoints so clients reconnect transparently. You get the open-source Kafka data plane; MSK runs everything around it.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 860 470" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <defs>
+          <marker id="prod" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#2dc653"/>
+          </marker>
+          <marker id="rep" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#f4a259"/>
+          </marker>
+          <marker id="cons" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#4cc9f0"/>
+          </marker>
+        </defs>
+
+        <!-- Producer -->
+        <rect x="20" y="200" width="110" height="56" rx="10" fill="#2dc653"/>
+        <text x="75" y="224" fill="#04140b" font-size="13" font-weight="700" text-anchor="middle">Producer</text>
+        <text x="75" y="242" fill="#0a2a17" font-size="10" text-anchor="middle">acks=all</text>
+
+        <!-- AZ boxes with brokers -->
+        <text x="300" y="40" fill="#8fa0bd" font-size="11" font-weight="700" text-anchor="middle">AZ-a</text>
+        <text x="490" y="40" fill="#8fa0bd" font-size="11" font-weight="700" text-anchor="middle">AZ-b</text>
+        <text x="680" y="40" fill="#8fa0bd" font-size="11" font-weight="700" text-anchor="middle">AZ-c</text>
+
+        <!-- Broker 1 (leader) -->
+        <rect x="220" y="55" width="160" height="150" rx="12" fill="#0f3d2e" stroke="#2dc653"/>
+        <text x="300" y="78" fill="#a8f0c6" font-size="12.5" font-weight="700" text-anchor="middle">Broker 1</text>
+        <text x="300" y="95" fill="#7fd7a3" font-size="10" text-anchor="middle">P0 LEADER</text>
+        <rect x="238" y="105" width="124" height="16" rx="3" fill="#2dc653" opacity=".85"/>
+        <rect x="238" y="126" width="124" height="16" rx="3" fill="#2dc653" opacity=".6"/>
+        <rect x="238" y="147" width="124" height="16" rx="3" fill="#2dc653" opacity=".4"/>
+        <text x="300" y="182" fill="#7fd7a3" font-size="9.5" text-anchor="middle">append-only log →</text>
+
+        <!-- Broker 2 (follower) -->
+        <rect x="410" y="55" width="160" height="150" rx="12" fill="#22304d" stroke="#f4a259"/>
+        <text x="490" y="78" fill="#ffd9b0" font-size="12.5" font-weight="700" text-anchor="middle">Broker 2</text>
+        <text x="490" y="95" fill="#f4a259" font-size="10" text-anchor="middle">P0 follower (ISR)</text>
+        <rect x="428" y="105" width="124" height="16" rx="3" fill="#f4a259" opacity=".8"/>
+        <rect x="428" y="126" width="124" height="16" rx="3" fill="#f4a259" opacity=".55"/>
+        <rect x="428" y="147" width="124" height="16" rx="3" fill="#f4a259" opacity=".35"/>
+
+        <!-- Broker 3 (follower) -->
+        <rect x="600" y="55" width="160" height="150" rx="12" fill="#22304d" stroke="#f4a259"/>
+        <text x="680" y="78" fill="#ffd9b0" font-size="12.5" font-weight="700" text-anchor="middle">Broker 3</text>
+        <text x="680" y="95" fill="#f4a259" font-size="10" text-anchor="middle">P0 follower (ISR)</text>
+        <rect x="618" y="105" width="124" height="16" rx="3" fill="#f4a259" opacity=".8"/>
+        <rect x="618" y="126" width="124" height="16" rx="3" fill="#f4a259" opacity=".55"/>
+        <rect x="618" y="147" width="124" height="16" rx="3" fill="#f4a259" opacity=".35"/>
+
+        <!-- KRaft / metadata -->
+        <rect x="300" y="250" width="380" height="52" rx="10" fill="#7048e8"/>
+        <text x="490" y="273" fill="#fff" font-size="12.5" font-weight="700" text-anchor="middle">KRaft controllers (or ZooKeeper) — metadata &amp; leader election</text>
+        <text x="490" y="291" fill="#e3d9ff" font-size="10" text-anchor="middle">MSK-managed · membership, partition leadership, config</text>
+
+        <!-- Tiered storage -->
+        <rect x="300" y="330" width="380" height="48" rx="10" fill="#155d3a" stroke="#2dc653" stroke-dasharray="4 3"/>
+        <text x="490" y="352" fill="#a8f0c6" font-size="12" font-weight="700" text-anchor="middle">Tiered storage (remote low-cost tier · KIP-405)</text>
+        <text x="490" y="369" fill="#7fd7a3" font-size="10" text-anchor="middle">cold log segments offloaded from broker EBS · retain ∞</text>
+
+        <!-- Consumers -->
+        <rect x="770" y="200" width="80" height="56" rx="10" fill="#4cc9f0"/>
+        <text x="810" y="224" fill="#04202a" font-size="11.5" font-weight="700" text-anchor="middle">Consumer</text>
+        <text x="810" y="241" fill="#04202a" font-size="9.5" text-anchor="middle">groups</text>
+
+        <!-- Arrows -->
+        <path d="M130 224 Q 180 180 235 150" fill="none" stroke="#2dc653" stroke-width="2.6" marker-end="url(#prod)"/>
+        <text x="140" y="185" fill="#2dc653" font-size="10">append→leader</text>
+        <path d="M382 130 L 408 130" fill="none" stroke="#f4a259" stroke-width="2.4" marker-end="url(#rep)"/>
+        <path d="M382 150 Q 500 220 598 150" fill="none" stroke="#f4a259" stroke-width="2.4" marker-end="url(#rep)"/>
+        <text x="430" y="205" fill="#f4a259" font-size="10">replicate to ISR</text>
+        <path d="M300 205 L 300 248" fill="none" stroke="#7048e8" stroke-width="1.8" stroke-dasharray="3 3" marker-end="url(#rep)"/>
+        <path d="M360 180 Q 620 230 768 224" fill="none" stroke="#4cc9f0" stroke-width="2.4" marker-end="url(#cons)"/>
+        <text x="600" y="205" fill="#4cc9f0" font-size="10">read from leader (by offset)</text>
+        <path d="M490 205 L 490 328" fill="none" stroke="#2dc653" stroke-width="1.6" stroke-dasharray="3 3" marker-end="url(#rep)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#2dc653"></span>Produce (append to leader)</span>
+        <span><span class="dot" style="background:#f4a259"></span>Replication to followers (ISR)</span>
+        <span><span class="dot" style="background:#4cc9f0"></span>Consume (read by offset)</span>
+        <span><span class="dot" style="background:#7048e8"></span>Metadata / control</span>
+      </div>
+    </div>
+
+    <h3>The produce path</h3>
+    <ol class="steps">
+      <li>Producer picks a partition (by key hash, or round-robin) and sends a <strong>batch</strong> of messages to that partition's <strong>leader</strong> broker.</li>
+      <li>Leader appends the batch to its log segment (sequential write) and assigns offsets.</li>
+      <li>Followers in the <strong>ISR</strong> pull the new records and append them to their own logs.</li>
+      <li>With <code>acks=all</code>, once <code>min.insync.replicas</code> have the data the leader acknowledges the write — now it's durable against AZ loss.</li>
+    </ol>
+
+    <h3>The consume path</h3>
+    <ol class="steps">
+      <li>A consumer group subscribes; each partition is assigned to exactly <strong>one</strong> consumer in the group (parallelism = partition count).</li>
+      <li>The consumer fetches from the partition leader starting at its committed <strong>offset</strong>.</li>
+      <li>Broker serves the read straight from the OS <strong>page cache</strong> via <strong>zero-copy</strong> — no data loss to userspace.</li>
+      <li>Consumer periodically <strong>commits</strong> its offset (to an internal Kafka topic) so it can resume after a restart; it can also rewind to reprocess.</li>
+    </ol>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a message travel through the log, step by step</h2>
+    <p>This animation shows exactly what makes Kafka <em>durable</em> and <em>replayable</em>: a producer batch is appended to the leader's log, replicated to two follower ISR replicas across AZs, acknowledged with <code>acks=all</code>, then a consumer catches up by advancing its offset. Use <em>Play</em> for the sequence or <em>Step →</em> / <em>← Back</em> to inspect each frame.</p>
+
+    <div class="anim-frame" id="kafka-anim">
+      <svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <!-- Producer -->
+        <rect x="20" y="140" width="90" height="56" rx="10" fill="#2dc653"/>
+        <text x="65" y="164" fill="#04140b" font-size="12" font-weight="700" text-anchor="middle">Producer</text>
+        <text x="65" y="182" fill="#0a2a17" font-size="10" text-anchor="middle">acks=all</text>
+
+        <!-- The message that will travel -->
+        <g id="msg" data-anim class="a-hidden" transform="translate(0,0)">
+          <rect x="120" y="152" width="46" height="30" rx="6" fill="#f4a259"/>
+          <text x="143" y="171" fill="#3a2400" font-size="10" font-weight="700" text-anchor="middle">msg</text>
+        </g>
+
+        <!-- Leader (broker in AZ-a) -->
+        <g>
+          <text x="290" y="24" fill="#a8f0c6" font-size="11" font-weight="700" text-anchor="middle">Broker 1 (leader · AZ-a)</text>
+          <rect x="200" y="34" width="180" height="88" rx="10" fill="#0f3d2e" stroke="#2dc653"/>
+          <!-- log slots (offsets) -->
+          <g id="ldr-slots">
+            <rect x="215" y="52" width="30" height="18" rx="3" fill="#2dc653" opacity=".55"/>
+            <text x="230" y="66" fill="#04140b" font-size="9" text-anchor="middle" font-weight="700">40</text>
+            <rect x="250" y="52" width="30" height="18" rx="3" fill="#2dc653" opacity=".55"/>
+            <text x="265" y="66" fill="#04140b" font-size="9" text-anchor="middle" font-weight="700">41</text>
+            <rect id="ldr-42" data-anim x="285" y="52" width="30" height="18" rx="3" fill="#2dc653" opacity=".22"/>
+            <text x="300" y="66" fill="#04140b" font-size="9" text-anchor="middle" font-weight="700">42</text>
+            <rect x="320" y="52" width="30" height="18" rx="3" fill="#2dc653" opacity=".15"/>
+            <text x="335" y="66" fill="#04140b" font-size="9" text-anchor="middle" font-weight="700">43</text>
+          </g>
+          <text x="290" y="95" fill="#7fd7a3" font-size="10" text-anchor="middle">append-only log (offsets)</text>
+          <text id="ldr-hw" data-anim x="290" y="112" fill="#7fd7a3" font-size="10" text-anchor="middle">HW = 41</text>
+        </g>
+
+        <!-- Follower B (AZ-b) -->
+        <g>
+          <text x="500" y="24" fill="#ffd9b0" font-size="11" font-weight="700" text-anchor="middle">Broker 2 (follower ISR · AZ-b)</text>
+          <rect x="410" y="34" width="180" height="88" rx="10" fill="#22304d" stroke="#f4a259"/>
+          <rect x="425" y="52" width="30" height="18" rx="3" fill="#f4a259" opacity=".55"/>
+          <text x="440" y="66" fill="#3a2400" font-size="9" text-anchor="middle" font-weight="700">40</text>
+          <rect x="460" y="52" width="30" height="18" rx="3" fill="#f4a259" opacity=".55"/>
+          <text x="475" y="66" fill="#3a2400" font-size="9" text-anchor="middle" font-weight="700">41</text>
+          <rect id="fB-42" data-anim x="495" y="52" width="30" height="18" rx="3" fill="#f4a259" opacity=".22"/>
+          <text x="510" y="66" fill="#3a2400" font-size="9" text-anchor="middle" font-weight="700">42</text>
+          <text id="fB-status" data-anim x="500" y="95" fill="#f4a259" font-size="10" text-anchor="middle">up to 41</text>
+        </g>
+
+        <!-- Follower C (AZ-c) -->
+        <g>
+          <text x="290" y="164" fill="#ffd9b0" font-size="11" font-weight="700" text-anchor="middle">Broker 3 (follower ISR · AZ-c)</text>
+          <rect x="200" y="174" width="180" height="88" rx="10" fill="#22304d" stroke="#f4a259"/>
+          <rect x="215" y="192" width="30" height="18" rx="3" fill="#f4a259" opacity=".55"/>
+          <text x="230" y="206" fill="#3a2400" font-size="9" text-anchor="middle" font-weight="700">40</text>
+          <rect x="250" y="192" width="30" height="18" rx="3" fill="#f4a259" opacity=".55"/>
+          <text x="265" y="206" fill="#3a2400" font-size="9" text-anchor="middle" font-weight="700">41</text>
+          <rect id="fC-42" data-anim x="285" y="192" width="30" height="18" rx="3" fill="#f4a259" opacity=".22"/>
+          <text x="300" y="206" fill="#3a2400" font-size="9" text-anchor="middle" font-weight="700">42</text>
+          <text id="fC-status" data-anim x="290" y="235" fill="#f4a259" font-size="10" text-anchor="middle">up to 41</text>
+        </g>
+
+        <!-- Consumer -->
+        <rect x="610" y="200" width="90" height="56" rx="10" fill="#4cc9f0"/>
+        <text x="655" y="224" fill="#04202a" font-size="12" font-weight="700" text-anchor="middle">Consumer</text>
+        <text id="cons-off" data-anim x="655" y="242" fill="#04202a" font-size="10" text-anchor="middle">offset=41</text>
+
+        <!-- Ack badge -->
+        <g id="ack" data-anim class="a-hidden" transform="translate(0,0)">
+          <rect x="120" y="220" width="90" height="30" rx="6" fill="#2dc653"/>
+          <text x="165" y="240" fill="#04140b" font-size="11" font-weight="700" text-anchor="middle">ack (acks=all)</text>
+        </g>
+
+        <!-- Delivered msg to consumer -->
+        <g id="delivered" data-anim class="a-hidden">
+          <rect x="560" y="180" width="46" height="30" rx="6" fill="#f4a259"/>
+          <text x="583" y="199" fill="#3a2400" font-size="10" font-weight="700" text-anchor="middle">msg</text>
+        </g>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to watch a message flow through the Kafka commit log.</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('kafka-anim');
+        if (!root) return;
+        const $ = (s) => root.querySelector(s);
+        const label = root.querySelector('.anim-step-label');
+        const cap   = root.querySelector('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const steps = [
+          { c: 'Producer prepares a batch destined for the partition leader (Broker 1 in AZ-a).',
+            a: () => {
+              $('#msg').classList.remove('a-hidden');
+              $('#msg').setAttribute('transform', 'translate(0,0)');
+            }},
+          { c: 'Producer sends the batch to the leader — the leader owns all writes for this partition.',
+            a: () => {
+              $('#msg').setAttribute('transform', 'translate(160,-95)');
+            }},
+          { c: 'Leader appends the record to its log at offset 42 (a sequential, append-only write).',
+            a: () => {
+              $('#msg').classList.add('a-hidden');
+              $('#ldr-42').setAttribute('opacity','.85');
+              $('#ldr-42').classList.add('a-glow');
+            }},
+          { c: 'Followers in the ISR pull the new record from the leader.',
+            a: () => {
+              $('#ldr-42').classList.remove('a-glow');
+              $('#fB-42').setAttribute('opacity','.85');
+              $('#fC-42').setAttribute('opacity','.85');
+              $('#fB-status').textContent = 'up to 42';
+              $('#fC-status').textContent = 'up to 42';
+            }},
+          { c: 'Both followers ack — enough replicas have the record, so acks=all + min.insync.replicas=2 is satisfied.',
+            a: () => {
+              $('#fB-42').classList.add('a-glow');
+              $('#fC-42').classList.add('a-glow');
+              $('#ldr-hw').textContent = 'HW = 42';
+            }},
+          { c: 'Leader acknowledges the producer — the write is now durable against losing an entire AZ.',
+            a: () => {
+              $('#fB-42').classList.remove('a-glow');
+              $('#fC-42').classList.remove('a-glow');
+              $('#ack').classList.remove('a-hidden');
+              $('#ack').setAttribute('transform', 'translate(-70,-50)');
+            }},
+          { c: 'Consumer advances its offset from 41 → 42 and reads the new record (zero-copy from the page cache).',
+            a: () => {
+              $('#ack').classList.add('a-hidden');
+              $('#cons-off').textContent = 'offset=42';
+              $('#delivered').classList.remove('a-hidden');
+            }}
+        ];
+
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          $('#msg').classList.add('a-hidden');
+          $('#msg').setAttribute('transform', 'translate(0,0)');
+          $('#ldr-42').setAttribute('opacity','.22');
+          $('#ldr-42').classList.remove('a-glow');
+          $('#ldr-hw').textContent = 'HW = 41';
+          $('#fB-42').setAttribute('opacity','.22');
+          $('#fB-42').classList.remove('a-glow');
+          $('#fC-42').setAttribute('opacity','.22');
+          $('#fC-42').classList.remove('a-glow');
+          $('#fB-status').textContent = 'up to 41';
+          $('#fC-status').textContent = 'up to 41';
+          $('#ack').classList.add('a-hidden');
+          $('#ack').setAttribute('transform', 'translate(0,0)');
+          $('#cons-off').textContent = 'offset=41';
+          $('#delivered').classList.add('a-hidden');
+          label.textContent = 'Ready';
+          cap.textContent = 'Press ▶ Play to watch a message flow through the Kafka commit log.';
+          btnPlay.textContent = '▶ Play';
+        }
+        function goto(i) {
+          if (i < 0 || i >= steps.length) return;
+          reset();
+          for (let k = 0; k <= i; k++) steps[k].a();
+          idx = i;
+          label.textContent = `Step ${i + 1}/${steps.length}`;
+          cap.textContent = steps[i].c;
+        }
+        let idx = -1, playing = false, timer = null;
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < steps.length) {
+              idx++;
+              steps[idx].a();
+              label.textContent = `Step ${idx + 1}/${steps.length}`;
+              cap.textContent = steps[idx].c;
+            }
+            if (idx < steps.length - 1) timer = setTimeout(tick, 2200);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 300);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>The commit log: partitions, segments &amp; offsets</h3>
+    <p>Everything in Kafka is a <strong>partitioned, append-only log</strong>. A partition is stored on disk as a series of <strong>segment files</strong>; new records are only ever appended to the active segment, and each gets a monotonically increasing 64-bit <strong>offset</strong>. This append-only design is the source of Kafka's speed: writes are <strong>sequential disk I/O</strong>, which on spinning disks and SSDs alike is dramatically faster than random writes — Kafka "turns a bursty stream of random message writes into linear writes." Old segments are deleted (or compacted) by <strong>retention policy</strong> — by time or size — completely independent of whether anyone has consumed them. That's what makes Kafka <em>replayable</em>: the log is the source of truth, not a queue that empties on read.</p>
+
+    <h3>Replication &amp; the ISR (the durability heart)</h3>
+    <p>Each partition has one <strong>leader</strong> and <em>replication-factor − 1</em> <strong>followers</strong> on other brokers. All reads and writes go through the leader; followers continuously fetch to stay caught up. The set of replicas that are fully caught up is the <strong>In-Sync Replica set (ISR)</strong>. Durability is governed by two knobs: producer <strong>acks</strong> (<code>0</code> = fire-and-forget, <code>1</code> = leader only, <code>all</code> = wait for all ISR) and <strong>min.insync.replicas</strong> (how many replicas must have the record before an <code>acks=all</code> write is accepted). The classic safe config — <code>RF=3</code>, <code>acks=all</code>, <code>min.insync.replicas=2</code> — means a write survives losing any one broker/AZ with <em>no data loss</em>. If the leader dies, the controller elects a new leader <strong>from the ISR</strong>, guaranteeing the new leader has all acknowledged data.</p>
+
+    <h3>Consumer groups &amp; offset management</h3>
+    <p>A <strong>consumer group</strong> is how Kafka scales reads and load-balances: partitions are distributed across the group's members, each partition owned by exactly one consumer, so <strong>parallelism is capped by partition count</strong>. Different groups read the same topic independently at their own offsets (pub/sub), while consumers within one group split the work (queue-like). Kafka uses <strong>manual/committed offset management</strong> — consumers control when they commit, enabling at-least-once (commit after processing) or at-most-once (commit before) semantics and fine-grained retry/failure handling. Offsets are stored in an internal <code>__consumer_offsets</code> topic. When members join/leave, a <strong>rebalance</strong> reassigns partitions.</p>
+
+    <h3>Why Kafka is so fast: page cache, zero-copy, batching</h3>
+    <p>Three tricks give Kafka its throughput. <strong>(1) Sequential I/O</strong> — append-only logs mean the disk head never seeks. <strong>(2) OS page cache</strong> — Kafka doesn't maintain its own cache in the JVM heap; it writes to the filesystem and lets the OS page cache serve hot reads, so recently produced data is served from RAM. <strong>(3) Zero-copy</strong> — on consume, Kafka uses the <code>sendfile</code> syscall to copy bytes straight from the page cache to the network socket, <em>bypassing userspace entirely</em> (no copy into the JVM, no serialization on the read path). Combined with <strong>batching</strong> and compression of message sets, this is how a single broker handles enormous throughput on commodity hardware.</p>
+
+    <h3>Metadata: ZooKeeper → KRaft</h3>
+    <p>Kafka needs a consistent place to store cluster metadata — which brokers exist, who leads each partition, topic configs — and to elect a <strong>controller</strong>. Historically this was <strong>Apache ZooKeeper</strong> (a separate quorum). Modern Kafka replaces it with <strong>KRaft</strong>, a built-in <strong>Raft</strong>-based consensus among a set of Kafka <em>controller</em> nodes, removing the external ZooKeeper dependency, simplifying operations, and scaling to far more partitions. MSK runs whichever your cluster version uses — and manages the controllers for you at no additional cost.</p>
+
+    <h3>What MSK adds on top</h3>
+    <p>MSK is the <strong>control plane</strong>: it provisions and patches brokers, spreads them <strong>across AZs</strong> (each in its own subnet), runs ZooKeeper/KRaft, and <strong>auto-recovers failed brokers</strong> — replacing an unhealthy broker while <em>reusing its storage</em> to minimize re-replication, and preserving broker endpoints so clients reconnect seamlessly. It adds <strong>encryption</strong> (at rest via KMS, in transit via TLS), <strong>IAM authentication</strong>, CloudWatch/Prometheus monitoring, and <strong>tiered storage</strong> (below). MSK <strong>Serverless</strong> removes capacity planning entirely — you don't size brokers, MSK manages them and you provision at the cluster level.</p>
+
+    <h3>Tiered storage (KIP-405)</h3>
+    <p>Normally each broker holds all its partition data on local <strong>EBS</strong> volumes, so retaining more data means bigger disks or more brokers. <strong>MSK tiered storage</strong> keeps hot, recent data on a performance-optimized local tier and, once a topic hits its retention limit, <strong>automatically moves older log segments to a low-cost remote tier</strong> — scaling to virtually unlimited storage with no infra to manage. You still read old data in exact production order through the same Kafka APIs (expect a small latency bump on the first bytes, then near-local speeds streaming sequentially). A big operational win: because cold data lives remotely, <strong>partition rebalances and broker recovery are faster</strong> — there's far less on-disk data to replicate between brokers.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Kafka is a beautiful application of a few core structures. The partition <em>is</em> the classic <strong>log data structure</strong> — an ordered, append-only sequence. Lookups by offset use a <strong>sparse index</strong> per segment (offset → byte position) for O(log n) seeks. Leader election and metadata use <strong>Raft consensus</strong> (KRaft). Producer partitioning uses <strong>hashing</strong>; consumer assignment is a <strong>partitioning/bin-packing</strong> problem.</p>
+    <table>
+      <tr><th>Structure / Algorithm</th><th>Where it's used</th><th>Complexity</th><th>Why it's chosen</th></tr>
+      <tr><td>Append-only log</td><td>Partition storage</td><td>O(1) append</td><td>Sequential writes ⇒ max disk throughput; natural ordering by offset.</td></tr>
+      <tr><td>Sparse offset index (per segment)</td><td>Random read by offset</td><td>O(log n) lookup</td><td>Find the byte position of an offset without scanning the whole segment.</td></tr>
+      <tr><td>Consistent-ish hashing</td><td>Producer key → partition</td><td>O(1)</td><td>Same key always lands in the same partition ⇒ per-key ordering.</td></tr>
+      <tr><td>ISR replication protocol</td><td>Leader/follower durability</td><td>O(RF) per write</td><td>Ack only when enough replicas have data ⇒ no loss on failover.</td></tr>
+      <tr><td>Raft consensus (KRaft)</td><td>Metadata + controller election</td><td>quorum majority</td><td>Consistent cluster metadata without external ZooKeeper.</td></tr>
+      <tr><td>Zero-copy (sendfile)</td><td>Consume read path</td><td>O(bytes), no userspace copy</td><td>Page cache → socket directly; huge throughput, low CPU.</td></tr>
+      <tr><td>Group rebalance assignment</td><td>Consumer group ↔ partitions</td><td>~O(partitions)</td><td>Distribute partitions across consumers; one owner each.</td></tr>
+      <tr><td>Log compaction (optional)</td><td>Keyed changelog topics</td><td>O(n) background</td><td>Retain the latest value per key ⇒ compact CDC/state topics.</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS / MSK implementation</span>
+    <h2>MSK on AWS — the managed mapping</h2>
+    <p>MSK is itself the AWS implementation of Kafka, so here the mapping shows <em>which AWS pieces MSK uses under the hood</em> and the services you wire around a cluster.</p>
+    <table>
+      <tr><th>Kafka concept / need</th><th>AWS / MSK piece</th><th>Why</th></tr>
+      <tr><td>Brokers</td><td><strong>MSK broker nodes</strong> (Standard / Express) on EC2, spread across AZs</td><td>MSK provisions ≥1 broker per AZ, each in its own VPC subnet, for AZ-fault tolerance.</td></tr>
+      <tr><td>Broker storage</td><td><strong>Amazon EBS</strong> (local tier) + <strong>tiered remote tier</strong></td><td>Hot segments on EBS; cold segments auto-offloaded to low-cost storage (KIP-405).</td></tr>
+      <tr><td>Metadata / controller</td><td><strong>MSK-managed ZooKeeper or KRaft</strong></td><td>Run for you at no extra cost; KRaft removes the ZooKeeper dependency.</td></tr>
+      <tr><td>No-capacity-planning option</td><td><strong>MSK Serverless</strong></td><td>MSK manages brokers &amp; scaling; you provision at the cluster level only.</td></tr>
+      <tr><td>Auth &amp; encryption</td><td><strong>IAM</strong> auth, <strong>TLS</strong> in transit, <strong>KMS</strong> at rest</td><td>IAM access control + end-to-end encryption without custom code.</td></tr>
+      <tr><td>Connectors (source/sink)</td><td><strong>MSK Connect</strong></td><td>Managed Kafka Connect to stream to/from S3, databases, etc.</td></tr>
+      <tr><td>Cross-region/-cluster copy</td><td><strong>MSK Replicator</strong></td><td>Reliable replication across clusters/regions for DR and aggregation.</td></tr>
+      <tr><td>Monitoring</td><td><strong>CloudWatch</strong> + open <strong>Prometheus</strong> (JMX)</td><td>Broker/partition metrics, consumer lag, storage alarms.</td></tr>
+      <tr><td>Downstream consumers</td><td><strong>Lambda</strong>, <strong>Kinesis Data Analytics / Flink</strong>, ECS/EKS apps</td><td>Event-driven processing; Lambda has a native MSK event source.</td></tr>
+    </table>
+    <p><strong>Deployment story to tell:</strong> "I'd run an <strong>MSK Provisioned</strong> cluster with brokers across 3 AZs, replication factor 3, <code>acks=all</code> and <code>min.insync.replicas=2</code> so a full AZ can fail with no data loss. I'd enable <strong>tiered storage</strong> so I keep days of hot data on EBS and retain the rest indefinitely on the cheap remote tier — which also makes broker recovery and rebalancing faster. Auth via <strong>IAM</strong>, encryption via <strong>KMS/TLS</strong>, <strong>MSK Connect</strong> to sink into S3, and <strong>Lambda</strong> as the MSK event source for stream processing. If I don't want to size brokers at all, <strong>MSK Serverless</strong>."</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>The interview-relevant code is the <strong>producer with durability settings</strong> and a <strong>consumer-group consumer with manual offset commit</strong>, using the <code>Confluent.Kafka</code> .NET client (works against MSK unchanged). Note the durability knobs (<code>acks=all</code>, idempotence) and the at-least-once commit-after-processing pattern.</p>
+    <pre><span class="kw">using</span> Confluent.Kafka;
+
+<span class="cmt">// ---- PRODUCER: durable, idempotent, keyed for per-key ordering ----</span>
+<span class="kw">var</span> producerConfig = <span class="kw">new</span> <span class="typ">ProducerConfig</span>
+{
+    BootstrapServers = <span class="str">"b-1.mycluster.kafka.us-east-1.amazonaws.com:9098,..."</span>,
+    <span class="cmt">// Durability: wait for ALL in-sync replicas before ack (no data loss on AZ failure).</span>
+    Acks = <span class="typ">Acks</span>.All,
+    EnableIdempotence = <span class="kw">true</span>,        <span class="cmt">// exactly-once append: no duplicates on retry</span>
+    MessageSendMaxRetries = 5,
+    <span class="cmt">// Throughput: batch messages before sending (linger + size).</span>
+    LingerMs = 10,
+    BatchSize = 64 * 1024,
+    CompressionType = <span class="typ">CompressionType</span>.Lz4,
+    <span class="cmt">// MSK IAM auth over TLS (SASL/OAUTHBEARER via the IAM extension).</span>
+    SecurityProtocol = <span class="typ">SecurityProtocol</span>.SaslSsl,
+    SaslMechanism = <span class="typ">SaslMechanism</span>.OAuthBearer
+};
+
+<span class="kw">using var</span> producer = <span class="kw">new</span> <span class="typ">ProducerBuilder</span>&lt;<span class="typ">string</span>, <span class="typ">string</span>&gt;(producerConfig).<span class="fn">Build</span>();
+
+<span class="cmt">// Key = userId ⇒ all events for a user hash to the SAME partition ⇒ ordered.</span>
+<span class="kw">var</span> result = <span class="kw">await</span> producer.<span class="fn">ProduceAsync</span>(<span class="str">"user-events"</span>,
+    <span class="kw">new</span> <span class="typ">Message</span>&lt;<span class="typ">string</span>, <span class="typ">string</span>&gt; { Key = <span class="str">"user-42"</span>, Value = <span class="str">"""{"event":"login"}"""</span> });
+<span class="typ">Console</span>.<span class="fn">WriteLine</span>($<span class="str">"→ partition {result.Partition} @ offset {result.Offset}"</span>);
+
+
+<span class="cmt">// ---- CONSUMER: consumer group + AT-LEAST-ONCE (commit AFTER processing) ----</span>
+<span class="kw">var</span> consumerConfig = <span class="kw">new</span> <span class="typ">ConsumerConfig</span>
+{
+    BootstrapServers = producerConfig.BootstrapServers,
+    GroupId = <span class="str">"analytics-workers"</span>,         <span class="cmt">// members split the topic's partitions</span>
+    AutoOffsetReset = <span class="typ">AutoOffsetReset</span>.Earliest,
+    EnableAutoCommit = <span class="kw">false</span>,             <span class="cmt">// we commit manually for correctness</span>
+    SecurityProtocol = <span class="typ">SecurityProtocol</span>.SaslSsl,
+    SaslMechanism = <span class="typ">SaslMechanism</span>.OAuthBearer
+};
+
+<span class="kw">using var</span> consumer = <span class="kw">new</span> <span class="typ">ConsumerBuilder</span>&lt;<span class="typ">string</span>, <span class="typ">string</span>&gt;(consumerConfig).<span class="fn">Build</span>();
+consumer.<span class="fn">Subscribe</span>(<span class="str">"user-events"</span>);
+
+<span class="kw">while</span> (!ct.IsCancellationRequested)
+{
+    <span class="kw">var</span> cr = consumer.<span class="fn">Consume</span>(ct);       <span class="cmt">// fetch from partition leader at current offset</span>
+    <span class="fn">Process</span>(cr.Message.Value);              <span class="cmt">// do the work FIRST...</span>
+    consumer.<span class="fn">Commit</span>(cr);                     <span class="cmt">// ...THEN commit ⇒ at-least-once (never lose a msg)</span>
+}
+<span class="cmt">// Commit-before-process would be at-most-once. Exactly-once needs</span>
+<span class="cmt">// transactions (InitTransactions/BeginTransaction/CommitTransaction).</span></pre>
+    <p>The two takeaways: (1) <code>Acks=All</code> + <code>EnableIdempotence</code> on the producer is the durability contract that pairs with broker-side <code>min.insync.replicas=2</code>; and (2) the order of <code>Process</code> then <code>Commit</code> is exactly what makes delivery <strong>at-least-once</strong> — commit before processing and a crash loses the message (at-most-once). Because MSK is plain Kafka, this same code runs against any Kafka cluster; only the bootstrap endpoints and the IAM/SASL auth differ.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <p><strong>Partition count is the master dial.</strong> More partitions = more parallelism and throughput, but also more open files, more memory, longer leader-election/rebalance times, and more end-to-end latency. You can add partitions but <em>not</em> remove them, and adding them breaks key-ordering guarantees for existing keys (they may re-hash to new partitions). Size partitions for peak consumer parallelism up front.</p>
+    <p><strong>Ordering is per-partition only.</strong> Global ordering across a topic isn't possible with parallelism. If you need ordering, key your messages so related events share a partition — and accept that a single hot key becomes a throughput ceiling.</p>
+    <p><strong>Durability vs latency.</strong> <code>acks=all</code> + <code>min.insync.replicas=2</code> is safe but slower (waits for replicas); <code>acks=1</code> is faster but can lose data if the leader dies before followers catch up. Name this trade explicitly.</p>
+    <p><strong>Consumer lag &amp; rebalances.</strong> If consumers can't keep up, lag grows and you risk hitting retention (data deleted before consumed). Monitor consumer lag; scale consumers up to (but not beyond) partition count. Frequent rebalances (from slow processing or churn) stall consumption — tune <code>max.poll.interval.ms</code> and use cooperative rebalancing.</p>
+    <p><strong>Why not SQS/Kinesis instead?</strong> SQS is a queue (no replay, no ordering across the queue, message deleted on ack); Kinesis is AWS-native and simpler but less flexible and with its own limits. Kafka/MSK wins when you need <em>replayable</em> logs, high fan-out to many independent consumers, an open ecosystem (Connect, Streams), and very high throughput.</p>
+
+    <div class="qa">
+      <p class="q">Q: How does Kafka guarantee no data loss?</p>
+      <p class="a">Replication factor 3 across AZs, <code>acks=all</code>, and <code>min.insync.replicas=2</code>: a write is only acknowledged once at least two replicas have it, and new leaders are only elected from the in-sync replica set — so the new leader always has every acknowledged record.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: What decides consumer parallelism?</p>
+      <p class="a">Partition count. Within a consumer group each partition is owned by exactly one consumer, so you can't have more <em>active</em> consumers than partitions — extra consumers sit idle. Size partitions for your peak parallelism.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: Why is Kafka so fast despite writing to disk?</p>
+      <p class="a">Append-only logs make writes sequential (no seeks); the OS page cache serves hot reads from RAM; and zero-copy (<code>sendfile</code>) streams bytes from page cache straight to the socket, skipping userspace. Batching and compression amortize per-message overhead.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: What does MSK actually manage vs. plain Kafka?</p>
+      <p class="a">MSK owns the control plane: broker provisioning across AZs, ZooKeeper/KRaft, patching, automatic broker recovery (reusing storage to cut re-replication), encryption, IAM auth, monitoring, and tiered storage. The data plane is unmodified open-source Kafka, so your clients and tooling work unchanged.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "MSK is managed Apache Kafka, so internally it's Kafka's replicated commit log plus an AWS control plane. A topic is split into partitions; each partition is an append-only log with monotonic offsets, replicated across brokers in different AZs with one leader and follower replicas tracked in the ISR. Producers append batches to the leader; with <code>acks=all</code> + <code>min.insync.replicas=2</code> a write survives an AZ loss with zero data loss. Consumers read by offset in consumer groups (parallelism = partition count) and control their own commits. Throughput comes from sequential I/O, the OS page cache, and zero-copy sendfile. KRaft (or ZooKeeper) holds metadata and elects leaders. MSK provisions brokers across AZs, auto-recovers failures, and adds tiered storage for near-infinite cheap retention."</div>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Replication factor <strong>3</strong> across <strong>3 AZs</strong>; <code>min.insync.replicas=2</code> with <code>acks=all</code>.</li>
+      <li>Parallelism = <strong>partition count</strong> (one consumer per partition per group).</li>
+      <li>Ordering guaranteed <strong>within a partition</strong>, not across a topic.</li>
+      <li>Tiered storage min remote retention <strong>3 days</strong>; local retention any duration.</li>
+      <li>Throughput levers: <strong>sequential I/O + page cache + zero-copy + batching</strong>.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li><strong>The replicated commit log</strong> — append-only, offset-addressed, replayable.</li>
+      <li><strong>ISR + acks + min.insync.replicas</strong> — the exact durability contract.</li>
+      <li><strong>Partitions = scale &amp; ordering unit</strong> — parallelism, key-based ordering, can't shrink.</li>
+      <li><strong>Zero-copy &amp; page cache</strong> — why disk-backed Kafka is still blazing fast.</li>
+      <li><strong>MSK control plane + tiered storage + KRaft</strong> — what "managed" buys you.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html">What is Amazon MSK?</a> — AWS MSK Developer Guide: control plane vs data plane, broker nodes per AZ, ZooKeeper &amp; KRaft controllers, automatic broker failure recovery, MSK Serverless/Connect/Replicator.</li>
+      <li><a href="https://docs.aws.amazon.com/msk/latest/developerguide/msk-tiered-storage.html">MSK Tiered storage</a> — AWS: local vs low-cost remote tier, automatic segment offload (KIP-405), unlimited retention, faster rebalancing, constraints (min 3-day remote retention, provisioned-only).</li>
+      <li><a href="https://en.wikipedia.org/wiki/Apache_Kafka">Apache Kafka</a> — Wikipedia: durable append-only log, per-partition ordering, offset management, message-set batching turning random writes into linear writes, consumer/share groups.</li>
+      <li><a href="https://kafka.apache.org/documentation/#design">Apache Kafka Documentation — Design</a> — the authoritative reference for the log, replication/ISR, acks, consumer groups, page cache and zero-copy (used for the replication, durability and throughput mechanics).</li>
+      <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-405%3A+Kafka+Tiered+Storage">KIP-405: Kafka Tiered Storage</a> — the upstream proposal MSK tiered storage implements.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

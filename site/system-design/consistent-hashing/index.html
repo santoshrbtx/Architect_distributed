@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Consistent Hashing — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c; --scenario-bg: #fff0f4;
+    --laymen: #f4a259; --laymen-bg: #fff7ed;
+    --reqs: #f4a259; --reqs-bg: #fff7ed;
+    --arch: #4361ee; --arch-bg: #eef2ff;
+    --anim: #00b4d8; --anim-bg: #eef9fc;
+    --dsa: #7048e8; --dsa-bg: #f3effe;
+    --aws: #ff9900; --aws-bg: #fff6e6;
+    --code-bg: #1e2430; --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08); --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box; }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .25; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Consistent Hashing</h1>
+    <p>Why <code>hash(key) mod N</code> breaks the world when N changes — and how a ring of virtual nodes moves only K/N keys instead of nearly all of them.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>The problem: what happens when your cache tier scales?</h2>
+    <p>You run a <strong>Memcached</strong> or <strong>Redis</strong> tier with 10 nodes. To decide which node holds a key, you do <code>server = hash(key) % 10</code>. Life is good. Then Black Friday hits and you scale to 11 nodes. Now <code>hash(key) % 11</code> sends nearly every key to a <em>different</em> server than before — <strong>~10 out of every 11 keys become cache misses</strong>. The origin database is suddenly hit with a stampede that can knock it over. This isn't hypothetical: the whole reason consistent hashing was invented (Karger et al., MIT, 1997) was to keep web caches sane when servers come and go.</p>
+    <p><strong>Consistent hashing solves it.</strong> Both keys and servers are mapped onto a circular hash space (the "ring"). A key is served by the first server encountered walking clockwise from the key's hash position. When you add or remove a server, only the keys that fall in <em>that server's arc</em> move — roughly <strong>K/N keys</strong>, not all K. That's the magic property: a change touches a fraction proportional to <code>1/N</code>, so the origin database is barely disturbed.</p>
+    <p>This one idea powers a shocking amount of infrastructure: <strong>Amazon DynamoDB</strong> partitions data across nodes with consistent-hashing-inspired schemes; <strong>Apache Cassandra</strong> and <strong>Riak</strong> use a token ring; <strong>Memcached</strong> clients use the Ketama library; <strong>Netflix Open Connect</strong> and other CDNs use it to place video content; <strong>Envoy Proxy</strong> and <strong>HAProxy</strong> use it for sticky session load balancing; <strong>Discord</strong> uses it to locate chat-server shards. It's a bread-and-butter interview topic for FAANG staff and principal roles because it shows you understand distributed hashing, load balancing, and graceful scaling in one algorithm.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Think of a round dinner table with waiters and dishes</h2>
+    <p>Imagine you're running a big restaurant with a <strong>round dinner table</strong>, and you have <strong>five waiters</strong> stationed at different spots around it. Every time an order comes in, you write it on a small ticket and drop the ticket on the table. The rule is simple: the ticket belongs to the <strong>next waiter you meet if you walk clockwise from where it landed</strong>. This is fair, easy to explain, and every waiter ends up with roughly the same number of tickets.</p>
+    <p>Now suppose a sixth waiter joins for the dinner rush. In a bad system, you'd have to <strong>collect every single ticket off the table and redistribute them all</strong> — a huge disruption. But in this system, all you do is <strong>seat the new waiter in one open spot</strong>. Only the tickets sitting in the arc between the new waiter and the previous waiter change hands. Everyone else keeps the tickets they already had. <strong>Adding one waiter only touches one-sixth of the tickets</strong>. That's the whole trick.</p>
+    <p>The same thing happens in reverse: if a waiter gets sick and leaves, the tickets that were theirs slide to the next waiter clockwise. Nobody else is disturbed. This is exactly how <strong>Netflix decides which storage box holds which piece of a movie</strong>, how <strong>Amazon DynamoDB decides which server owns your shopping cart</strong>, and how a <strong>load balancer keeps sending you back to the same web server you were talking to five minutes ago</strong> so your session doesn't get lost.</p>
+    <p>There's one more clever tweak. If you only have five waiters, one might end up guarding a huge stretch of the table and get slammed. So instead of placing each waiter in one spot, we <strong>place each waiter at many spots</strong> — imagine each of the five waiters wearing five hats scattered around the ring. Now the arcs are small and even, and if one waiter leaves, their many small arcs get absorbed by many different neighbors — <strong>no single neighbor gets overwhelmed</strong>. These "extra hats" are what engineers call <em>virtual nodes</em>. The idea is delightfully simple; the elegance is that it stays fair no matter how big the restaurant grows.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What we're optimizing for</h2>
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Given a key, deterministically pick a server from the current cluster.</li>
+      <li>When a server joins, remap <strong>only the keys that now belong to it</strong>.</li>
+      <li>When a server leaves (planned or crash), remap only <strong>that server's keys</strong> to its clockwise neighbor(s).</li>
+      <li>Support heterogeneous nodes (bigger nodes get more keys via more virtual replicas).</li>
+    </ul>
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Minimal remapping:</strong> on a node change, at most ~K/N keys move.</li>
+      <li><strong>Balanced load:</strong> with V virtual nodes per physical node, load spread stays within a few % of average when V is ~100–500.</li>
+      <li><strong>Fast lookup:</strong> O(log N·V) per key.</li>
+      <li><strong>Client-side or coordinator-side:</strong> the algorithm must work with no shared coordination (many implementations do it purely in the client library).</li>
+    </ul>
+
+    <h3>Back-of-envelope numbers</h3>
+    <table>
+      <thead><tr><th>Cluster</th><th>Physical nodes</th><th>Virtual nodes each</th><th>Ring positions</th><th>Keys moved on +1 node</th></tr></thead>
+      <tbody>
+        <tr><td>Small cache</td><td>10</td><td>150</td><td>1,500</td><td>~1/11 ≈ 9 %</td></tr>
+        <tr><td>Cassandra cluster</td><td>50</td><td>256</td><td>12,800</td><td>~2 %</td></tr>
+        <tr><td>DynamoDB partition</td><td>100+</td><td>hundreds</td><td>tens of thousands</td><td>&lt; 1 %</td></tr>
+      </tbody>
+    </table>
+    <p>Compare that with plain <strong>modulo hashing</strong> where adding 1 node to a 10-node cluster shuffles <strong>~91 %</strong> of keys — a cache-tier extinction event.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>Where consistent hashing sits in a system</h2>
+    <p>The <strong>client</strong> (or a load balancer/proxy) holds a small in-memory data structure called the <em>ring</em> — a sorted map from hash position to server id. To route a request it hashes the key, does a binary search for the smallest ring position ≥ that hash (wrapping to the start if past the end), and forwards to the matching server. Membership changes flow in through a <strong>gossip protocol</strong> (Cassandra), a <strong>coordinator/config service</strong> (DynamoDB, Zookeeper), or by <strong>service discovery</strong> like Consul/etcd. Each node registers itself with V virtual positions on the ring; every client rebuilds its ring on membership change.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg" font-family="Inter,Segoe UI,Arial" font-size="13">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0L10 5L0 10z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <!-- clients -->
+        <rect x="30" y="60" width="130" height="55" rx="10" fill="#4361ee"/>
+        <text x="95" y="85" text-anchor="middle" fill="#fff" font-weight="700">Client / Proxy</text>
+        <text x="95" y="102" text-anchor="middle" fill="#dbe4ff" font-size="11">GET user:42</text>
+
+        <!-- ring lookup -->
+        <rect x="200" y="60" width="180" height="55" rx="10" fill="#7048e8"/>
+        <text x="290" y="85" text-anchor="middle" fill="#fff" font-weight="700">Ring Lookup</text>
+        <text x="290" y="102" text-anchor="middle" fill="#e5dcfe" font-size="11">binary search sorted map</text>
+
+        <!-- servers -->
+        <rect x="440" y="30" width="140" height="55" rx="10" fill="#2dc653"/>
+        <text x="510" y="55" text-anchor="middle" fill="#fff" font-weight="700">Node A</text>
+        <text x="510" y="72" text-anchor="middle" fill="#dcffe4" font-size="11">150 vnodes</text>
+        <rect x="440" y="100" width="140" height="55" rx="10" fill="#2dc653"/>
+        <text x="510" y="125" text-anchor="middle" fill="#fff" font-weight="700">Node B</text>
+        <text x="510" y="142" text-anchor="middle" fill="#dcffe4" font-size="11">150 vnodes</text>
+        <rect x="440" y="170" width="140" height="55" rx="10" fill="#2dc653"/>
+        <text x="510" y="195" text-anchor="middle" fill="#fff" font-weight="700">Node C</text>
+        <text x="510" y="212" text-anchor="middle" fill="#dcffe4" font-size="11">150 vnodes</text>
+
+        <!-- membership -->
+        <rect x="650" y="60" width="220" height="55" rx="10" fill="#00b4d8"/>
+        <text x="760" y="85" text-anchor="middle" fill="#fff" font-weight="700">Membership / Gossip</text>
+        <text x="760" y="102" text-anchor="middle" fill="#cfefff" font-size="11">Zookeeper / Consul / Cassandra gossip</text>
+
+        <!-- ring representation -->
+        <g transform="translate(280,290)">
+          <circle r="90" fill="none" stroke="#7fa2ff" stroke-width="2"/>
+          <circle cx="0" cy="-90" r="8" fill="#2dc653"/>
+          <text x="0" y="-105" text-anchor="middle" fill="#c6d0e0" font-size="11">A₁</text>
+          <circle cx="70" cy="-56" r="8" fill="#f7567c"/>
+          <text x="85" y="-56" fill="#c6d0e0" font-size="11">B₁</text>
+          <circle cx="86" cy="30" r="8" fill="#f4a259"/>
+          <text x="102" y="34" fill="#c6d0e0" font-size="11">C₁</text>
+          <circle cx="30" cy="86" r="8" fill="#2dc653"/>
+          <text x="20" y="105" fill="#c6d0e0" font-size="11">A₂</text>
+          <circle cx="-50" cy="76" r="8" fill="#f7567c"/>
+          <text x="-70" y="95" fill="#c6d0e0" font-size="11">B₂</text>
+          <circle cx="-86" cy="-24" r="8" fill="#f4a259"/>
+          <text x="-108" y="-24" fill="#c6d0e0" font-size="11">C₂</text>
+          <circle cx="-50" cy="-76" r="8" fill="#2dc653"/>
+          <text x="-72" y="-78" fill="#c6d0e0" font-size="11">A₃</text>
+          <text x="0" y="6" fill="#fff" text-anchor="middle" font-weight="700">Hash Ring</text>
+          <text x="0" y="24" fill="#7fa2ff" text-anchor="middle" font-size="11">0 → 2³² clockwise</text>
+        </g>
+
+        <!-- key on ring -->
+        <g transform="translate(280,290)">
+          <circle cx="55" cy="-72" r="6" fill="#fff" stroke="#4361ee" stroke-width="2"/>
+          <text x="70" y="-85" fill="#7fa2ff" font-size="11" font-weight="700">key</text>
+          <path d="M55 -72 L70 -56" stroke="#7fa2ff" stroke-dasharray="3 3"/>
+        </g>
+
+        <!-- explanation on right -->
+        <g>
+          <rect x="480" y="260" width="380" height="150" rx="10" fill="#0f1420" stroke="#4361ee"/>
+          <text x="500" y="285" fill="#7fa2ff" font-weight="700" font-size="13">Lookup:</text>
+          <text x="500" y="308" fill="#c6d0e0" font-size="12">1. Hash the key → position on the ring.</text>
+          <text x="500" y="328" fill="#c6d0e0" font-size="12">2. Walk clockwise → first node position.</text>
+          <text x="500" y="348" fill="#c6d0e0" font-size="12">3. Forward request there.</text>
+          <text x="500" y="378" fill="#f4a259" font-size="12">On +/– node: only that arc reshuffles.</text>
+        </g>
+
+        <!-- arrows -->
+        <path d="M160 88 L200 88" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+        <path d="M380 88 L440 55" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+        <path d="M580 128 L650 88" stroke="#7fa2ff" stroke-width="2" fill="none" stroke-dasharray="5 3" marker-end="url(#arr)"/>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#7fa2ff"></span>request flow</span>
+      <span><span class="dot" style="background:#00b4d8"></span>membership control plane</span>
+      <span><span class="dot" style="background:#2dc653"></span>node A vnodes</span>
+      <span><span class="dot" style="background:#f7567c"></span>node B vnodes</span>
+      <span><span class="dot" style="background:#f4a259"></span>node C vnodes</span>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a key land, then watch a node get added</h2>
+    <p>The first half of the animation places a key on the ring and walks clockwise to find its owner. The second half adds a new node and shows why <strong>only the keys in its arc</strong> move — the rest stay put.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg" font-family="Inter,Segoe UI,Arial" font-size="13">
+        <defs>
+          <marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0L10 5L0 10z" fill="#00b4d8"/>
+          </marker>
+        </defs>
+
+        <!-- The ring -->
+        <g transform="translate(300,260)">
+          <circle r="180" fill="none" stroke="#4361ee" stroke-width="2"/>
+          <text x="0" y="-195" text-anchor="middle" fill="#7fa2ff" font-size="12">0 / 2³²</text>
+
+          <!-- Three nodes A, B, C -->
+          <g id="nodeA"><circle cx="0" cy="-180" r="12" fill="#2dc653"/><text x="0" y="-200" text-anchor="middle" fill="#c6d0e0" font-weight="700">A</text></g>
+          <g id="nodeB"><circle cx="156" cy="90"  r="12" fill="#f7567c"/><text x="180" y="98" fill="#c6d0e0" font-weight="700">B</text></g>
+          <g id="nodeC"><circle cx="-156" cy="90" r="12" fill="#f4a259"/><text x="-185" y="98" fill="#c6d0e0" font-weight="700">C</text></g>
+
+          <!-- Keys: k1 (near A), k2 (near B), k3 (near C) -->
+          <g id="k1" data-anim class="a-hidden">
+            <circle cx="90" cy="-156" r="7" fill="#fff" stroke="#00b4d8" stroke-width="2"/>
+            <text x="110" y="-160" fill="#00b4d8" font-size="11" font-weight="700">key₁</text>
+          </g>
+          <g id="k2" data-anim class="a-hidden">
+            <circle cx="150" cy="-90" r="7" fill="#fff" stroke="#00b4d8" stroke-width="2"/>
+            <text x="168" y="-90" fill="#00b4d8" font-size="11" font-weight="700">key₂</text>
+          </g>
+          <g id="k3" data-anim class="a-hidden">
+            <circle cx="0" cy="180" r="7" fill="#fff" stroke="#00b4d8" stroke-width="2"/>
+            <text x="10" y="200" fill="#00b4d8" font-size="11" font-weight="700">key₃</text>
+          </g>
+
+          <!-- Arrows: clockwise walks -->
+          <path id="walk1" data-anim class="a-hidden"
+                d="M90 -156 A180 180 0 0 1 156 90"
+                stroke="#00b4d8" stroke-width="3" fill="none" marker-end="url(#ah1)"/>
+          <path id="walk2" data-anim class="a-hidden"
+                d="M150 -90 A180 180 0 0 1 156 90"
+                stroke="#00b4d8" stroke-width="3" fill="none" marker-end="url(#ah1)"/>
+          <path id="walk3" data-anim class="a-hidden"
+                d="M0 180 A180 180 0 0 1 -156 90"
+                stroke="#00b4d8" stroke-width="3" fill="none" marker-end="url(#ah1)"/>
+
+          <!-- New node D (added later) -->
+          <g id="nodeD" data-anim class="a-hidden">
+            <circle cx="180" cy="0" r="12" fill="#7048e8"/>
+            <text x="205" y="4" fill="#c6d0e0" font-weight="700">D (new)</text>
+          </g>
+
+          <!-- Highlight arc reassigned to D -->
+          <path id="arcD" data-anim class="a-hidden"
+                d="M156 -90 A180 180 0 0 1 180 0"
+                stroke="#7048e8" stroke-width="10" fill="none" opacity="0.55"/>
+
+          <!-- Redirect arrow: key2 now goes to D instead of B -->
+          <path id="walk2b" data-anim class="a-hidden"
+                d="M150 -90 A180 180 0 0 1 180 0"
+                stroke="#7048e8" stroke-width="3" fill="none" marker-end="url(#ah1)"/>
+        </g>
+
+        <!-- Legend / caption of untouched keys -->
+        <g id="untouched" data-anim class="a-hidden">
+          <rect x="600" y="60" width="270" height="130" rx="10" fill="#0f1420" stroke="#2dc653"/>
+          <text x="620" y="85" fill="#2dc653" font-weight="700" font-size="13">✓ Untouched by the change</text>
+          <text x="620" y="108" fill="#c6d0e0" font-size="12">• key₁ still → node A</text>
+          <text x="620" y="128" fill="#c6d0e0" font-size="12">• key₃ still → node C</text>
+          <text x="620" y="158" fill="#f4a259" font-size="12">Only keys inside node D's</text>
+          <text x="620" y="176" fill="#f4a259" font-size="12">new arc are reassigned.</text>
+        </g>
+
+        <!-- Modulo comparison (loser) -->
+        <g id="mod" data-anim class="a-hidden">
+          <rect x="600" y="230" width="270" height="130" rx="10" fill="#0f1420" stroke="#f7567c"/>
+          <text x="620" y="255" fill="#f7567c" font-weight="700" font-size="13">✗ Naïve modulo hashing</text>
+          <text x="620" y="278" fill="#c6d0e0" font-size="12">hash(k) % 3 → hash(k) % 4</text>
+          <text x="620" y="298" fill="#c6d0e0" font-size="12">~75% of keys move.</text>
+          <text x="620" y="325" fill="#f7567c" font-size="12">Consistent hashing:</text>
+          <text x="620" y="343" fill="#f7567c" font-size="12">only ~1/4 (K/N) move.</text>
+        </g>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'A ring with 3 nodes (A, B, C). We drop 3 keys, watch them find their owner, then add node D — only one key changes hands.',
+          interval: 1900,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.add('a-hidden');
+              el.classList.remove('a-glow');
+            });
+            ['nodeA','nodeB','nodeC'].forEach(id => { const el = r.querySelector('#'+id); if (el) el.classList.remove('a-glow'); });
+          },
+          steps: [
+            { caption: 'Three servers A, B, C are placed on the ring by hashing their id. This is the starting cluster.',
+              apply: (r, $) => { ['nodeA','nodeB','nodeC'].forEach(id => $('#'+id).classList.add('a-glow')); } },
+
+            { caption: 'key₁ lands on the ring by hashing its own value. It now needs an owner.',
+              apply: (r, $) => { $('#k1').classList.remove('a-hidden'); } },
+
+            { caption: 'Walk clockwise from key₁ — the first node you meet is B. key₁ is owned by B.',
+              apply: (r, $) => { $('#walk1').classList.remove('a-hidden'); $('#nodeB').classList.add('a-glow'); } },
+
+            { caption: 'key₂ lands closer to B (still walking clockwise → B). key₃ lands near C (clockwise → C).',
+              apply: (r, $) => { $('#k2').classList.remove('a-hidden'); $('#k3').classList.remove('a-hidden'); $('#walk2').classList.remove('a-hidden'); $('#walk3').classList.remove('a-hidden'); $('#nodeC').classList.add('a-glow'); } },
+
+            { caption: 'Now we scale out: node D joins between B and C\'s clockwise neighbors. Only the arc between the previous node and D is affected.',
+              apply: (r, $) => { $('#nodeD').classList.remove('a-hidden'); $('#arcD').classList.remove('a-hidden'); } },
+
+            { caption: 'key₂ was walking clockwise to B; now it hits D first, so key₂ moves from B to D. That is the only key that moves.',
+              apply: (r, $) => { $('#walk2').classList.add('a-hidden'); $('#walk2b').classList.remove('a-hidden'); $('#nodeD').classList.add('a-glow'); $('#nodeB').classList.remove('a-glow'); } },
+
+            { caption: 'key₁ still → B, key₃ still → C. All keys outside D\'s arc are undisturbed.',
+              apply: (r, $) => { $('#untouched').classList.remove('a-hidden'); } },
+
+            { caption: 'Compare to naïve hash(k) % N: adding one node would have moved ~75% of keys. Consistent hashing moved 1 out of 3.',
+              apply: (r, $) => { $('#mod').classList.remove('a-hidden'); } },
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; return; }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. The ring — a big integer space treated as a circle</h3>
+    <p>The hash output space (e.g., 128-bit MD5, 32-bit Murmur, 64-bit xxHash) is treated as a <strong>circle</strong>: value <code>MAX</code> wraps around to <code>0</code>. Every node is hashed to a position; every key is hashed to a position; the key is served by the <strong>first node encountered walking clockwise</strong>. In an implementation, the ring is a sorted map (TreeMap in Java, SortedDictionary in .NET, <code>std::map</code> in C++) keyed by hash value. A key lookup is a <code>ceiling(hash)</code> call — O(log&nbsp;N·V). If the ceiling is missing (past the largest position), you wrap to <code>first()</code>.</p>
+
+    <h3>2. Why virtual nodes are non-negotiable</h3>
+    <p>With one position per physical node, the ring is easily lopsided: if 3 node hashes cluster together by bad luck, one node covers a huge arc and gets slammed. The fix is <strong>V virtual node positions per physical node</strong> (typically <code>V = 100 to 500</code>). Each vnode is <code>hash(nodeId + "-" + i)</code>, spread pseudo-randomly around the ring. With enough vnodes the standard deviation of load per node drops to a few percent. Vnodes also let heterogeneous hardware carry proportional load: give a 2× bigger machine 2× the vnodes.</p>
+
+    <h3>3. Adding a node: the arc-transfer step</h3>
+    <p>When a new node <em>D</em> joins, its vnode positions divide up the arcs currently owned by neighbors. Each vnode's arc "steals" the keys sitting in it from whichever node used to own the arc. In a stateful system like <strong>Cassandra</strong>, that means <em>D</em> must <strong>stream in</strong> the data corresponding to those arcs from the previous owners before it can serve reads. During the stream, reads can go to <em>either</em> the old or new owner to preserve availability. Only <strong>K/N keys</strong> need moving.</p>
+
+    <h3>4. Removing a node</h3>
+    <p>When a node leaves, each of its vnodes vanishes and the <em>clockwise-next</em> vnode absorbs that arc. In a replicated system, the second replica for those keys usually already holds them, so <strong>no re-streaming is needed for durability</strong> — just re-election. Cassandra achieves this via replicas being placed at the <em>N successors on the ring</em>.</p>
+
+    <h3>5. Replication on the ring (RF &gt; 1)</h3>
+    <p>To replicate each key <em>R</em> times, walk clockwise from the primary and pick the next <em>R−1</em> distinct <em>physical</em> nodes (skipping vnodes of nodes already picked). This is how Cassandra achieves <code>REPLICATION_FACTOR = 3</code> across an arbitrary ring — the property "consecutive on the ring" makes it trivial. Rack- and datacenter-aware placement modify the walk to skip over nodes in the same failure domain.</p>
+
+    <h3>6. Bounded-load consistent hashing</h3>
+    <p>Vanilla consistent hashing balances <em>keyspace</em>, not <em>traffic</em>. A few keys can go viral (a hot celebrity, a trending video ID) and overload one node. <strong>Bounded-load consistent hashing</strong> (Google, 2016) caps a node's load at <code>c × average</code>; if a lookup lands on an "over-quota" node it forwards to the next node clockwise, but still deterministically. HAProxy ships this algorithm; Vimeo uses it for streaming load balancing.</p>
+
+    <h3>7. Alternatives you should know</h3>
+    <p><strong>Rendezvous (Highest-Random-Weight / HRW) hashing</strong>: for each key, compute a weight <code>hash(key, node_i)</code> for every node and pick the max. No ring, no vnodes; adding a node still moves only K/N keys. Simpler code, ~O(N) per lookup (fine for small N or with caching). Used in some CDNs and Kafka clients. <strong>Google Maglev</strong> uses a lookup table generated by a deterministic permutation; O(1) lookup, memory scales with entries but fantastic for high-QPS load balancers. <strong>Jump consistent hash</strong> (Google, 2014) is a two-line algorithm that assigns a bucket in O(log N) with zero memory — great when nodes are numbered sequentially but doesn't support arbitrary node identities.</p>
+
+    <h3>8. Membership and gossip</h3>
+    <p>The ring only works if every client agrees on who's on it. In small deployments this comes from a config service (Zookeeper, Consul, etcd). In large peer-to-peer systems (Cassandra, DynamoDB internal, Riak) it comes from a <strong>gossip protocol</strong>: each node periodically exchanges its view of the cluster with a random peer, converging to a consistent view in O(log N) rounds. During transitions, brief inconsistency is expected and requests may be handed off ("hinted handoff").</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <table>
+      <thead><tr><th>Piece</th><th>Structure</th><th>Ops</th><th>Complexity</th></tr></thead>
+      <tbody>
+        <tr><td>Hash function</td><td>Murmur3, xxHash, SHA-1</td><td>hash(bytes) → uint</td><td>O(len(key))</td></tr>
+        <tr><td>Ring</td><td>Sorted map / self-balancing BST (Red-Black tree)</td><td>ceiling(h), floor(h)</td><td>O(log N·V)</td></tr>
+        <tr><td>Alternative ring</td><td>Sorted array + binary search</td><td>lower_bound(h)</td><td>O(log N·V) lookup, O(N·V) rebuild</td></tr>
+        <tr><td>Add node</td><td>Insert V vnode entries</td><td>V×insert</td><td>O(V·log N·V) + O(K/N) key rebalance</td></tr>
+        <tr><td>Remove node</td><td>Delete V vnode entries</td><td>V×delete</td><td>O(V·log N·V) + O(K/N) key rebalance</td></tr>
+        <tr><td>Rendezvous (HRW)</td><td>No ring — per-key scan</td><td>argmax hash(k, n)</td><td>O(N) per lookup</td></tr>
+        <tr><td>Jump hash</td><td>Pure arithmetic</td><td>bucket(key, N)</td><td>O(log N) time, O(1) memory</td></tr>
+        <tr><td>Maglev hash</td><td>Precomputed lookup table</td><td>table[hash(k) % M]</td><td>O(1) lookup, O(M) memory</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Why these choices:</strong> a red-black tree gives fast log-time inserts and range queries for vnode positions; non-cryptographic hashes (Murmur, xxHash) are 5–10× faster than SHA-1 and just as uniform for load-balancing. Rendezvous is often simpler than a ring; Maglev is what you reach for at Google-scale load-balancer QPS.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Where consistent hashing hides in AWS</h2>
+    <table>
+      <thead><tr><th>Service</th><th>Where it uses consistent hashing</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Amazon DynamoDB</strong></td><td>Partitions data across storage nodes via a partition-key hash and consistent-hashing-inspired token assignment</td><td>Scale up/down without mass repartitioning; each partition can split independently.</td></tr>
+        <tr><td><strong>Amazon ElastiCache (Memcached / Redis)</strong></td><td>Memcached mode uses Ketama consistent hashing on the client (SDK / Elasticache Auto Discovery)</td><td>Rolling adds/removes of cache nodes shift only ~K/N keys, avoiding cache stampedes.</td></tr>
+        <tr><td><strong>Amazon Keyspaces &amp; MCS (Cassandra)</strong></td><td>Token ring with virtual nodes underneath (managed for you)</td><td>Cassandra's native ring model.</td></tr>
+        <tr><td><strong>Elastic Load Balancer / ALB</strong></td><td>"Application-based cookie affinity" and gRPC hash-based routing</td><td>Sticky sessions without a shared state store.</td></tr>
+        <tr><td><strong>AWS Global Accelerator / Route 53</strong></td><td>Anycast + consistent-hash-flavored client stickiness</td><td>Route the same client to the same regional edge to keep TCP/QUIC flows sticky.</td></tr>
+        <tr><td><strong>CloudFront + S3 origin</strong></td><td>Origin selection and cache key partitioning across edge nodes</td><td>Adding an edge location doesn't invalidate the entire cache tier.</td></tr>
+        <tr><td><strong>Amazon MSK (Kafka)</strong></td><td>Partition assignment via hash(key) % partitions — <em>not</em> consistent hashing by default, but the "murmur2 partitioner" behaves the same for a fixed partition count</td><td>Repartitioning is expensive; consistent hashing helps if you migrate topics.</td></tr>
+        <tr><td><strong>Envoy / AWS App Mesh</strong></td><td>Ring-hash load balancer policy (Envoy default)</td><td>Deterministic session affinity across sidecar proxies.</td></tr>
+      </tbody>
+    </table>
+    <p>Deployment story: in a typical AWS architecture, put your cache tier on <strong>ElastiCache with Memcached</strong> mode and enable the SDK's consistent hashing (default in <code>ElastiCache Auto Discovery Client for Java</code>). For sticky sessions on <strong>ALB</strong>, use application cookies. For your database partitioning, prefer <strong>DynamoDB</strong> — Amazon has already done the consistent-hashing work under the hood. If you need cross-service session affinity in a service mesh, deploy <strong>Envoy</strong> with <code>ring_hash</code> load balancing.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — a ring with virtual nodes</h2>
+    <p>Below is a compact, production-shaped implementation. It supports adding/removing nodes with different weights, and the lookup is a binary search over a <code>SortedDictionary</code> (backed by a red-black tree). This is essentially the algorithm Cassandra clients ship with — swap in Murmur3 or xxHash for real workloads.</p>
+    <pre><code><span class="kw">using</span> System;
+<span class="kw">using</span> System.Collections.Generic;
+<span class="kw">using</span> System.Linq;
+<span class="kw">using</span> System.Security.Cryptography;
+<span class="kw">using</span> System.Text;
+
+<span class="kw">public class</span> <span class="typ">ConsistentHash</span>&lt;<span class="typ">TNode</span>&gt; <span class="kw">where</span> <span class="typ">TNode</span> : IEquatable&lt;<span class="typ">TNode</span>&gt;
+{
+    <span class="cmt">// Sorted map: ring position -> owning node. Red-black tree under the hood
+    // so ceiling() and add/remove are O(log N).</span>
+    <span class="kw">private readonly</span> SortedDictionary&lt;<span class="typ">uint</span>, <span class="typ">TNode</span>&gt; _ring = <span class="kw">new</span>();
+
+    <span class="kw">private readonly int</span> _defaultReplicas;
+
+    <span class="kw">public</span> ConsistentHash(<span class="kw">int</span> defaultReplicas = 150) =&gt; _defaultReplicas = defaultReplicas;
+
+    <span class="cmt">// Non-crypto hash is faster and just as uniform for load balancing.
+    // Using MD5 here for portability; swap to Murmur3/xxHash in production.</span>
+    <span class="kw">private static uint</span> Hash(<span class="kw">string</span> s)
+    {
+        <span class="kw">using var</span> md5 = MD5.Create();
+        <span class="kw">byte</span>[] b = md5.ComputeHash(Encoding.UTF8.GetBytes(s));
+        <span class="kw">return</span> BitConverter.ToUInt32(b, 0);
+    }
+
+    <span class="cmt">// Add a physical node with `replicas` virtual positions on the ring.
+    // Higher-capacity nodes → pass a larger `replicas` value.</span>
+    <span class="kw">public void</span> <span class="fn">AddNode</span>(<span class="typ">TNode</span> node, <span class="typ">int</span>? replicas = <span class="kw">null</span>)
+    {
+        <span class="kw">int</span> r = replicas ?? _defaultReplicas;
+        <span class="kw">for</span> (<span class="kw">int</span> i = 0; i &lt; r; i++)
+        {
+            <span class="kw">uint</span> pos = Hash($<span class="str">"{node}-vnode-{i}"</span>);
+            _ring[pos] = node;
+        }
+    }
+
+    <span class="cmt">// Removing a node deletes every vnode owned by it; keys in those arcs
+    // slide to the next clockwise vnode automatically.</span>
+    <span class="kw">public void</span> <span class="fn">RemoveNode</span>(<span class="typ">TNode</span> node, <span class="typ">int</span>? replicas = <span class="kw">null</span>)
+    {
+        <span class="kw">int</span> r = replicas ?? _defaultReplicas;
+        <span class="kw">for</span> (<span class="kw">int</span> i = 0; i &lt; r; i++)
+        {
+            <span class="kw">uint</span> pos = Hash($<span class="str">"{node}-vnode-{i}"</span>);
+            _ring.Remove(pos);
+        }
+    }
+
+    <span class="cmt">// Lookup: hash key, find smallest ring position >= hash, wrap to first if none.</span>
+    <span class="kw">public</span> <span class="typ">TNode</span> <span class="fn">GetNode</span>(<span class="kw">string</span> key)
+    {
+        <span class="kw">if</span> (_ring.Count == 0) <span class="kw">throw new</span> InvalidOperationException(<span class="str">"empty ring"</span>);
+        <span class="kw">uint</span> h = Hash(key);
+
+        <span class="cmt">// Binary search for the ceiling. SortedDictionary doesn't expose one
+        // directly, so we do a LINQ FirstOrDefault; a real impl uses SortedList
+        // with a BinarySearch for true O(log N).</span>
+        <span class="kw">foreach</span> (<span class="kw">var</span> kv <span class="kw">in</span> _ring)
+            <span class="kw">if</span> (kv.Key &gt;= h) <span class="kw">return</span> kv.Value;
+
+        <span class="kw">return</span> _ring.First().Value;   <span class="cmt">// wrap around</span>
+    }
+
+    <span class="cmt">// Replication factor: return R distinct physical nodes starting at
+    // GetNode(key), walking clockwise. Skip duplicates (multiple vnodes of same node).</span>
+    <span class="kw">public</span> List&lt;<span class="typ">TNode</span>&gt; <span class="fn">GetNodes</span>(<span class="kw">string</span> key, <span class="typ">int</span> replicationFactor)
+    {
+        <span class="kw">var</span> results = <span class="kw">new</span> List&lt;<span class="typ">TNode</span>&gt;();
+        <span class="kw">var</span> seen    = <span class="kw">new</span> HashSet&lt;<span class="typ">TNode</span>&gt;();
+        <span class="kw">uint</span> h = Hash(key);
+
+        <span class="cmt">// One full sweep at most.</span>
+        <span class="kw">var</span> ordered = _ring.SkipWhile(kv =&gt; kv.Key &lt; h)
+                            .Concat(_ring.TakeWhile(kv =&gt; kv.Key &lt; h));
+        <span class="kw">foreach</span> (<span class="kw">var</span> kv <span class="kw">in</span> ordered)
+        {
+            <span class="kw">if</span> (seen.Add(kv.Value))
+            {
+                results.Add(kv.Value);
+                <span class="kw">if</span> (results.Count == replicationFactor) <span class="kw">return</span> results;
+            }
+        }
+        <span class="kw">return</span> results;
+    }
+}
+
+<span class="cmt">// ---------- usage ----------
+// var ring = new ConsistentHash&lt;string&gt;(defaultReplicas: 150);
+// ring.AddNode("cache-a"); ring.AddNode("cache-b"); ring.AddNode("cache-c");
+// Console.WriteLine(ring.GetNode("user:42"));           // "cache-b"
+// ring.AddNode("cache-d");                              // ~K/N keys move
+// Console.WriteLine(ring.GetNode("user:42"));           // maybe "cache-d" now
+// var replicas = ring.GetNodes("user:42", 3);           // primary + 2 replicas</span>
+</code></pre>
+    <p>Production notes: swap the LINQ ceiling for a <code>SortedList</code> with <code>Array.BinarySearch</code> for a real O(log N) lookup; replace MD5 with <code>Murmur3</code> for ~10× speed; add a version number so clients can detect stale ring state. In Go, this is the <code>groupcache</code> package; in Java, it's <code>Guava HashFunction.consistentHash</code> and Cassandra's <code>Murmur3Partitioner</code>; in Python, the <code>uhashring</code> library.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Uneven load without virtual nodes</h3>
+    <p>With one position per node and only a handful of nodes, load can be catastrophically lopsided — the standard deviation of arc size is O(1/√N). Mitigate with V vnodes per physical node; V ≈ 100–500 keeps load within ~2–5% of the mean.</p>
+
+    <h3>Hot keys still overload one node</h3>
+    <p>Consistent hashing balances the <em>keyspace</em>, not the <em>traffic</em>. A single trending key (a celebrity, a hot Kafka partition) still hits one owner. Fix: <strong>bounded-load consistent hashing</strong>, <strong>request coalescing</strong>, or an <strong>L1 in-process cache</strong> in front of the shard.</p>
+
+    <h3>Client memory and ring rebuild cost</h3>
+    <p>Each client holds the whole ring: N × V entries × ~30 bytes each. At 100 nodes × 500 vnodes = 50k entries ≈ 1.5&nbsp;MB — trivial. Rebuilding on membership change is O(N·V·log(N·V)) but happens rarely (seconds-scale events).</p>
+
+    <h3>State movement dominates the win</h3>
+    <p>For a <em>stateless</em> cache, adding a node is instantaneous — the new node just starts filling from misses. For a <em>stateful</em> store (Cassandra, DynamoDB storage nodes), the arc-transfer step involves streaming gigabytes across the network before the new node can serve reads. Bandwidth, not the algorithm, is the bottleneck.</p>
+
+    <h3>Likely interview follow-ups</h3>
+
+    <div class="qa">
+      <p class="q">Q: Why is <code>hash(key) % N</code> bad?</p>
+      <p class="a">A: Because it moves ~<code>(N−1)/N</code> of keys when N changes — for N=10 that's 90% cache invalidation. Consistent hashing moves only ~<code>1/N</code>.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: How do virtual nodes actually help?</p>
+      <p class="a">A: They smooth arc-size variance. With V vnodes per node, standard deviation of load per physical node drops from O(1/√N) to roughly O(1/√(N·V)). V=100–500 gives 2–5% deviation.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: How would you replicate a key R times?</p>
+      <p class="a">A: Starting from the key's primary owner, walk clockwise and collect the next R−1 <em>distinct physical nodes</em> (skipping additional vnodes of already-picked nodes). This is exactly Cassandra's <code>SimpleStrategy</code>. Rack-aware placement adds "skip if same rack" logic.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: What if a hot key overwhelms one node?</p>
+      <p class="a">A: Vanilla consistent hashing won't help. Options: (1) bounded-load consistent hashing (Google, 2016) — if a node is over quota, forward to next clockwise; (2) client-side L1 cache; (3) key salting (split "trending-video-123" into ":shard-0", ":shard-1", ...); (4) request coalescing at the shard.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: Consistent hashing vs Rendezvous vs Jump hash — when to use each?</p>
+      <p class="a">A: Ring is the industry standard, supports weights and replication trivially. <strong>Rendezvous (HRW)</strong> is simpler code, O(N) per lookup, great for small N. <strong>Jump hash</strong> is zero-memory and blazing fast but only works when nodes are numbered 0..N-1 and you don't need arbitrary node ids (bad for dynamic membership).</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: What hash function should we use?</p>
+      <p class="a">A: For load balancing, use a fast non-cryptographic hash: <strong>Murmur3</strong> or <strong>xxHash</strong>. Avoid SHA-1/MD5 unless you already depend on them — they're 5–10× slower and cryptographic strength is unnecessary here.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "Consistent hashing maps both keys and servers onto a ring. A key is served by the next server clockwise. When a server is added or removed, only that server's arc — roughly K/N keys — is reassigned. Virtual nodes fix load imbalance. It's what makes cache tiers, DynamoDB partitions, Cassandra rings, and sticky load balancers scale gracefully."</p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Naïve modulo hashing moves <strong>~(N−1)/N</strong> of keys on any change; consistent hashing moves <strong>~1/N</strong>.</li>
+      <li>Virtual nodes per physical node: typical <strong>100–500</strong>; load variance drops to <strong>2–5 %</strong>.</li>
+      <li>Lookup complexity: <strong>O(log N·V)</strong> per key, ring memory <strong>~30 bytes × N·V</strong>.</li>
+      <li>Invented by <strong>Karger et al., MIT, 1997</strong> — originally for CDNs.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li>"The core property is <em>K/N remap on membership change</em> — that's the interviewer's checkbox."</li>
+      <li>"Virtual nodes aren't an optimization, they're required — a plain ring is too lopsided in practice."</li>
+      <li>"For a stateless cache, adding a node is instant. For Cassandra, the algorithm is easy — <em>streaming the moved arc's data</em> is the actual bottleneck."</li>
+      <li>"Consistent hashing balances the keyspace, <em>not</em> the traffic — for hot keys use bounded-load hashing or key salting."</li>
+      <li>"Rendezvous, Jump hash, and Maglev are variants an interviewer might probe — know when each wins."</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li>AlgoMaster — <a href="https://algomaster.io/learn/system-design/course-introduction">System Design Fundamentals Curriculum</a> (source of the topic list)</li>
+      <li>Toptal — <a href="https://www.toptal.com/big-data/consistent-hashing">Consistent Hashing</a> (ring, virtual nodes, weights, real-world uses)</li>
+      <li>HighScalability — <a href="https://highscalability.com/consistent-hashing-algorithm/">Consistent Hashing Algorithm</a> (K/N math, bounded-load, Maglev, Rendezvous)</li>
+      <li>GeeksforGeeks — <a href="https://www.geeksforgeeks.org/system-design/consistent-hashing/">Consistent Hashing</a> (algorithm + implementation)</li>
+      <li>Karger et al., MIT (1997) — the original paper on consistent hashing for web caches.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

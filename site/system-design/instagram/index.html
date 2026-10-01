@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Design Instagram — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Design Instagram</h1>
+    <p>A photo/video sharing app with a personalized feed at billion-user scale — the canonical "media + social graph + fan-out feed" interview question.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building & where it's used</h2>
+    <p>Instagram lets a user snap a photo or record a short video, add a caption, and publish it to their followers, who then see it in a scrollable, personalized <strong>home feed</strong>. Underneath a deceptively simple UI sit three hard problems that show up in almost every large consumer app: storing and delivering <strong>huge amounts of immutable media</strong> cheaply and fast, modeling a <strong>massive social graph</strong> (who follows whom), and assembling a <strong>per-user feed</strong> from the posts of everyone you follow — quickly, for hundreds of millions of people at once.</p>
+    <p>The same architectural spine powers Facebook, Twitter/X, TikTok, Pinterest, Snapchat, and LinkedIn. That is exactly why interviewers love it: it forces you to reason about a <strong>read-heavy workload</strong> (people scroll far more than they post), the classic <strong>fan-out-on-write vs. fan-out-on-read</strong> trade-off, object storage plus a CDN for blobs, and how you shard a relational database when a single box can no longer hold the data. The real Instagram famously scaled to 14M+ users with a tiny team on Django, PostgreSQL, Redis and Amazon S3 before Facebook acquired it — a reminder that the fundamentals, done well, take you a very long way.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Your own private magazine, freshly printed every second</h2>
+    <p>Think about what Instagram actually is: <strong>two billion people</strong> take pictures, and <strong>two billion people</strong> want to see pictures — but only from the handful of friends and celebrities they care about. Nobody wants to see everyone's photos. That's the whole trick.</p>
+    <p>Imagine a giant printing press in the sky. Every time your friend Priya posts a beach photo, the press <strong>immediately prints a copy into your personal magazine</strong> — and into the personal magazines of everyone else who follows her. Same for your cousin's dog, your college batch group, the food blogger you follow. When you open the app, you're not searching through a huge pile of "everyone's photos." You're just <strong>flipping through your own custom magazine</strong> that was already assembled for you. That's why it feels instant.</p>
+    <p>But there's a <strong>catch</strong>: some people, like <strong>Cristiano Ronaldo</strong>, have <em>640 million followers</em>. If the printing press tried to stamp his photo into 640 million magazines the moment he posts, it would jam. So Instagram plays a clever mixed game — for ordinary people (a few hundred followers), it stamps the photo into everyone's magazine instantly. But for superstars, it does the <strong>opposite</strong>: their photos sit in one central spot, and when a fan opens their app, Instagram quickly runs over and mixes in the latest superstar posts on the way.</p>
+    <p>The photos themselves? They're not on Instagram's main computers. They live in a giant, cheap warehouse called <strong>S3</strong> — basically Amazon's endless attic. And to make them <em>appear</em> in your feed in a blink no matter where you are on the planet, Instagram keeps <strong>small copies of the popular photos in warehouses close to you</strong> — one in Mumbai, one in Frankfurt, one in São Paulo. Your phone grabs the picture from the nearest warehouse, not the original one.</p>
+    <p>The <strong>really hard part</strong> is that all of this — write once, be seen a million times, feel instant — has to hold together while people upload <strong>a hundred million photos every single day</strong>.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements & scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Upload media</strong> — post a photo or video with a caption.</li>
+      <li><strong>Follow / unfollow</strong> other users (a directed social graph).</li>
+      <li><strong>Home feed</strong> — see a reverse-chronological (or ranked) feed of posts from people you follow, with low latency.</li>
+      <li><strong>View a user's profile</strong> — their posts in reverse-chronological order.</li>
+      <li>(Extensions) likes, comments, search, stories, notifications — mention them, then scope them out to stay focused.</li>
+    </ul>
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Highly available</strong> — feed should never be "down"; availability &gt; strict consistency.</li>
+      <li><strong>Low latency</strong> — feed loads in &lt; 200–500 ms; media renders instantly via CDN.</li>
+      <li><strong>Durable</strong> — an uploaded photo is never lost (11 nines of durability on object storage).</li>
+      <li><strong>Eventually consistent</strong> — it's fine if your new post takes a few seconds to appear in every follower's feed.</li>
+      <li><strong>Read-heavy</strong> — design for a ~100:1 read:write ratio.</li>
+    </ul>
+
+    <h3>Back-of-the-envelope (numbers to volunteer)</h3>
+    <p>Assume <strong>500M daily active users</strong> out of ~1B total. Say ~100M posts/day (a mix of photos and videos). These round numbers are what interviewers want you to state up front and reason from.</p>
+    <table>
+      <tr><th>Quantity</th><th>Estimate</th><th>How we get it</th></tr>
+      <tr><td>Daily active users</td><td>500M</td><td>Given assumption</td></tr>
+      <tr><td>Posts / day</td><td>~100M</td><td>~0.2 posts per DAU</td></tr>
+      <tr><td>Write QPS (uploads)</td><td>~1,200/s avg, ~6k/s peak</td><td>100M ÷ 86,400 s; ×5 peak factor</td></tr>
+      <tr><td>Read:write ratio</td><td>~100:1</td><td>Scrolling ≫ posting</td></tr>
+      <tr><td>Feed-read QPS</td><td>~120k/s avg, ~600k/s peak</td><td>Write QPS × 100</td></tr>
+      <tr><td>Photo size</td><td>~2–3 MB (≈0.5 MB post-compress)</td><td>Given / typical</td></tr>
+      <tr><td>New media / day</td><td>~100–200 TB/day</td><td>100M × avg blob size + thumbnails/transcodes</td></tr>
+      <tr><td>Storage / year</td><td>tens of PB → hundreds of PB with video</td><td>Daily × 365, ×replication</td></tr>
+      <tr><td>Metadata / year</td><td>~tens of GB of rows</td><td>100M/day × ~0.5 KB row × 365</td></tr>
+    </table>
+    <p>The headline takeaway to say out loud: <em>"The bytes live in blob storage + a CDN; the database only stores small metadata rows and the graph. Media storage is the cost/bandwidth problem; feed generation is the latency/fan-out problem."</em></p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>Clients talk to an <strong>API gateway / load balancer</strong> that routes to stateless microservices. The <strong>write path</strong> and the <strong>read path</strong> are deliberately separated. On upload, the client gets a <strong>pre-signed URL</strong> and pushes the raw bytes <em>directly to object storage</em> (bypassing our servers), then the Post service writes a small metadata row and drops an event on a queue. A <strong>fan-out worker</strong> consumes that event and pushes the new post ID into the Redis feed-cache list of each follower ("fan-out on write"). On read, the Feed service simply reads the pre-computed list of post IDs from Redis, hydrates them with metadata, and returns CDN URLs for the media — so the scroll is a couple of fast cache lookups, not a giant join.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 470" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif" font-size="13">
+        <defs>
+          <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#7aa2f7"/>
+          </marker>
+          <marker id="arrA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#f7567c"/>
+          </marker>
+        </defs>
+        <!-- Client -->
+        <rect x="20" y="200" width="120" height="60" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="80" y="226" fill="#fff" text-anchor="middle">📱 Client</text>
+        <text x="80" y="244" fill="#8fa3c8" text-anchor="middle" font-size="11">app / web</text>
+        <!-- Gateway -->
+        <rect x="185" y="200" width="130" height="60" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="250" y="226" fill="#fff" text-anchor="middle">API Gateway</text>
+        <text x="250" y="244" fill="#8fa3c8" text-anchor="middle" font-size="11">LB + auth</text>
+        <!-- Post service -->
+        <rect x="360" y="90" width="140" height="58" rx="10" fill="#1b2940" stroke="#f7567c"/>
+        <text x="430" y="115" fill="#fff" text-anchor="middle">Post service</text>
+        <text x="430" y="133" fill="#8fa3c8" text-anchor="middle" font-size="11">write path</text>
+        <!-- Feed service -->
+        <rect x="360" y="312" width="140" height="58" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="430" y="337" fill="#fff" text-anchor="middle">Feed service</text>
+        <text x="430" y="355" fill="#8fa3c8" text-anchor="middle" font-size="11">read path</text>
+        <!-- Object storage -->
+        <rect x="360" y="10" width="140" height="52" rx="10" fill="#26343f" stroke="#ff9900"/>
+        <text x="430" y="32" fill="#fff" text-anchor="middle">Object store (S3)</text>
+        <text x="430" y="49" fill="#ffcf8f" text-anchor="middle" font-size="11">raw media blobs</text>
+        <!-- Queue -->
+        <rect x="560" y="90" width="120" height="58" rx="10" fill="#1b2940" stroke="#f7567c"/>
+        <text x="620" y="115" fill="#fff" text-anchor="middle">Queue</text>
+        <text x="620" y="133" fill="#8fa3c8" text-anchor="middle" font-size="11">SQS / Kafka</text>
+        <!-- Fan-out worker -->
+        <rect x="720" y="90" width="150" height="58" rx="10" fill="#1b2940" stroke="#f7567c"/>
+        <text x="795" y="112" fill="#fff" text-anchor="middle">Fan-out worker</text>
+        <text x="795" y="130" fill="#8fa3c8" text-anchor="middle" font-size="11">push post→followers</text>
+        <!-- Metadata DB -->
+        <rect x="560" y="200" width="120" height="58" rx="10" fill="#26343f" stroke="#2dc653"/>
+        <text x="620" y="225" fill="#fff" text-anchor="middle">Metadata DB</text>
+        <text x="620" y="243" fill="#a7e8bd" text-anchor="middle" font-size="11">sharded SQL</text>
+        <!-- Graph DB -->
+        <rect x="560" y="290" width="120" height="52" rx="10" fill="#26343f" stroke="#2dc653"/>
+        <text x="620" y="312" fill="#fff" text-anchor="middle">Graph store</text>
+        <text x="620" y="329" fill="#a7e8bd" text-anchor="middle" font-size="11">follows</text>
+        <!-- Redis feed cache -->
+        <rect x="720" y="290" width="150" height="80" rx="10" fill="#26343f" stroke="#7048e8"/>
+        <text x="795" y="322" fill="#fff" text-anchor="middle">Feed cache</text>
+        <text x="795" y="340" fill="#c4b5fd" text-anchor="middle" font-size="11">Redis lists of</text>
+        <text x="795" y="356" fill="#c4b5fd" text-anchor="middle" font-size="11">post IDs / user</text>
+        <!-- CDN -->
+        <rect x="185" y="20" width="130" height="58" rx="10" fill="#26343f" stroke="#ff9900"/>
+        <text x="250" y="45" fill="#fff" text-anchor="middle">CDN</text>
+        <text x="250" y="63" fill="#ffcf8f" text-anchor="middle" font-size="11">CloudFront</text>
+
+        <!-- arrows: client-gateway -->
+        <line x1="140" y1="230" x2="183" y2="230" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arr)"/>
+        <!-- gateway -> post (write) -->
+        <line x1="315" y1="215" x2="358" y2="130" stroke="#f7567c" stroke-width="2" marker-end="url(#arrA)"/>
+        <!-- gateway -> feed (read) -->
+        <line x1="315" y1="245" x2="358" y2="335" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arr)"/>
+        <!-- client -> S3 direct (presigned) -->
+        <path d="M80,200 C80,80 300,40 358,36" fill="none" stroke="#ff9900" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+        <text x="150" y="105" fill="#ffcf8f" font-size="11">pre-signed upload</text>
+        <!-- client <- CDN media -->
+        <line x1="185" y1="49" x2="142" y2="205" stroke="#ff9900" stroke-width="2" marker-end="url(#arr)"/>
+        <!-- post -> S3 (thumbs)/metadata -->
+        <line x1="430" y1="90" x2="430" y2="64" stroke="#ff9900" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="500" y1="130" x2="558" y2="210" stroke="#2dc653" stroke-width="2" marker-end="url(#arr)"/>
+        <!-- post -> queue -> worker -->
+        <line x1="500" y1="119" x2="558" y2="119" stroke="#f7567c" stroke-width="2" marker-end="url(#arrA)"/>
+        <line x1="680" y1="119" x2="718" y2="119" stroke="#f7567c" stroke-width="2" marker-end="url(#arrA)"/>
+        <!-- worker -> redis -->
+        <line x1="795" y1="148" x2="795" y2="288" stroke="#f7567c" stroke-width="2" marker-end="url(#arrA)"/>
+        <!-- worker reads graph -->
+        <line x1="718" y1="130" x2="682" y2="300" stroke="#f7567c" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#arrA)"/>
+        <!-- feed -> redis + metadata -->
+        <line x1="500" y1="335" x2="718" y2="330" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="500" y1="330" x2="558" y2="240" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arr)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#f7567c"></span> write / async fan-out</span>
+        <span><span class="dot" style="background:#7aa2f7"></span> read / feed path</span>
+        <span><span class="dot" style="background:#ff9900"></span> media (blob + CDN)</span>
+        <span><span class="dot" style="background:#2dc653"></span> data stores</span>
+      </div>
+    </div>
+
+    <h3>The two paths, step by step</h3>
+    <ol class="steps">
+      <li><strong>Upload:</strong> client asks Post service for a pre-signed URL, uploads raw bytes straight to S3, then confirms — Post service writes a metadata row (author, caption, media key, timestamp, a globally-unique post ID) and emits a "new post" event.</li>
+      <li><strong>Process:</strong> a worker generates thumbnails / transcodes video into multiple resolutions, storing them back in S3 behind the CDN.</li>
+      <li><strong>Fan-out:</strong> the fan-out worker looks up the author's followers in the graph store and prepends the post ID to each follower's Redis feed list (capped, e.g. latest 500–1000).</li>
+      <li><strong>Read feed:</strong> Feed service reads the pre-computed post-ID list from Redis, batch-hydrates metadata from cache/DB, and returns items with CDN media URLs — the client streams the bytes from the nearest edge.</li>
+    </ol>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>Media storage — never put blobs in your database</h3>
+    <p>Photos and videos are large, immutable, and served by the millions per second — a perfect fit for <strong>object storage (S3)</strong>, not a relational DB. The DB stores only a small row with the S3 <em>object key</em>. Uploads go <strong>directly from client to S3</strong> via a pre-signed URL so our app servers never touch the bytes, and downloads go through a <strong>CDN</strong> that caches media at edge locations near the user. This is what makes media "render instantly" — the bytes travel the shortest possible network path, and origin (S3) load stays low because of high cache-hit ratios.</p>
+
+    <h3>Feed generation — fan-out on write vs. fan-out on read</h3>
+    <p>This is the heart of the interview. <strong>Fan-out on write (push):</strong> when you post, we immediately write the post ID into every follower's precomputed feed list in Redis. Reads are then O(1) — dirt cheap and fast — at the cost of expensive writes and storage duplication. <strong>Fan-out on read (pull):</strong> we store nothing precomputed; at read time we gather recent posts from everyone you follow and merge them. Writes are cheap, but reads are expensive (a merge across hundreds of authors on every scroll).</p>
+    <p>The production answer is <strong>hybrid</strong>. Use push for the common case (most users have a modest follower count), but for <strong>celebrities</strong> with tens of millions of followers, fanning out a single post to 50M lists is catastrophic (the "hot key" / thundering-herd problem). So for those high-fan-out accounts we switch to <strong>pull</strong>: their posts are <em>not</em> pushed; instead, at read time the Feed service merges the viewer's precomputed list with a fresh pull of the few celebrities they follow. Best of both worlds.</p>
+
+    <h3>The social graph &amp; sharding</h3>
+    <p>Follows are a directed graph stored as adjacency lists (<code>followers(userId) → [followerIds]</code> and <code>following(userId) → [...]</code>). Everything is <strong>sharded by user ID</strong> so one user's data lives on one shard. That means a globally unique, roughly time-sortable <strong>post ID</strong> matters a lot: Instagram's real solution was a 64-bit ID minted in Postgres that packs a millisecond timestamp, the shard ID, and a per-shard sequence number — so IDs sort by time <em>and</em> encode where the row lives, with no central coordinator.</p>
+
+    <h3>Caching &amp; hot keys</h3>
+    <p>Multiple cache layers: the CDN for media, Redis for feed lists, and Memcached/Redis for hot metadata (post rows, user profiles, follower counts). Hot keys (a viral post, a celebrity profile) are mitigated with request coalescing, short TTLs, and replicas. The DB sits behind all of this and mostly serves cache misses and writes.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures & algorithms</h2>
+    <p>The design looks like plumbing, but each choice is a deliberate data-structure decision:</p>
+    <ul>
+      <li><strong>Redis list / sorted set per user</strong> — the precomputed feed. A capped list gives O(1) prepend and O(1) range-read of the latest N. A <em>sorted set</em> keyed by timestamp (or a ranking score) lets you keep it ordered and trim the tail cheaply.</li>
+      <li><strong>k-way merge with a min/max-heap</strong> — fan-out-on-read and the hybrid merge combine posts from many authors in timestamp order. Push the newest post from each of the <em>k</em> sources into a heap and pop the max repeatedly: O(N log k) to produce N feed items.</li>
+      <li><strong>64-bit time-sortable IDs (Snowflake-style)</strong> — <code>[41 bits ms timestamp | 13 bits shard | 10 bits sequence]</code>. Distributed, collision-free, and monotonic-by-time so a feed can be ordered by ID alone.</li>
+      <li><strong>Adjacency lists</strong> for the follow graph — the natural structure for "get all followers of X" in O(degree).</li>
+      <li><strong>Consistent hashing</strong> to map user ID → shard/cache node, so adding capacity moves only a small slice of keys.</li>
+      <li><strong>Bloom filter</strong> — a compact "have you already seen this post?" check to de-duplicate the feed without a DB round-trip.</li>
+    </ul>
+    <table>
+      <tr><th>Operation</th><th>Structure</th><th>Complexity</th></tr>
+      <tr><td>Prepend post to a feed</td><td>Redis capped list / sorted set</td><td>O(1) / O(log n)</td></tr>
+      <tr><td>Read latest N feed items</td><td>Redis range read</td><td>O(N)</td></tr>
+      <tr><td>Fan-out to F followers (push)</td><td>Loop of list-prepends</td><td>O(F)</td></tr>
+      <tr><td>Merge k authors' posts (pull)</td><td>Min/max-heap k-way merge</td><td>O(N log k)</td></tr>
+      <tr><td>Generate a post ID</td><td>Bit-packing</td><td>O(1)</td></tr>
+      <tr><td>Map key → node</td><td>Consistent hashing</td><td>O(log nodes)</td></tr>
+      <tr><td>"Seen this post?" dedup</td><td>Bloom filter</td><td>O(k) hashes</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Edge / DNS</td><td>Route 53 + CloudFront</td><td>Geo-routing and edge caching so media loads from the nearest POP.</td></tr>
+      <tr><td>API entry</td><td>API Gateway / ALB</td><td>TLS, auth, routing, throttling to stateless services.</td></tr>
+      <tr><td>Compute (services)</td><td>ECS/EKS or Lambda</td><td>Stateless Post/Feed/Graph services that scale horizontally.</td></tr>
+      <tr><td>Media blobs</td><td>Amazon S3</td><td>11 nines durability, cheap, direct pre-signed uploads; origin for CloudFront.</td></tr>
+      <tr><td>Media processing</td><td>Lambda / MediaConvert</td><td>Thumbnails + video transcoding into multiple bitrates, triggered by S3 events.</td></tr>
+      <tr><td>Metadata store</td><td>DynamoDB (or Aurora/RDS sharded)</td><td>Post/user rows keyed by ID; DynamoDB gives auto-sharding + predictable latency.</td></tr>
+      <tr><td>Feed cache</td><td>ElastiCache for Redis</td><td>Precomputed per-user feed lists; O(1) prepend/range-read.</td></tr>
+      <tr><td>Hot-read acceleration</td><td>DAX / ElastiCache</td><td>Microsecond reads for hot profiles/posts, shielding the DB.</td></tr>
+      <tr><td>Async fan-out</td><td>SQS / SNS / Kinesis (or MSK)</td><td>Decouple upload from fan-out; absorb spikes; retry safely.</td></tr>
+      <tr><td>Search / discovery</td><td>OpenSearch</td><td>Hashtag, caption, and user search.</td></tr>
+      <tr><td>Observability</td><td>CloudWatch</td><td>Metrics, alarms on feed latency and queue depth.</td></tr>
+    </table>
+    <p>Deployment: clients hit CloudFront/API Gateway; stateless containers on ECS/EKS across multiple AZs sit behind an ALB and auto-scale on CPU/queue depth. Uploads flow client→S3 directly; an S3 event fires a Lambda to transcode; a "new post" message goes to SQS, and fan-out workers (ECS/Lambda) update ElastiCache. DynamoDB holds metadata with on-demand capacity, and everything replicates across AZs (and Regions for the media/CDN layer) for availability.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>Two pieces of core logic an interviewer will ask you to sketch: a <strong>Snowflake-style ID generator</strong> (globally-unique, time-sortable post IDs) and the <strong>fan-out + feed-read</strong> logic. This is correct, idiomatic C#.</p>
+    <pre><span class="cmt">// ---- 1. Snowflake-style 64-bit ID: [41b timestamp | 13b shard | 10b seq] ----</span>
+<span class="kw">public sealed class</span> <span class="typ">SnowflakeIdGenerator</span>
+{
+    <span class="kw">private const long</span> Epoch = <span class="str">1288834974657L</span>;  <span class="cmt">// custom epoch (ms)</span>
+    <span class="kw">private const int</span> ShardBits = <span class="str">13</span>, SeqBits = <span class="str">10</span>;
+    <span class="kw">private const long</span> MaxSeq = (<span class="str">1L</span> &lt;&lt; SeqBits) - <span class="str">1</span>;   <span class="cmt">// 1023 IDs / ms / shard</span>
+
+    <span class="kw">private readonly long</span> _shardId;
+    <span class="kw">private readonly object</span> _lock = <span class="kw">new</span>();
+    <span class="kw">private long</span> _lastMs = -<span class="str">1</span>, _seq = <span class="str">0</span>;
+
+    <span class="kw">public</span> <span class="fn">SnowflakeIdGenerator</span>(<span class="kw">long</span> shardId) =&gt; _shardId = shardId;
+
+    <span class="kw">public long</span> <span class="fn">NextId</span>()
+    {
+        <span class="kw">lock</span> (_lock)
+        {
+            <span class="kw">var</span> ms = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            <span class="kw">if</span> (ms == _lastMs)
+            {
+                _seq = (_seq + <span class="str">1</span>) &amp; MaxSeq;
+                <span class="kw">if</span> (_seq == <span class="str">0</span>) <span class="kw">while</span> ((ms = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) &lt;= _lastMs) { } <span class="cmt">// spin to next ms</span>
+            }
+            <span class="kw">else</span> _seq = <span class="str">0</span>;
+            _lastMs = ms;
+            <span class="kw">return</span> ((ms - Epoch) &lt;&lt; (ShardBits + SeqBits))
+                 | (_shardId &lt;&lt; SeqBits)
+                 | _seq;
+        }
+    }
+}
+
+<span class="cmt">// ---- 2. Hybrid fan-out: push for normal users, skip celebrities (pulled at read) ----</span>
+<span class="kw">public class</span> <span class="typ">FeedService</span>
+{
+    <span class="kw">private readonly</span> IRedis _redis;          <span class="cmt">// per-user capped list of post IDs</span>
+    <span class="kw">private readonly</span> IGraph _graph;          <span class="cmt">// followers / following</span>
+    <span class="kw">private readonly</span> IPostStore _posts;       <span class="cmt">// metadata by id</span>
+    <span class="kw">private const int</span> CelebThreshold = <span class="str">100_000</span>, FeedCap = <span class="str">800</span>;
+
+    <span class="cmt">// Called by the async fan-out worker when a post is created.</span>
+    <span class="kw">public async</span> Task <span class="fn">FanOutAsync</span>(<span class="kw">long</span> authorId, <span class="kw">long</span> postId)
+    {
+        <span class="kw">var</span> followerCount = <span class="kw">await</span> _graph.<span class="fn">FollowerCountAsync</span>(authorId);
+        <span class="kw">if</span> (followerCount &gt; CelebThreshold) <span class="kw">return</span>; <span class="cmt">// celebrity → pulled at read time</span>
+
+        <span class="kw">await foreach</span> (<span class="kw">var</span> follower <span class="kw">in</span> _graph.<span class="fn">GetFollowersAsync</span>(authorId))
+        {
+            <span class="kw">await</span> _redis.<span class="fn">LPushCappedAsync</span>($<span class="str">"feed:{follower}"</span>, postId, FeedCap);
+        }
+    }
+
+    <span class="cmt">// Read path: merge precomputed feed with fresh posts from followed celebrities.</span>
+    <span class="kw">public async</span> Task&lt;<span class="typ">List</span>&lt;<span class="typ">Post</span>&gt;&gt; <span class="fn">GetFeedAsync</span>(<span class="kw">long</span> userId, <span class="kw">int</span> limit = <span class="str">30</span>)
+    {
+        <span class="kw">var</span> pushedIds = <span class="kw">await</span> _redis.<span class="fn">LRangeAsync</span>($<span class="str">"feed:{userId}"</span>, <span class="str">0</span>, limit * <span class="str">2</span>);
+        <span class="kw">var</span> celebs    = <span class="kw">await</span> _graph.<span class="fn">GetFollowedCelebritiesAsync</span>(userId);
+        <span class="kw">var</span> pulledIds = <span class="kw">await</span> _posts.<span class="fn">RecentPostIdsAsync</span>(celebs, limit);
+
+        <span class="cmt">// IDs are time-sortable → merge & take newest. (heap for true k-way merge)</span>
+        <span class="kw">var</span> merged = pushedIds.<span class="fn">Concat</span>(pulledIds)
+                             .<span class="fn">Distinct</span>()
+                             .<span class="fn">OrderByDescending</span>(id =&gt; id)
+                             .<span class="fn">Take</span>(limit);
+
+        <span class="kw">return</span> (<span class="kw">await</span> _posts.<span class="fn">HydrateAsync</span>(merged)).<span class="fn">ToList</span>(); <span class="cmt">// attach CDN URLs</span>
+    }
+}</pre>
+    <p>In other stacks you'd reach for the same shapes: Redis <code>LPUSH</code>/<code>LTRIM</code> for the capped list, a real min-heap for the k-way merge (e.g. <code>PriorityQueue&lt;T&gt;</code> in .NET), and Twitter's open-source Snowflake or a DB sequence for IDs.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks & likely follow-ups</h2>
+    <p><strong>The celebrity fan-out problem.</strong> Pure push dies on accounts with tens of millions of followers — one post triggers tens of millions of writes and a latency spike. The hybrid (push for the masses, pull for celebrities) is the standard answer; be ready to name the follower threshold as a tunable.</p>
+    <p><strong>Consistency vs. availability.</strong> We choose availability and eventual consistency (a post appearing a few seconds late is fine), but a user must always see <em>their own</em> post immediately — so on read we can splice the user's own recent posts in even before fan-out finishes ("read-your-writes" for the author).</p>
+    <p><strong>Storage &amp; bandwidth</strong> are the dominant cost. Video multiplies everything; you transcode into multiple bitrates and lean hard on CDN cache-hit ratio and tiered/cold storage (S3 Glacier) for old media.</p>
+    <p><strong>Hot keys &amp; thundering herds</strong> on viral content — solved with request coalescing, multiple cache replicas, and short TTLs.</p>
+    <div class="qa"><p class="q">"How do you keep the feed fast at 500M users?"</p><p class="a">Precompute it. Reads become O(1) Redis lookups; the expensive work happens asynchronously off the write path.</p></div>
+    <div class="qa"><p class="q">"What breaks first as you scale, and how do you shard?"</p><p class="a">The single DB. Shard by user ID with consistent hashing, and use time-sortable Snowflake IDs that encode the shard so you never need a global lookup.</p></div>
+    <div class="qa"><p class="q">"How do you order the feed — chronological or ranked?"</p><p class="a">Start chronological (sort by ID). To rank, store a score in a Redis sorted set and compute it from engagement signals; the structure is the same, only the sort key changes.</p></div>
+    <div class="qa"><p class="q">"How does upload not overload your servers?"</p><p class="a">Pre-signed URLs — the client uploads bytes straight to S3; our servers only handle the small metadata write and enqueue processing.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "Media lives in S3 behind a CDN; the DB only holds small metadata rows and the follow graph. I separate the write and read paths: uploads go straight to S3 via pre-signed URLs and enqueue an async fan-out that pushes post IDs into each follower's precomputed Redis feed list. Reads are then O(1) cache lookups. I use a hybrid fan-out — push for normal users, pull for celebrities — to dodge the hot-key problem, and shard everything by user ID with time-sortable Snowflake IDs."</p>
+    <ul>
+      <li><strong>Numbers to quote:</strong> 500M DAU, ~100M posts/day, ~100:1 read:write, feed &lt; 200–500 ms, media = the storage/bandwidth cost, feed = the fan-out/latency cost.</li>
+      <li><strong>Talking point 1:</strong> Blobs in object storage + CDN; never in the DB.</li>
+      <li><strong>Talking point 2:</strong> Fan-out on write for cheap reads; hybrid to survive celebrities.</li>
+      <li><strong>Talking point 3:</strong> Pre-signed uploads keep bytes off your servers.</li>
+      <li><strong>Talking point 4:</strong> Shard by user ID; Snowflake IDs sort by time and encode the shard.</li>
+      <li><strong>Talking point 5:</strong> Availability &gt; consistency; eventual consistency, but read-your-writes for the author.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://www.hellointerview.com/learn/system-design/problem-breakdowns/instagram">Hello Interview — Instagram System Design breakdown</a></li>
+      <li><a href="https://www.geeksforgeeks.org/system-design/design-instagram-a-system-design-interview-question/">GeeksforGeeks — Design Instagram (system design interview)</a></li>
+      <li><a href="https://instagram-engineering.com/">Instagram Engineering blog — real production architecture (Django, PostgreSQL sharding, Snowflake-style IDs, Redis, S3)</a></li>
+      <li><a href="https://highscalability.com/">High Scalability — Instagram architecture write-ups</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

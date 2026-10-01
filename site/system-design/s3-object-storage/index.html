@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Amazon S3 — Object Storage Internals — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  .statgrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; margin: 16px 0; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .stat .n { font-size: 1.5rem; font-weight: 800; color: var(--arch); letter-spacing: -.5px; }
+  .stat .l { font-size: .82rem; color: var(--muted); margin-top: 2px; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>How Amazon S3 Works Internally</h1>
+    <p>Designing planet-scale object storage: 500 trillion objects, 11 nines of durability, and 200M requests/sec — on millions of ordinary hard drives.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>We are designing an <strong>object storage service</strong>: a system where clients <code>PUT</code> and <code>GET</code> arbitrary blobs of bytes (0 bytes to 5&nbsp;TB) addressed by a simple <em>key</em>, over a plain HTTP REST API, with effectively unlimited capacity, extreme durability, and a flat 99.9%+ availability SLA. This is exactly what <strong>Amazon S3</strong> (Simple Storage Service, launched March 2006) provides, and it is the template every "design a blob store / Dropbox / photo backend" interview is really asking about.</p>
+    <p>Object storage is the quiet foundation of the modern internet. S3 and its peers — <strong>Google Cloud Storage, Azure Blob Storage, Backblaze B2, MinIO, Ceph</strong> — sit underneath data lakes (Athena/Spark/Snowflake scanning petabytes), media libraries (Netflix streams its catalog from S3), backups and disaster recovery, static website assets served through a CDN, machine-learning training corpora, and the storage tier of countless SaaS products. The reason companies reach for object storage instead of a filesystem or a database is that it decouples <em>durability and scale</em> from any single machine: you hand bytes to an API and the service guarantees they will survive disk failures, rack failures, and even the loss of an entire data hall, while scaling from one object to <strong>hundreds of trillions</strong> without you provisioning anything.</p>
+    <p>In an interview, the thing that makes S3 fascinating is the gap between the <em>trivial-looking API</em> (four verbs: PUT, GET, DELETE, LIST) and the <em>staggering machinery</em> behind it. Your job is to explain how you turn millions of failure-prone 120-IOPS hard drives into a service that never loses data and never has a hotspot.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The endless warehouse of numbered lockers</h2>
+    <p>Picture the biggest warehouse you've ever seen, then imagine it a million times bigger — so big that trucks drive <em>inside</em> it. Now fill it with <strong>simple metal lockers</strong>, each one with a shiny label on the front. When you want to keep something safe — a wedding photo, a movie, a copy of your tax return — you drive up to the loading dock, hand over your box, and give it a name like "sarah/holiday-2024/beach.jpg". A worker takes your box, walks off into the warehouse, and slides it into a locker. Any time later, you come back and say that same name, and out comes your box.</p>
+    <p>The magic is what you <em>don't</em> see. There are no folders, no filing cabinets — just <strong>flat labels and lockers</strong>. And every box you hand in is <strong>quietly copied three times</strong> — one copy in this building, one in a building across town, one on the other side of the city. If the whole building floods tonight, your wedding photo is still fine. This is what people mean when they say Amazon S3 has "eleven nines of safety" — they've done the maths so that losing your box would take longer than the universe has been around.</p>
+    <p>You already use this all day without knowing. When you watch Netflix, the movie itself is sitting in one of these warehouses. When Instagram loads your holiday photos, they came from here. When your friend WhatsApps you a voice note, it lands in a locker for a bit before it reaches you. The reason companies love it: they don't have to think about disk drives, backups, or "what if the building burns down?" They just say "please keep this" and trust the warehouse.</p>
+    <p>The clever puzzle is <strong>how to run a warehouse this enormous without a single traffic jam</strong>. That's really what the whole design is about — spreading trucks, boxes, and workers so evenly that nobody ever has to wait in line.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>PUT</strong> an object (key → bytes) into a bucket; <strong>GET</strong> it back by key; <strong>DELETE</strong>; <strong>LIST</strong> keys by prefix.</li>
+      <li>Objects up to <strong>5&nbsp;TB</strong>; single upload capped at <strong>5&nbsp;GB</strong> (larger uses <strong>multipart upload</strong>).</li>
+      <li>Bucket namespace, per-object metadata, versioning, and range reads (fetch byte <em>x…y</em> of a large object).</li>
+    </ul>
+
+    <h3>Non-functional requirements (the hard part)</h3>
+    <ul>
+      <li><strong>Durability: 99.999999999% (11 nines).</strong> For 10 million objects, that's a statistical expectation of losing one object every ~10,000 years.</li>
+      <li><strong>Availability: 99.9%–99.99%</strong> for the request path; scale to any request rate with no pre-provisioning.</li>
+      <li><strong>Strong read-after-write consistency</strong> (S3 has offered this since December 2020) — a GET after a successful PUT always returns the latest bytes.</li>
+      <li><strong>Elastic scale</strong> and cost efficiency at exabyte volume.</li>
+    </ul>
+
+    <h3>The numbers to quote (real S3 figures)</h3>
+    <div class="statgrid">
+      <div class="stat"><div class="n">500T+</div><div class="l">objects stored</div></div>
+      <div class="stat"><div class="n">100s EB</div><div class="l">total data</div></div>
+      <div class="stat"><div class="n">200M/s</div><div class="l">requests at peak</div></div>
+      <div class="stat"><div class="n">~1 PB/s</div><div class="l">peak bandwidth</div></div>
+      <div class="stat"><div class="n">Millions</div><div class="l">of hard drives</div></div>
+      <div class="stat"><div class="n">11 nines</div><div class="l">durability target</div></div>
+    </div>
+
+    <table>
+      <tr><th>Quantity</th><th>Figure</th><th>Why it matters in the design</th></tr>
+      <tr><td>Objects stored</td><td>~500 trillion (2025)</td><td>The <em>index</em> is itself a giant distributed database — bigger than most companies' entire datasets.</td></tr>
+      <tr><td>Peak requests</td><td>200 million/sec</td><td>The frontend + index must shard horizontally with no single bottleneck.</td></tr>
+      <tr><td>Per-prefix rate</td><td>3,500 writes &amp; 5,500 reads /sec</td><td>Scaling unit is the <strong>prefix/partition</strong>; more prefixes = more throughput.</td></tr>
+      <tr><td>HDD random IOPS</td><td>~120 ops/sec</td><td>Unchanged since 2006 — the core physics constraint the whole design fights.</td></tr>
+      <tr><td>HDD bit error rate</td><td>~1 in 10<sup>15</sup></td><td>At exabyte scale, silent corruption is a certainty → checksums + erasure coding.</td></tr>
+      <tr><td>Object latency</td><td>~100–200&nbsp;ms first byte</td><td>It's disk-backed, not a cache — pair with CloudFront/ElastiCache when you need ms.</td></tr>
+    </table>
+    <p><strong>The killer insight to volunteer:</strong> a single hard drive does only ~120 random IOPS, and that hasn't improved in ~20 years even as capacity exploded. So on a 200&nbsp;TB drive you get roughly <em>1 IOP per 2&nbsp;TB of data</em>. You cannot make one drive fast — you win only by <strong>spreading every workload across thousands of drives</strong> so their IOPS sum up. That single sentence frames the entire architecture.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>S3 is not one program — it's <strong>hundreds of microservices</strong> grouped into a few large fleets, each with an API-level contract. The request path splits cleanly into a <strong>metadata plane</strong> (where is this object?) and a <strong>data plane</strong> (the actual bytes on disks). A PUT flows: client → <strong>Frontend fleet</strong> (auth, request routing) → <strong>Index / Namespace service</strong> (allocates the object's location, records metadata) → <strong>Storage fleet</strong> (erasure-codes the bytes into shards and writes them across many drives). A GET reverses it: look up the location in the index, fetch enough shards from the storage fleet to reconstruct, stream back. A separate <strong>background operations fleet</strong> handles replication, tiering, repair, and continuous durability audits — off the critical path.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 860 470" role="img" aria-label="Amazon S3 architecture diagram">
+        <defs>
+          <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,3 L0,6 z" fill="#7aa2f7"/>
+          </marker>
+          <marker id="arrA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,3 L0,6 z" fill="#f7a072"/>
+          </marker>
+        </defs>
+        <style>
+          .box{rx:12;stroke-width:1.5;}
+          .lbl{fill:#e7ecf3;font:600 14px -apple-system,Segoe UI,sans-serif;}
+          .sub{fill:#9aa7bd;font:400 11px -apple-system,Segoe UI,sans-serif;}
+          .flow{stroke:#7aa2f7;stroke-width:2;fill:none;marker-end:url(#arr);}
+          .aflow{stroke:#f7a072;stroke-width:2;fill:none;stroke-dasharray:6 5;marker-end:url(#arrA);}
+        </style>
+
+        <!-- client -->
+        <rect x="20" y="200" width="120" height="60" class="box" fill="#1b2940" stroke="#4361ee"/>
+        <text x="80" y="228" text-anchor="middle" class="lbl">Client / SDK</text>
+        <text x="80" y="246" text-anchor="middle" class="sub">PUT · GET · LIST</text>
+
+        <!-- frontend -->
+        <rect x="190" y="200" width="140" height="60" class="box" fill="#1b2940" stroke="#4361ee"/>
+        <text x="260" y="224" text-anchor="middle" class="lbl">Frontend Fleet</text>
+        <text x="260" y="241" text-anchor="middle" class="sub">auth · routing · TLS</text>
+        <text x="260" y="255" text-anchor="middle" class="sub">load balancing</text>
+
+        <!-- index -->
+        <rect x="385" y="90" width="170" height="80" class="box" fill="#241b40" stroke="#7048e8"/>
+        <text x="470" y="118" text-anchor="middle" class="lbl">Index / Namespace</text>
+        <text x="470" y="136" text-anchor="middle" class="sub">key → shard locations</text>
+        <text x="470" y="152" text-anchor="middle" class="sub">metadata, versions (KV)</text>
+
+        <!-- storage -->
+        <rect x="385" y="290" width="170" height="80" class="box" fill="#0f2a1c" stroke="#2dc653"/>
+        <text x="470" y="318" text-anchor="middle" class="lbl">Storage Fleet</text>
+        <text x="470" y="336" text-anchor="middle" class="sub">ShardStore nodes</text>
+        <text x="470" y="352" text-anchor="middle" class="sub">erasure-coded shards</text>
+
+        <!-- disks -->
+        <rect x="620" y="270" width="220" height="120" class="box" fill="#1b2940" stroke="#2dc653"/>
+        <text x="730" y="296" text-anchor="middle" class="lbl">Millions of HDDs</text>
+        <text x="730" y="314" text-anchor="middle" class="sub">object spread across tens of</text>
+        <text x="730" y="329" text-anchor="middle" class="sub">drives; workload across 1000s</text>
+        <g fill="#2dc653" opacity="0.85">
+          <rect x="640" y="345" width="14" height="30" rx="2"/>
+          <rect x="660" y="345" width="14" height="30" rx="2"/>
+          <rect x="680" y="345" width="14" height="30" rx="2"/>
+          <rect x="700" y="345" width="14" height="30" rx="2"/>
+          <rect x="720" y="345" width="14" height="30" rx="2"/>
+          <rect x="740" y="345" width="14" height="30" rx="2"/>
+          <rect x="760" y="345" width="14" height="30" rx="2"/>
+          <rect x="780" y="345" width="14" height="30" rx="2"/>
+          <rect x="800" y="345" width="14" height="30" rx="2"/>
+        </g>
+
+        <!-- background ops -->
+        <rect x="620" y="80" width="220" height="90" class="box" fill="#3a2410" stroke="#f4a259"/>
+        <text x="730" y="108" text-anchor="middle" class="lbl">Background Ops Fleet</text>
+        <text x="730" y="126" text-anchor="middle" class="sub">repair · re-replication</text>
+        <text x="730" y="141" text-anchor="middle" class="sub">tiering · durability audits</text>
+        <text x="730" y="156" text-anchor="middle" class="sub">(off the critical path)</text>
+
+        <!-- flows -->
+        <path class="flow" d="M140,230 L186,230"/>
+        <path class="flow" d="M330,222 L383,150"/>
+        <path class="flow" d="M330,238 L383,320"/>
+        <path class="flow" d="M555,330 L616,330"/>
+        <path class="flow" d="M470,170 L470,288"/>
+        <text x="478" y="235" class="sub">where are the shards?</text>
+
+        <!-- async flows -->
+        <path class="aflow" d="M620,330 C580,250 600,200 618,150"/>
+        <path class="aflow" d="M730,270 L730,172"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7aa2f7"></span> synchronous request path</span>
+        <span><span class="dot" style="background:#f7a072"></span> async / background (repair, audit, tiering)</span>
+      </div>
+    </div>
+
+    <ol class="steps">
+      <li><strong>Client → Frontend:</strong> a request hits the frontend fleet behind DNS load balancing; it authenticates (SigV4), authorizes (IAM/bucket policy), and routes.</li>
+      <li><strong>Frontend → Index:</strong> the namespace service resolves the bucket+key to physical shard locations (for GET) or allocates new ones (for PUT), and durably records metadata.</li>
+      <li><strong>Frontend → Storage:</strong> for a PUT, bytes are erasure-coded and the shards are written across many independent drives in multiple availability zones; the write acks only when enough shards are durable.</li>
+      <li><strong>GET reconstruction:</strong> fetch any <em>k</em> of the <em>(k+m)</em> shards, verify checksums, reassemble, and stream to the client.</li>
+      <li><strong>Background:</strong> continuously scrubs data, re-generates lost shards after drive failures, moves cold objects to cheaper tiers, and runs the durability model.</li>
+    </ol>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. The index (namespace) — a giant distributed key-value store</h3>
+    <p>The index maps <code>(bucket, key) → {shard locations, size, etag, version, metadata}</code>. With 500 trillion objects this map is itself one of the largest databases on earth, so it is horizontally partitioned. The partitioning key is derived from the <strong>object key's prefix</strong> — which is exactly why S3's documented throughput is expressed <em>per prefix</em> (3,500 writes / 5,500 reads per second). When a prefix gets hot, S3 automatically splits its partition so different key ranges land on different index servers. This is the single most practical S3 fact for engineers: <strong>you scale by spreading keys across many prefixes</strong> (e.g. lead with a hash or a high-cardinality field), not by hammering one sequential prefix.</p>
+
+    <h3>2. Strong consistency</h3>
+    <p>Since December 2020, S3 provides <strong>strong read-after-write consistency</strong> for all operations, at no cost and no performance penalty. The trick is that the index is the single source of truth for "which shards are the current version of this object." A PUT is not acknowledged until the new metadata is durably committed in the index; any subsequent GET reads that committed pointer, so it can never see stale bytes. Consistency is therefore a property of the <em>metadata commit</em>, not of the (immutable) data shards.</p>
+
+    <h3>3. The storage fleet &amp; ShardStore</h3>
+    <p>The storage fleet is "full of hard disks." The lowest layer — the on-disk key-value store that manages shards on each node — was rewritten as <strong>ShardStore</strong>, built in <strong>Rust</strong> for memory safety and validated with <strong>lightweight formal verification</strong>: engineers wrote an executable specification (~1% the size of the real code) and used property-based/reference testing to prove the implementation matches it. This matters because at S3's scale, a rare correctness bug in the storage layer would corrupt data somewhere every single day.</p>
+
+    <h3>4. Durability: erasure coding, not just copies</h3>
+    <p>Naïve durability = keep N full copies (replication). That's simple and read-efficient but triples your cost at 3×. S3 instead leans on <strong>erasure coding</strong> (Reed–Solomon): split an object into <em>k</em> data shards, compute <em>m</em> parity shards, and store all <em>k+m</em> on different drives across multiple availability zones. Any <em>k</em> shards can reconstruct the object, so you survive <em>m</em> simultaneous failures with far less overhead than replication (e.g. a 5+4 scheme survives 4 losses at ~1.8× cost vs 3× for triple replication). Every shard is checksummed to catch the silent bit-rot that's statistically guaranteed at exabyte scale.</p>
+
+    <h3>5. Heat management — the anti-hotspot superpower</h3>
+    <p>"Heat" is the request rate landing on a given disk. Because a drive does only ~120 IOPS, a concentrated workload would create a <strong>hotspot</strong> — a straggler drive that drags down tail latency. S3's answer is <strong>spreading</strong>: a single customer's objects are scattered across a huge number of drives, and conversely each drive holds shards from countless unrelated workloads. Aggregating millions of bursty, mostly-idle workloads means their peaks don't line up, so aggregate demand is smooth and <em>no single workload can create a hotspot on any one disk</em>. A customer can momentarily burst onto over a million drives — capacity no one could build alone. This is the decorrelation-through-scale argument, closely related to <strong>shuffle sharding</strong>.</p>
+
+    <h3>6. Multipart upload &amp; range reads</h3>
+    <p>Objects over 5&nbsp;GB (and in practice anything large) use <strong>multipart upload</strong>: the client splits the object into parts, uploads them in parallel (each part independently retried), and sends a final "complete" call that stitches the part list together in the index. Reads can request a <strong>byte range</strong>, so a client fetches only the slice it needs and can parallelize a large download across many connections — turning one big serial transfer into many concurrent ones across many drives.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Object storage looks like plumbing, but it's built on a tight set of algorithms — each chosen to beat a specific physical constraint (drive IOPS, disk failure, silent corruption, hot keys).</p>
+    <table>
+      <tr><th>Technique</th><th>Where it's used</th><th>Cost / complexity</th></tr>
+      <tr><td><strong>Reed–Solomon erasure coding</strong></td><td>Durably store bytes at ~1.5–1.8× overhead instead of 3× replication; survive <em>m</em> failures.</td><td>Encode/decode over GF(2⁸): O(k·m) per stripe; reconstruct from any <em>k</em> shards.</td></tr>
+      <tr><td><strong>Consistent hashing / partitioning</strong></td><td>Map key prefixes to index partitions &amp; shards to storage nodes; rebalance with minimal movement.</td><td>O(log N) lookup with a hash ring; only K/N keys move when a node joins/leaves.</td></tr>
+      <tr><td><strong>Distributed KV store (LSM-tree)</strong></td><td>The index: <code>(bucket,key) → locations</code>. Write-optimized log-structured merge trees back massive metadata.</td><td>O(1) amortized writes; O(log N) reads; range scans for LIST.</td></tr>
+      <tr><td><strong>Checksums (CRC32C / MD5)</strong></td><td>Every shard &amp; every transfer verified end-to-end to catch bit-rot and network corruption.</td><td>O(n) over bytes; cheap, done inline.</td></tr>
+      <tr><td><strong>Merkle / scrub audits</strong></td><td>Background verification that stored shards still match their checksums; trigger repair.</td><td>Continuous O(data) sweep, off critical path.</td></tr>
+      <tr><td><strong>Shuffle sharding</strong></td><td>Assign each workload a random subset of resources so a bad workload can't take down neighbors.</td><td>Combinatorial isolation — overlap between any two tenants is tiny.</td></tr>
+      <tr><td><strong>Quorum writes</strong></td><td>Ack a PUT once ≥ a threshold of shards are durable across AZs; balances latency vs durability.</td><td>Write succeeds at W-of-(k+m); tunable.</td></tr>
+    </table>
+    <p><strong>Why erasure coding over replication:</strong> at exabyte scale the cost delta is billions of dollars. Reed–Solomon buys the same (or better) fault tolerance as 3× replication at roughly half the storage, and the CPU cost of encode/decode is negligible next to the disk savings. The trade-off is that reconstructing a lost shard requires reading <em>k</em> other shards (more I/O on repair) — acceptable because repair is a background, not a request-path, cost.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>S3 <em>is</em> the AWS service, so this section flips the usual exercise: how would you <strong>build an S3-like system on AWS primitives</strong>, or assemble the surrounding architecture that a real app uses with S3? Either framing is fair game in an interview.</p>
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Object storage tier</td><td><strong>Amazon S3</strong> (Standard / IA / Glacier / Express One Zone)</td><td>The service itself; pick the storage class by access pattern to trade latency vs cost.</td></tr>
+      <tr><td>Metadata / index (if rebuilding)</td><td><strong>DynamoDB</strong></td><td>Horizontally partitioned KV with single-digit-ms lookups — the pattern S3's own index embodies.</td></tr>
+      <tr><td>Frontend / API</td><td><strong>API Gateway</strong> or <strong>ALB</strong> + <strong>ECS/EKS/Lambda</strong></td><td>Auth, routing, TLS termination, autoscaling the request path.</td></tr>
+      <tr><td>Edge cache / low latency</td><td><strong>CloudFront</strong> (+ <strong>S3 Transfer Acceleration</strong>)</td><td>S3 first-byte latency is ~100–200ms; CDN drops it to ms and offloads reads.</td></tr>
+      <tr><td>Hot-object cache</td><td><strong>ElastiCache (Redis)</strong> / <strong>DAX</strong></td><td>Absorb read hotspots the disk tier can't serve at ms latency.</td></tr>
+      <tr><td>Async / event pipeline</td><td><strong>S3 Event Notifications → SQS / SNS / Lambda</strong></td><td>Trigger processing on upload (thumbnails, indexing, ETL) without polling.</td></tr>
+      <tr><td>Access control</td><td><strong>IAM</strong> + bucket policies + <strong>KMS</strong></td><td>SigV4 auth, fine-grained authz, server-side encryption at rest.</td></tr>
+      <tr><td>Querying data in place</td><td><strong>Athena / S3 Select / Glue</strong></td><td>Scan petabytes in S3 without moving it — the data-lake pattern.</td></tr>
+    </table>
+    <p><strong>Deployment shape:</strong> a real app puts CloudFront in front of an S3 bucket for public assets, uses <strong>pre-signed URLs</strong> so clients upload/download directly to S3 (bytes never touch your servers), fires an S3 event to SQS→Lambda for post-processing, and stores searchable metadata in DynamoDB. That "presigned URL + event notification + DynamoDB metadata" trio is the canonical answer to "how do I let users upload files in my app?"</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>Two things worth showing in code: (1) how an app actually talks to S3 — <strong>multipart upload with a pre-signed URL</strong>, the pattern interviewers love — and (2) the durability core, a minimal <strong>Reed–Solomon-style erasure split</strong> so you can explain shards concretely.</p>
+
+    <h3>Talking to S3: presigned URL + multipart upload (AWS SDK for .NET)</h3>
+    <pre><span class="cmt">// AWSSDK.S3. The app never proxies bytes — it hands the client a presigned URL,</span>
+<span class="cmt">// so uploads/downloads go straight to S3 and scale independently of your servers.</span>
+<span class="kw">using</span> Amazon.S3;
+<span class="kw">using</span> Amazon.S3.Model;
+<span class="kw">using</span> Amazon.S3.Transfer;
+
+<span class="kw">public class</span> <span class="typ">S3Store</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IAmazonS3</span> _s3;
+    <span class="kw">public</span> <span class="fn">S3Store</span>(<span class="typ">IAmazonS3</span> s3) => _s3 = s3;
+
+    <span class="cmt">// (1) Hand the browser a short-lived URL to PUT directly to S3.</span>
+    <span class="kw">public</span> <span class="typ">string</span> <span class="fn">GetUploadUrl</span>(<span class="typ">string</span> bucket, <span class="typ">string</span> key) =>
+        _s3.<span class="fn">GetPreSignedURL</span>(<span class="kw">new</span> <span class="typ">GetPreSignedUrlRequest</span>
+        {
+            BucketName = bucket,
+            Key        = key,
+            Verb       = <span class="typ">HttpVerb</span>.PUT,
+            Expires    = <span class="typ">DateTime</span>.UtcNow.<span class="fn">AddMinutes</span>(<span class="str">15</span>)
+        });
+
+    <span class="cmt">// (2) Large object? TransferUtility auto-splits into parts and uploads them</span>
+    <span class="cmt">//     in parallel — this is S3 multipart upload under the hood (&gt;5GB requires it).</span>
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">UploadLargeAsync</span>(<span class="typ">string</span> bucket, <span class="typ">string</span> key, <span class="typ">string</span> path)
+    {
+        <span class="kw">var</span> tu = <span class="kw">new</span> <span class="typ">TransferUtility</span>(_s3);
+        <span class="kw">await</span> tu.<span class="fn">UploadAsync</span>(<span class="kw">new</span> <span class="typ">TransferUtilityUploadRequest</span>
+        {
+            BucketName  = bucket,
+            Key         = key,
+            FilePath    = path,
+            PartSize    = <span class="str">16</span> * <span class="str">1024</span> * <span class="str">1024</span>,   <span class="cmt">// 16 MB parts, uploaded concurrently</span>
+            ChecksumAlgorithm = <span class="typ">ChecksumAlgorithm</span>.CRC32C <span class="cmt">// end-to-end integrity check</span>
+        });
+    }
+
+    <span class="cmt">// (3) Range read — fetch only bytes [start..end] of a big object.</span>
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">Stream</span>&gt; <span class="fn">GetRangeAsync</span>(<span class="typ">string</span> bucket, <span class="typ">string</span> key, <span class="typ">long</span> start, <span class="typ">long</span> end)
+    {
+        <span class="kw">var</span> resp = <span class="kw">await</span> _s3.<span class="fn">GetObjectAsync</span>(<span class="kw">new</span> <span class="typ">GetObjectRequest</span>
+        {
+            BucketName = bucket, Key = key,
+            ByteRange  = <span class="kw">new</span> <span class="typ">ByteRange</span>(start, end)
+        });
+        <span class="kw">return</span> resp.ResponseStream;
+    }
+}</pre>
+
+    <h3>The durability core: erasure-coding a blob into k+m shards</h3>
+    <pre><span class="cmt">// Illustrative Reed–Solomon-style split: k data shards + m parity shards.</span>
+<span class="cmt">// Any k of the (k+m) shards can rebuild the object. Real impl uses GF(2^8)</span>
+<span class="cmt">// matrix math (e.g. the 'ReedSolomon' NuGet); this shows the shape.</span>
+<span class="kw">public sealed class</span> <span class="typ">ErasureCoder</span>
+{
+    <span class="kw">private readonly int</span> _k, _m;              <span class="cmt">// data shards, parity shards</span>
+    <span class="kw">public</span> <span class="fn">ErasureCoder</span>(<span class="typ">int</span> k, <span class="typ">int</span> m) { _k = k; _m = m; }
+
+    <span class="kw">public</span> <span class="typ">byte</span>[][] <span class="fn">Encode</span>(<span class="typ">byte</span>[] obj)
+    {
+        <span class="kw">int</span> shardLen = (obj.Length + _k - <span class="str">1</span>) / _k;   <span class="cmt">// ceil split into k pieces</span>
+        <span class="kw">var</span> shards = <span class="kw">new</span> <span class="typ">byte</span>[_k + _m][];
+        <span class="kw">for</span> (<span class="kw">int</span> i = <span class="str">0</span>; i &lt; _k; i++)          <span class="cmt">// slice the k data shards</span>
+        {
+            shards[i] = <span class="kw">new</span> <span class="typ">byte</span>[shardLen];
+            <span class="typ">Array</span>.<span class="fn">Copy</span>(obj, i * shardLen, shards[i], <span class="str">0</span>,
+                       <span class="typ">Math</span>.<span class="fn">Min</span>(shardLen, obj.Length - i * shardLen));
+        }
+        <span class="cmt">// Compute m parity shards over the data matrix (Reed–Solomon).</span>
+        <span class="kw">for</span> (<span class="kw">int</span> p = <span class="str">0</span>; p &lt; _m; p++)
+            shards[_k + p] = <span class="fn">ComputeParity</span>(shards, p);
+
+        <span class="cmt">// Scatter these k+m shards onto k+m DIFFERENT drives / AZs.</span>
+        <span class="kw">return</span> shards;
+    }
+
+    <span class="kw">public</span> <span class="typ">byte</span>[] <span class="fn">Decode</span>(<span class="typ">byte</span>[][] surviving)   <span class="cmt">// need ANY k of them</span>
+    {
+        <span class="kw">if</span> (surviving.<span class="fn">Count</span>(s => s != <span class="kw">null</span>) &lt; _k)
+            <span class="kw">throw new</span> <span class="typ">DataLossException</span>(<span class="str">"fewer than k shards — unrecoverable"</span>);
+        <span class="kw">return</span> <span class="fn">ReconstructFromAnyK</span>(surviving, _k);  <span class="cmt">// invert the RS matrix</span>
+    }
+}</pre>
+    <p>Beyond C#, S3's real storage layer (ShardStore) is written in <strong>Rust</strong> for memory safety, and clients exist in every language; the code above is about explaining the <em>shape</em> of the system, not reimplementing it.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <p><strong>Latency vs. durability &amp; cost.</strong> S3 is disk-backed, so first-byte latency is ~100–200ms — great cost per byte, poor for hot small-object reads. The design choice is deliberate: you get 11 nines and pennies-per-GB, and you're expected to layer CloudFront/ElastiCache when you need milliseconds. Never pitch S3 as a low-latency cache.</p>
+    <p><strong>The metadata plane is the real bottleneck.</strong> Bytes scale trivially by adding drives; the <em>index</em> is what's hard. A hot prefix concentrates load on one index partition. The mitigation — and the #1 practical S3 tip — is <strong>key-space design</strong>: spread writes across many high-cardinality prefixes so partitions split and throughput scales. Sequential keys (timestamps, monotonic IDs) are an anti-pattern.</p>
+    <p><strong>Erasure coding vs replication.</strong> Erasure coding wins on cost and matches replication's fault tolerance, but repair reads <em>k</em> shards to rebuild one — heavier repair I/O and higher small-object overhead. That's why hot, tiny objects and single-AZ tiers sometimes use different schemes (e.g. S3 Express One Zone trades multi-AZ durability for latency and cost).</p>
+    <p><strong>Failure modes.</strong> Drive failure → background fleet rebuilds shards from parity. AZ failure → surviving AZs still have ≥ k shards. Silent corruption → checksums + continuous scrub catch it. Correctness bugs in storage code → mitigated by ShardStore's formal verification. Region-wide durability still depends on <strong>Cross-Region Replication</strong> if you need it.</p>
+
+    <div class="qa"><p class="q">Q: How does S3 achieve 11 nines of durability?</p><p class="a">Erasure coding (Reed–Solomon k+m shards) spread across multiple AZs, end-to-end checksums, continuous background scrubbing that repairs lost shards from parity, and a statistical durability model reviewed like a security threat model. It's redundancy + active repair + verification, not just "many copies."</p></div>
+    <div class="qa"><p class="q">Q: How did S3 add strong consistency without a performance hit?</p><p class="a">The index is the single source of truth for the current version's shard pointers. A PUT isn't acked until that metadata is durably committed, so any later GET reads the committed pointer — no stale reads, no extra round-trips.</p></div>
+    <div class="qa"><p class="q">Q: Why does S3 talk about "per-prefix" throughput?</p><p class="a">The index is partitioned by key prefix; each partition serves ~3,500 writes / 5,500 reads per second and auto-splits when hot. More distinct prefixes → more partitions → more aggregate throughput. Hence: never use sequential keys for high-write workloads.</p></div>
+    <div class="qa"><p class="q">Q: Why hard drives and not SSDs everywhere?</p><p class="a">Cost per byte. At hundreds of exabytes, HDDs are dramatically cheaper. S3 overcomes their ~120 IOPS limit not by making one drive fast, but by spreading each workload across thousands of drives so their IOPS aggregate. SSD-backed tiers (Express One Zone) exist where latency justifies the price.</p></div>
+    <div class="qa"><p class="q">Q: How does S3 avoid hotspots?</p><p class="a">Decorrelation through scale: each customer's data is scattered over huge numbers of drives, and each drive holds many unrelated workloads. Millions of bursty, idle-most-of-the-time workloads have peaks that don't align, so aggregate demand is smooth — related to shuffle sharding.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "S3 is object storage exposing a dead-simple HTTP API — PUT/GET/DELETE/LIST by key. Internally it splits into a <em>metadata plane</em> (a massively partitioned key-value index mapping keys to shard locations) and a <em>data plane</em> (millions of hard drives). Durability comes from <em>erasure coding</em> — Reed–Solomon k+m shards spread across AZs, so any k rebuild the object — plus checksums and continuous background repair, hitting 11 nines. It scales by <em>spreading</em>: every workload lands on thousands of drives, so no single disk gets hot. Throughput is per-prefix, so you design keys for high cardinality."</div>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li><strong>500 trillion</strong> objects · <strong>hundreds of exabytes</strong> · <strong>200M requests/sec</strong> peak · ~1 PB/s bandwidth.</li>
+      <li><strong>11 nines</strong> durability · 99.9–99.99% availability · <strong>strong read-after-write</strong> since Dec 2020.</li>
+      <li><strong>3,500 writes / 5,500 reads</strong> per prefix/sec · object 0B–<strong>5TB</strong> · single PUT ≤ 5GB, else multipart.</li>
+      <li>HDD ≈ <strong>120 IOPS</strong> (flat since 2006) · ~1 IOP per 2TB on a 200TB drive · ~100–200ms first byte.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li>Separate the <strong>metadata plane from the data plane</strong> — the index is the hard part, not the bytes.</li>
+      <li><strong>Erasure coding beats replication</strong> on cost at scale for the same fault tolerance (~1.5–1.8× vs 3×).</li>
+      <li><strong>Scale = spreading</strong>: aggregate thousands of slow drives; decorrelation kills hotspots (shuffle sharding).</li>
+      <li><strong>Consistency lives in the metadata commit</strong>, not the immutable data shards.</li>
+      <li><strong>Key/prefix design is the real lever</strong> engineers control for S3 throughput.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://www.allthingsdistributed.com/2023/07/building-and-operating-a-pretty-big-storage-system.html">Werner Vogels — "Building and operating a pretty big storage system (S3)"</a> — index/storage/background fleets, heat management, ShardStore, erasure coding vs replication, HDD physics.</li>
+      <li><a href="https://en.wikipedia.org/wiki/Amazon_S3">Wikipedia — Amazon S3</a> — scale figures (500T objects, 200M req/s, ~1PB/s), object size limits, storage classes, history.</li>
+      <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html">AWS Docs — Best practices: optimizing S3 performance</a> — 3,500 write / 5,500 read per-prefix rates, parallelization, latency guidance.</li>
+      <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html">AWS Docs — Amazon S3 User Guide</a> — consistency model, multipart upload, durability &amp; availability.</li>
+      <li><a href="https://www.amazon.science/publications/using-lightweight-formal-methods-to-validate-a-key-value-storage-node-in-amazon-s3">Amazon Science (SOSP) — Using lightweight formal methods to validate ShardStore</a> — Rust storage node &amp; verification.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

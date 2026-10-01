@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Meta TAO — The Social Graph Store — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg [data-anim] {
+    transition: transform .8s cubic-bezier(.4,0,.2,1),
+                opacity .45s ease, fill .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.15); }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep · FAANG case study</div>
+    <h1>Meta TAO — Serving the Social Graph</h1>
+    <p>How Facebook serves <strong>over a billion reads per second</strong> off its social graph with a geo-distributed, write-through cache in front of MySQL — the read-heavy scaling case study that teaches caching, sharding &amp; eventual consistency all at once.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>This is a real FAANG case study straight from <strong>Meta's engineering blog</strong>: <strong>TAO — "The Associations and Objects"</strong> — the distributed data store that serves Facebook's <em>social graph</em>. Every time you load Facebook, the page stitches together "hundreds of pieces of information from the social graph" — who your friends are, which posts they made, who liked and commented on them, which pages they follow — and it must render "on the fly in a few hundred milliseconds." TAO is the system that answers all those graph queries.</p>
+    <p>The reason it's such a valuable interview topic is that it's the canonical example of <strong>scaling a read-heavy workload</strong>. Facebook's traffic is overwhelmingly reads — the graph is queried far more than it's written — and the data is a giant, hard-to-partition mesh of relationships where popular items (a celebrity's photo) cause sudden request spikes. TAO's design answers questions every senior system-design interview probes: how do you put a cache in front of a database <em>correctly</em>, how do you shard a graph, how do you replicate across continents, and what consistency can you actually promise? Before TAO, Facebook engineers hand-wired <strong>memcache in front of MySQL</strong>, juggling two data models by hand — TAO replaced that pattern with one graph-aware service.</p>
+    <p>Real products it powers: essentially all of Facebook's user-facing surface — the news feed, profiles, friend lists, likes/comments, pages, and events — plus it's the archetype that inspired graph-serving layers across the industry.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Sticky notes on the front counter, filing cabinets in the back room</h2>
+    <p>Think about how <strong>Facebook</strong> or <strong>Instagram</strong> opens on your phone. In the second it takes to load your feed, the app secretly asks a thousand tiny questions: <em>Who are Aisha's friends? Who liked this photo? Is Priya following this page? How many people commented?</em> If there are three billion people using it, those tiny questions add up to <strong>millions of them every single second</strong>. Nobody can answer that many questions from a filing cabinet — it would be like a librarian sprinting to the basement stacks for every visitor. The whole place would collapse.</p>
+    <p>So the trick is this. Imagine a busy town clerk's office. All the official records — birth certificates, marriage records, deeds — are stored in <strong>tall filing cabinets in the back room</strong>. Those are the truth, and they never lie. But right at the front counter, the clerk keeps a <strong>wall of yellow sticky notes</strong> with the answers to the most-asked questions: "Alex married Sam in 2018," "Anita has 412 friends," "This photo has 91 likes." When you walk up to the counter, 99 out of 100 times your answer is already on a sticky note — you get it instantly and walk away happy. Only the odd, unusual question makes the clerk actually walk to the back room.</p>
+    <p>The magic part: when someone adds a new friend, the clerk <strong>writes it down in the filing cabinet first</strong> (so it's permanent), then <strong>updates the sticky notes on every counter around the world</strong>. That way, whether you open the app from Delhi, London, or São Paulo, the answer is right there in front of a clerk near you. It's simple, cheap, and it's why the feed feels instant even though the data is truly enormous.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Model the social graph as <strong>objects</strong> (nodes: users, posts, comments, pages) and <strong>associations</strong> (edges: friend-of, liked-by, authored, checked-in-at).</li>
+      <li><strong>Point query</strong> — fetch an object by id, or check whether a specific edge exists.</li>
+      <li><strong>Range query</strong> — list a node's edges of a type, newest-first (e.g. "the 50 most recent comments on this post").</li>
+      <li><strong>Count query</strong> — return the number of edges of a type in constant time (e.g. "like count") without scanning them.</li>
+      <li>Auto-maintain <strong>inverse edges</strong> — creating <code>A friends B</code> also creates <code>B friends A</code>.</li>
+    </ul>
+
+    <h3>Non-functional requirements (the ones that shape the design)</h3>
+    <ul>
+      <li><strong>Extreme read scale</strong> — over a billion reads/second, at a few-hundred-ms page budget.</li>
+      <li><strong>Low latency</strong> — served from RAM caches, not disk, on the hot path.</li>
+      <li><strong>Availability &gt; strict consistency</strong> — the feed must load even if a write hasn't fully propagated.</li>
+      <li><strong>Efficiency</strong> — the working set is driven by <em>creation-time locality</em> (recent items are hottest), which MySQL's buffer pool handled poorly.</li>
+      <li><strong>Geo-distribution</strong> — data centers on multiple continents; reads must be local.</li>
+    </ul>
+
+    <h3>Capacity estimation (Meta-published + standard TAO-paper figures)</h3>
+    <table>
+      <tr><th>Quantity</th><th>Figure</th><th>Reasoning / source</th></tr>
+      <tr><td>Read requests</td><td><strong>&gt; 1 billion / second</strong></td><td>Meta engineering blog (2013).</td></tr>
+      <tr><td>Write requests</td><td><strong>millions / second</strong></td><td>Meta engineering blog.</td></tr>
+      <tr><td>Read : write ratio</td><td><strong>≈ 500 : 1</strong></td><td>TAO USENIX ATC paper — the defining "read-heavy" number to quote.</td></tr>
+      <tr><td>Cache hit rate</td><td><strong>&gt; 96%</strong></td><td>TAO paper — most reads never touch MySQL. This is why caching is the whole game.</td></tr>
+      <tr><td>Shards</td><td><strong>hundreds of thousands</strong></td><td>Each shard = one MySQL database; enables migration/cloning to smooth spikes.</td></tr>
+      <tr><td>Users</td><td><strong>&gt; 1 billion active</strong></td><td>Meta engineering blog.</td></tr>
+      <tr><td>Data types</td><td><strong>thousands</strong></td><td>Object &amp; association types across all products.</td></tr>
+    </table>
+    <p><strong>The number to volunteer:</strong> "The workload is roughly <strong>500 reads for every write</strong> with a <strong>96%+ cache hit rate</strong> — so the design is dominated by <em>caching reads in RAM</em> and keeping the cache correct on writes. Everything else follows from that."</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>TAO is a <strong>two-tier, write-through caching layer over a sharded MySQL backing store</strong>, organized logically as a tree per region. Clients never touch MySQL directly; they talk to the nearest cache. The tree has two cache tiers within each region: <strong>follower</strong> caches (what clients connect to) and a smaller set of <strong>leader</strong> caches that sit in front of MySQL. Reads are served from RAM at the follower tier; on a miss, the request climbs the tree (follower → leader → MySQL) and the answer is filled back down, populating each tier on the way.</p>
+    <p>Geographically, each shard has <strong>one primary (master) region</strong>. All caches in a region share the local MySQL replica for reads, so reads are always local and fast. <strong>Writes</strong> are the interesting part: a write goes up to the leader; if the local region is a <em>secondary</em> for that shard, the leader forwards the write to the <em>primary</em> region's leader, which applies it to the primary MySQL. MySQL's own replication then streams the change back out to the secondary regions' databases. Because TAO is <strong>write-through</strong>, the cache is updated as the write reply propagates back down the tree — so the follower that issued the write reflects it immediately (read-after-write for that client).</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 860 500" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <defs>
+          <marker id="rd" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#2dc653"/>
+          </marker>
+          <marker id="wr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#f4a259"/>
+          </marker>
+          <marker id="rep" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#4cc9f0"/>
+          </marker>
+        </defs>
+
+        <!-- Region boxes -->
+        <rect x="20" y="60" width="400" height="410" rx="14" fill="none" stroke="#3a4a6b" stroke-dasharray="5 4"/>
+        <text x="40" y="82" fill="#8fa0bd" font-size="12" font-weight="700">PRIMARY (master) region</text>
+        <rect x="450" y="60" width="390" height="410" rx="14" fill="none" stroke="#3a4a6b" stroke-dasharray="5 4"/>
+        <text x="470" y="82" fill="#8fa0bd" font-size="12" font-weight="700">SECONDARY region</text>
+
+        <!-- Client primary -->
+        <rect x="45" y="100" width="120" height="46" rx="10" fill="#4361ee"/>
+        <text x="105" y="128" fill="#fff" font-size="12.5" font-weight="700" text-anchor="middle">Web / client</text>
+        <!-- Follower primary -->
+        <rect x="45" y="185" width="150" height="52" rx="10" fill="#155d3a"/>
+        <text x="120" y="207" fill="#a8f0c6" font-size="12.5" font-weight="700" text-anchor="middle">Follower caches</text>
+        <text x="120" y="224" fill="#7fd7a3" font-size="10" text-anchor="middle">RAM · client-facing</text>
+        <!-- Leader primary -->
+        <rect x="45" y="280" width="150" height="52" rx="10" fill="#0f7a48"/>
+        <text x="120" y="302" fill="#d6ffe8" font-size="12.5" font-weight="700" text-anchor="middle">Leader caches</text>
+        <text x="120" y="319" fill="#a8f0c6" font-size="10" text-anchor="middle">front of MySQL</text>
+        <!-- MySQL primary -->
+        <rect x="45" y="378" width="150" height="60" rx="10" fill="#7048e8"/>
+        <text x="120" y="404" fill="#fff" font-size="12.5" font-weight="700" text-anchor="middle">MySQL (primary)</text>
+        <text x="120" y="421" fill="#e3d9ff" font-size="10" text-anchor="middle">sharded · source of truth</text>
+
+        <!-- Read path arrows primary -->
+        <path d="M105 146 L 118 183" fill="none" stroke="#2dc653" stroke-width="2.4" marker-end="url(#rd)"/>
+        <path d="M120 237 L 120 278" fill="none" stroke="#2dc653" stroke-width="2.2" marker-end="url(#rd)" stroke-dasharray="4 3"/>
+        <text x="128" y="262" fill="#2dc653" font-size="9.5">miss ↑</text>
+        <path d="M120 332 L 120 376" fill="none" stroke="#2dc653" stroke-width="2.2" marker-end="url(#rd)" stroke-dasharray="4 3"/>
+
+        <!-- Secondary region -->
+        <rect x="475" y="100" width="120" height="46" rx="10" fill="#4361ee"/>
+        <text x="535" y="128" fill="#fff" font-size="12.5" font-weight="700" text-anchor="middle">Web / client</text>
+        <rect x="475" y="185" width="150" height="52" rx="10" fill="#155d3a"/>
+        <text x="550" y="207" fill="#a8f0c6" font-size="12.5" font-weight="700" text-anchor="middle">Follower caches</text>
+        <rect x="475" y="280" width="150" height="52" rx="10" fill="#0f7a48"/>
+        <text x="550" y="306" fill="#d6ffe8" font-size="12.5" font-weight="700" text-anchor="middle">Leader caches</text>
+        <rect x="475" y="378" width="150" height="60" rx="10" fill="#7048e8" opacity=".75"/>
+        <text x="550" y="404" fill="#fff" font-size="12.5" font-weight="700" text-anchor="middle">MySQL (replica)</text>
+        <text x="550" y="421" fill="#e3d9ff" font-size="10" text-anchor="middle">read-only locally</text>
+
+        <path d="M535 146 L 548 183" fill="none" stroke="#2dc653" stroke-width="2.4" marker-end="url(#rd)"/>
+        <path d="M550 237 L 550 278" fill="none" stroke="#2dc653" stroke-width="2.2" marker-end="url(#rd)" stroke-dasharray="4 3"/>
+        <path d="M550 332 L 550 376" fill="none" stroke="#2dc653" stroke-width="2.2" marker-end="url(#rd)" stroke-dasharray="4 3"/>
+
+        <!-- Write forward from secondary leader to primary leader -->
+        <path d="M625 300 Q 340 250 197 300" fill="none" stroke="#f4a259" stroke-width="2.6" marker-end="url(#wr)"/>
+        <text x="330" y="255" fill="#f4a259" font-size="10.5" font-weight="700">write forwarded to primary</text>
+
+        <!-- MySQL replication primary -> secondary -->
+        <path d="M197 415 Q 340 460 473 415" fill="none" stroke="#4cc9f0" stroke-width="2.6" marker-end="url(#rep)"/>
+        <text x="300" y="470" fill="#4cc9f0" font-size="10.5" font-weight="700">MySQL replication streams change back</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#2dc653"></span>Read (local, cache-first)</span>
+        <span><span class="dot" style="background:#f4a259"></span>Write (forwarded to primary)</span>
+        <span><span class="dot" style="background:#4cc9f0"></span>MySQL async replication</span>
+      </div>
+    </div>
+
+    <h3>The read path</h3>
+    <ol class="steps">
+      <li>Client sends a graph query (get object / range / count) to a <strong>follower</strong> cache in its own region.</li>
+      <li><strong>Cache hit (&gt;96% of the time):</strong> served straight from RAM in sub-millisecond time. Done.</li>
+      <li><strong>Miss:</strong> follower asks a <strong>leader</strong>; if the leader also misses, the leader reads the local <strong>MySQL replica</strong>.</li>
+      <li>Result is filled back down the tree, populating leader and follower caches so the next read is a hit.</li>
+    </ol>
+
+    <h3>The write path</h3>
+    <ol class="steps">
+      <li>Client sends a write (create/update/delete an object or association) to its follower.</li>
+      <li>Follower forwards up to the region's leader. If this region is <em>secondary</em> for the shard, the leader forwards the write to the <strong>primary region's</strong> leader.</li>
+      <li>The primary leader applies it to the <strong>primary MySQL</strong> shard (the source of truth), and — because writes are write-through — updates caches as the reply flows back down.</li>
+      <li>MySQL <strong>replication</strong> asynchronously ships the change to secondary-region replicas; leaders send <strong>cache invalidations/refills</strong> so other regions converge.</li>
+    </ol>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch the three TAO traffic patterns run</h2>
+    <p>This animation walks through the three things TAO does thousands of times per second: (1) a <strong>cache hit</strong> — a read served from RAM at the follower in sub-ms, (2) a <strong>cache miss</strong> — the read climbs follower → leader → MySQL, filling caches on the way back down, and (3) a <strong>cross-region write</strong> — a secondary-region write is forwarded to the primary shard, applied write-through, and MySQL replication async-ships it back. Use <em>Play</em> or step through manually.</p>
+
+    <div class="anim-frame" id="tao-anim">
+      <svg viewBox="0 0 780 400" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <!-- PRIMARY region column (right) is where the shard's master MySQL lives -->
+        <!-- SECONDARY region column (left) is where the client happens to be -->
+
+        <text x="200" y="24" fill="#8fa0bd" font-size="11" font-weight="700" text-anchor="middle">SECONDARY region (client's local region)</text>
+        <text x="580" y="24" fill="#8fa0bd" font-size="11" font-weight="700" text-anchor="middle">PRIMARY region (shard's master)</text>
+
+        <!-- Client -->
+        <rect x="20" y="180" width="80" height="46" rx="8" fill="#4361ee"/>
+        <text x="60" y="200" fill="#fff" font-size="11" font-weight="700" text-anchor="middle">Client</text>
+        <text x="60" y="217" fill="#dfe6ff" font-size="9.5" text-anchor="middle">web/mobile</text>
+
+        <!-- Follower cache (secondary) -->
+        <g>
+          <text x="200" y="64" fill="#a8f0c6" font-size="11" font-weight="700" text-anchor="middle">Follower cache</text>
+          <rect id="follower" data-anim x="140" y="76" width="120" height="60" rx="10" fill="#155d3a" stroke="#2dc653"/>
+          <text x="200" y="102" fill="#a8f0c6" font-size="10" text-anchor="middle">RAM · client-facing</text>
+          <text id="fol-state" data-anim x="200" y="122" fill="#7fd7a3" font-size="10" text-anchor="middle">empty</text>
+        </g>
+
+        <!-- Leader cache (secondary) -->
+        <g>
+          <text x="200" y="266" fill="#d6ffe8" font-size="11" font-weight="700" text-anchor="middle">Leader cache</text>
+          <rect id="leader" data-anim x="140" y="278" width="120" height="56" rx="10" fill="#0f7a48"/>
+          <text x="200" y="302" fill="#d6ffe8" font-size="10" text-anchor="middle">DB-facing tier</text>
+          <text id="lea-state" data-anim x="200" y="320" fill="#a8f0c6" font-size="10" text-anchor="middle">empty</text>
+        </g>
+
+        <!-- MySQL primary (right column) -->
+        <g>
+          <text x="580" y="266" fill="#e3d9ff" font-size="11" font-weight="700" text-anchor="middle">MySQL (primary)</text>
+          <rect id="mysql" data-anim x="520" y="278" width="120" height="56" rx="10" fill="#7048e8"/>
+          <text x="580" y="302" fill="#e3d9ff" font-size="10" text-anchor="middle">source of truth</text>
+          <text id="db-state" data-anim x="580" y="320" fill="#c9b8ff" font-size="10" text-anchor="middle">friends=Alice,Bob</text>
+        </g>
+
+        <!-- Primary region leader (for cross-region write forwarding) -->
+        <g>
+          <text x="580" y="152" fill="#d6ffe8" font-size="11" font-weight="700" text-anchor="middle">Leader (primary region)</text>
+          <rect id="primLeader" data-anim x="520" y="164" width="120" height="48" rx="10" fill="#0f7a48"/>
+          <text x="580" y="186" fill="#d6ffe8" font-size="10" text-anchor="middle">writes coordinated here</text>
+        </g>
+
+        <!-- Request bubble (travels around) -->
+        <g id="req" data-anim class="a-hidden" transform="translate(0,0)">
+          <circle cx="105" cy="205" r="10" fill="#4cc9f0"/>
+          <text x="105" y="209" fill="#04202a" font-size="9" font-weight="700" text-anchor="middle">R</text>
+        </g>
+        <g id="wri" data-anim class="a-hidden" transform="translate(0,0)">
+          <circle cx="105" cy="205" r="10" fill="#f4a259"/>
+          <text x="105" y="209" fill="#3a2400" font-size="9" font-weight="700" text-anchor="middle">W</text>
+        </g>
+
+        <!-- Verdict flash -->
+        <g id="verdict" data-anim class="a-hidden">
+          <rect x="24" y="240" width="72" height="26" rx="6" fill="#2dc653"/>
+          <text x="60" y="258" fill="#04140b" font-size="11" font-weight="700" text-anchor="middle" id="verdictText">HIT · &lt;1ms</text>
+        </g>
+
+        <!-- Async replication arrow (primary MySQL back to secondary) -->
+        <g id="replArrow" data-anim class="a-hidden">
+          <path d="M520 306 L 265 306" stroke="#4cc9f0" stroke-width="2.4" stroke-dasharray="5 4" fill="none"/>
+          <path d="M270 300 L 260 306 L 270 312 Z" fill="#4cc9f0"/>
+          <text x="392" y="300" fill="#4cc9f0" font-size="10" text-anchor="middle">MySQL async replication</text>
+        </g>
+
+        <!-- Phase label -->
+        <rect x="290" y="72" width="220" height="30" rx="6" fill="#0f1a30" stroke="#4cc9f0"/>
+        <text id="phaseLabel" x="400" y="92" fill="#4cc9f0" font-size="12" font-weight="700" text-anchor="middle">Phase 1 — Cache hit</text>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to see hit, miss, and cross-region write in sequence.</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('tao-anim');
+        if (!root) return;
+        const $ = (s) => root.querySelector(s);
+        const label = root.querySelector('.anim-step-label');
+        const cap   = root.querySelector('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const steps = [
+          // Phase 1: Cache hit
+          { c: 'Phase 1 — Cache HIT: the follower already has the answer in RAM from an earlier request.',
+            a: () => {
+              $('#phaseLabel').textContent = 'Phase 1 — Cache hit';
+              $('#fol-state').textContent = 'friends=Alice,Bob (cached)';
+              $('#follower').classList.add('a-glow');
+            }},
+          { c: 'Client asks for a friend list. Follower cache hit — served from RAM in sub-millisecond time.',
+            a: () => {
+              $('#follower').classList.remove('a-glow');
+              $('#req').classList.remove('a-hidden');
+              $('#req').setAttribute('transform', 'translate(60,-90)');
+            }},
+          { c: '&lt;1ms later, the answer is back to the client. That is 96%+ of TAO traffic.',
+            a: () => {
+              $('#req').setAttribute('transform', 'translate(0,0)');
+              $('#req').classList.add('a-hidden');
+              $('#verdictText').textContent = 'HIT · <1ms';
+              $('#verdict').classList.remove('a-hidden');
+            }},
+          // Phase 2: Cache miss
+          { c: 'Phase 2 — Cache MISS: a fresh key. The follower does not have it.',
+            a: () => {
+              $('#verdict').classList.add('a-hidden');
+              $('#phaseLabel').textContent = 'Phase 2 — Cache miss';
+              $('#fol-state').textContent = 'no entry for like_count';
+              $('#req').classList.remove('a-hidden');
+              $('#req').setAttribute('transform', 'translate(60,-90)');
+            }},
+          { c: 'Follower forwards to the leader, which also misses. Leader reads from the local MySQL replica.',
+            a: () => {
+              $('#req').setAttribute('transform', 'translate(60,110)');
+              $('#leader').classList.add('a-glow');
+              $('#lea-state').textContent = 'querying MySQL...';
+            }},
+          { c: 'MySQL returns the value. As the response bubbles back down, both cache tiers get filled.',
+            a: () => {
+              $('#leader').classList.remove('a-glow');
+              $('#lea-state').textContent = 'like_count=482';
+              $('#fol-state').textContent = 'like_count=482 (filled)';
+              $('#req').setAttribute('transform', 'translate(0,0)');
+              $('#req').classList.add('a-hidden');
+              $('#verdictText').textContent = 'FILL · ~5ms';
+              $('#verdict').classList.remove('a-hidden');
+            }},
+          // Phase 3: cross-region write
+          { c: 'Phase 3 — WRITE from a secondary region. Client adds a new friend. The shard is mastered elsewhere.',
+            a: () => {
+              $('#verdict').classList.add('a-hidden');
+              $('#phaseLabel').textContent = 'Phase 3 — Cross-region write';
+              $('#wri').classList.remove('a-hidden');
+              $('#wri').setAttribute('transform', 'translate(60,-90)');
+            }},
+          { c: 'The secondary leader forwards the write to the primary region\'s leader (this is why writes cost more than reads).',
+            a: () => {
+              $('#wri').setAttribute('transform', 'translate(490,20)');
+              $('#primLeader').classList.add('a-glow');
+            }},
+          { c: 'Primary leader applies the write to primary MySQL, then updates its own cache (write-through).',
+            a: () => {
+              $('#primLeader').classList.remove('a-glow');
+              $('#wri').setAttribute('transform', 'translate(490,130)');
+              $('#mysql').classList.add('a-glow');
+              $('#db-state').textContent = 'friends=Alice,Bob,Carol';
+            }},
+          { c: 'Ack flows back to the client. Meanwhile MySQL replication async-ships the change to the secondary region.',
+            a: () => {
+              $('#mysql').classList.remove('a-glow');
+              $('#wri').setAttribute('transform', 'translate(0,0)');
+              $('#wri').classList.add('a-hidden');
+              $('#replArrow').classList.remove('a-hidden');
+              $('#verdictText').textContent = 'WRITTEN · async replicating';
+              $('#verdict').classList.remove('a-hidden');
+            }}
+        ];
+
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          $('#phaseLabel').textContent = 'Phase 1 — Cache hit';
+          $('#fol-state').textContent = 'empty';
+          $('#lea-state').textContent = 'empty';
+          $('#db-state').textContent = 'friends=Alice,Bob';
+          $('#req').setAttribute('transform', 'translate(0,0)');
+          $('#req').classList.add('a-hidden');
+          $('#wri').setAttribute('transform', 'translate(0,0)');
+          $('#wri').classList.add('a-hidden');
+          $('#verdict').classList.add('a-hidden');
+          $('#replArrow').classList.add('a-hidden');
+          ['#follower','#leader','#primLeader','#mysql'].forEach(id => $(id).classList.remove('a-glow'));
+          label.textContent = 'Ready';
+          cap.textContent = 'Press ▶ Play to see hit, miss, and cross-region write in sequence.';
+          btnPlay.textContent = '▶ Play';
+        }
+        function goto(i) {
+          if (i < 0 || i >= steps.length) return;
+          reset();
+          for (let k = 0; k <= i; k++) steps[k].a();
+          idx = i;
+          label.textContent = `Step ${i + 1}/${steps.length}`;
+          cap.textContent = steps[i].c;
+        }
+        let idx = -1, playing = false, timer = null;
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < steps.length) {
+              idx++;
+              steps[idx].a();
+              label.textContent = `Step ${idx + 1}/${steps.length}`;
+              cap.textContent = steps[idx].c;
+            }
+            if (idx < steps.length - 1) timer = setTimeout(tick, 2200);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 300);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>The objects-and-associations data model</h3>
+    <p>TAO models the graph as a <strong>labeled directed multigraph</strong>. An <strong>object</strong> is a typed node with a 64-bit id and a dictionary of fields (a user, a post, a photo). An <strong>association</strong> is a typed, directed edge from one object to another — <code>(id1, atype, id2)</code> — also carrying fields and, critically, a <strong>time</strong> attribute. That timestamp is the secret sauce: because the social graph is browsed newest-first, TAO stores each node's edge list <em>sorted by time descending</em>, so "give me the latest 50 comments" is a cheap prefix read. Association types can declare an <strong>inverse</strong> so bidirectional relationships (friend/friend, likes/liked-by) are maintained automatically in one operation.</p>
+
+    <h3>Why not just memcache + MySQL?</h3>
+    <p>That's exactly what Facebook did <em>before</em> TAO, and the blog is candid about why it broke down. MySQL's InnoDB buffer pool assumes <strong>spatial locality</strong> (rows near each other on disk are accessed together), but Facebook's access pattern is <strong>creation-time locality</strong> — recently created items are hottest regardless of where they sit on disk. Worse, many queries check for relationships that <em>don't exist</em> (does A like B?), and those negative lookups polluted the block cache. On top of that, product engineers had to manually keep two different data models (objects in MySQL rows, cached blobs in memcache) in sync — error-prone and slow to build on. TAO makes the cache <strong>graph-aware</strong> so it understands objects, edges, counts, and inverse edges natively.</p>
+
+    <h3>Two cache tiers: leaders and followers</h3>
+    <p>Splitting the cache into <strong>followers</strong> (many, client-facing) and <strong>leaders</strong> (few, database-facing) is a deliberate scaling move. Followers absorb the raw read volume close to clients; leaders serialize access to each shard's MySQL and act as a coordination point. The leader is the single writer per shard <em>within</em> a region, which lets it <strong>de-duplicate concurrent misses</strong> (the "thundering herd" — a thousand followers all missing the same hot key ask the leader, which issues <em>one</em> database read) and it's the place from which <strong>cache invalidations</strong> are broadcast to followers after a write. This two-level fan-in is why a single hot celebrity object doesn't melt MySQL.</p>
+
+    <h3>Sharding the graph</h3>
+    <p>Data is partitioned into <strong>hundreds of thousands of shards</strong>, each living in one logical MySQL database, and an object's id encodes its shard. Associations are co-located with their source object's shard so that a node's edge list is served from one place. Because shards are fine-grained, TAO can <strong>migrate or clone a hot shard</strong> to spread load and smooth spikes without resharding the world — the standard answer to "what about a celebrity with 100M followers?"</p>
+
+    <h3>Consistency model</h3>
+    <p>TAO chooses <strong>eventual consistency</strong> by default — a deliberate CAP-theorem trade favoring availability and latency at global scale. What it does guarantee in practice is <strong>read-after-write for the writer</strong>: because the write is applied write-through at the follower/leader on the write path, the client that made the change sees it immediately, even while other regions are still converging via MySQL replication. Stronger, <strong>read-your-writes across regions</strong> or fully linearizable reads are available on request at higher latency/cost. The interview lesson: TAO consciously trades global strong consistency for the availability and speed a billion-QPS read workload demands — and mitigates the user-visible impact with per-writer read-after-write.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>TAO is a masterclass in choosing data structures to match an access pattern. The graph itself is an <strong>adjacency list</strong> keyed by (object, association-type). Each adjacency list is kept <strong>sorted by time descending</strong> so range queries are prefix scans. Counts are <strong>materialized counters</strong> so "like count" is O(1) instead of an O(n) edge scan. The cache tier is a giant <strong>distributed hash table</strong> (shard → server → in-RAM map), and hot-key protection is <strong>request coalescing</strong> at the leader.</p>
+    <table>
+      <tr><th>Structure / Algorithm</th><th>Where it's used</th><th>Complexity</th><th>Why it's chosen</th></tr>
+      <tr><td>Adjacency list (per object+atype)</td><td>Association storage</td><td>O(1) to locate a node's edge list</td><td>Graphs are naturally adjacency lists; co-located with the source shard.</td></tr>
+      <tr><td>Time-descending sorted edge list</td><td><code>assoc_range</code> queries</td><td>O(k) prefix read for newest k</td><td>Social browsing is newest-first; matches creation-time locality.</td></tr>
+      <tr><td>Materialized counters</td><td><code>assoc_count</code> (likes, friends)</td><td>O(1) read</td><td>Avoid scanning millions of edges just to show a number.</td></tr>
+      <tr><td>Distributed hash table (sharded)</td><td>Cache tiers + MySQL routing</td><td>O(1) shard lookup from id</td><td>id encodes shard ⇒ direct routing, no directory service.</td></tr>
+      <tr><td>Write-through cache</td><td>Keeping cache ↔ DB coherent</td><td>O(1) per write</td><td>Cache updated on the write path ⇒ read-after-write for the writer.</td></tr>
+      <tr><td>Request coalescing (leader)</td><td>Thundering-herd / hot keys</td><td>N misses → 1 DB read</td><td>Protects MySQL from a stampede on a viral object.</td></tr>
+      <tr><td>Inverse-edge maintenance</td><td>Bidirectional associations</td><td>O(1) extra write</td><td>friend/friend, like/liked-by stay consistent in one op.</td></tr>
+      <tr><td>Async primary/secondary replication</td><td>Geo-distribution</td><td>eventual convergence</td><td>Local reads everywhere; writes funnel to a per-shard primary.</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Rebuilding TAO on AWS</h2>
+    <p>TAO is a Meta-internal system, but if an interviewer asks you to "design something like TAO on AWS," the components map cleanly. The pattern — a sharded relational source of truth behind a write-through in-memory cache, replicated across regions — is directly expressible with managed services.</p>
+    <table>
+      <tr><th>TAO component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Sharded source of truth (MySQL)</td><td><strong>Amazon Aurora MySQL</strong> (+ sharding) or <strong>DynamoDB</strong></td><td>Aurora keeps the MySQL model with better replication; DynamoDB gives built-in sharding &amp; single-digit-ms reads if you accept a KV model.</td></tr>
+      <tr><td>Follower cache tier (RAM, client-facing)</td><td><strong>ElastiCache for Redis</strong> (or <strong>DAX</strong> if on DynamoDB)</td><td>In-memory reads at sub-ms latency; the tier that absorbs the billion-QPS read load.</td></tr>
+      <tr><td>Leader tier / write coordination</td><td><strong>ElastiCache primary nodes</strong> + app-layer coalescing</td><td>Single writer per shard; de-dupes hot-key misses before hitting the DB.</td></tr>
+      <tr><td>Graph API service</td><td><strong>ECS / EKS</strong> behind an <strong>ALB</strong></td><td>Stateless service exposing get/range/count; scales horizontally.</td></tr>
+      <tr><td>Cross-region replication</td><td><strong>Aurora Global Database</strong> / <strong>DynamoDB Global Tables</strong></td><td>Async replicate the source of truth so every region reads locally.</td></tr>
+      <tr><td>Cache invalidation fan-out</td><td><strong>SNS / SQS</strong> (or Kinesis)</td><td>Broadcast "key X changed" to follower caches across regions after a write.</td></tr>
+      <tr><td>Edge routing / geo</td><td><strong>Route 53</strong> latency-based routing + <strong>CloudFront</strong></td><td>Send each user to the nearest region.</td></tr>
+    </table>
+    <p><strong>Deployment story to tell:</strong> "I'd back the graph with a sharded, globally-replicated store — <strong>Aurora Global Database</strong> (or DynamoDB Global Tables) as the source of truth — and put a <strong>Redis (ElastiCache)</strong> write-through cache tier in front, since 96%+ of traffic is reads. A stateless graph API on <strong>ECS/EKS</strong> exposes get/range/count. Writes go to the shard's primary region and I fan out <strong>SNS→SQS</strong> invalidations so other regions' caches converge — accepting eventual consistency, but giving each writer read-after-write by updating their local cache on the write path. <strong>Route 53</strong> latency routing keeps reads local. That's TAO's control-plane/data-plane and read-heavy caching strategy, rebuilt on managed services."</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>The core idea worth coding is the <strong>write-through graph cache with request coalescing</strong> — the heart of how TAO serves reads from RAM while protecting the database from hot-key stampedes. Below is a compact, idiomatic C# sketch of the objects/associations API with a follower-style cache, a materialized count, and single-flight de-duplication of concurrent misses.</p>
+    <pre><span class="kw">using</span> System.Collections.Concurrent;
+
+<span class="cmt">// (id1, atype, id2) — a typed, directed edge with a time attribute.</span>
+<span class="kw">public readonly record struct</span> <span class="typ">Assoc</span>(<span class="typ">long</span> Id1, <span class="typ">string</span> AType, <span class="typ">long</span> Id2, <span class="typ">long</span> Time);
+
+<span class="kw">public interface</span> <span class="typ">IGraphStore</span>   <span class="cmt">// the sharded MySQL source of truth</span>
+{
+    <span class="typ">Task</span>&lt;<span class="typ">byte</span>[]?&gt; <span class="fn">GetObjectAsync</span>(<span class="typ">long</span> id);
+    <span class="typ">Task</span>&lt;<span class="typ">IReadOnlyList</span>&lt;<span class="typ">Assoc</span>&gt;&gt; <span class="fn">GetAssocsAsync</span>(<span class="typ">long</span> id1, <span class="typ">string</span> atype);
+    <span class="typ">Task</span> <span class="fn">PutAssocAsync</span>(<span class="typ">Assoc</span> a);
+}
+
+<span class="cmt">// A follower-style write-through cache in front of the store.</span>
+<span class="kw">public sealed class</span> <span class="typ">TaoCache</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IGraphStore</span> _store;
+    <span class="kw">private readonly</span> <span class="typ">ConcurrentDictionary</span>&lt;<span class="typ">long</span>, <span class="typ">byte</span>[]&gt; _objs = <span class="kw">new</span>();
+    <span class="cmt">// (id1, atype) -&gt; edge list, kept sorted by Time DESC for range queries</span>
+    <span class="kw">private readonly</span> <span class="typ">ConcurrentDictionary</span>&lt;<span class="typ">string</span>, <span class="typ">List</span>&lt;<span class="typ">Assoc</span>&gt;&gt; _assocs = <span class="kw">new</span>();
+    <span class="cmt">// materialized counters =&gt; assoc_count is O(1)</span>
+    <span class="kw">private readonly</span> <span class="typ">ConcurrentDictionary</span>&lt;<span class="typ">string</span>, <span class="typ">long</span>&gt; _counts = <span class="kw">new</span>();
+    <span class="cmt">// single-flight: coalesce concurrent misses on the same key (thundering herd)</span>
+    <span class="kw">private readonly</span> <span class="typ">ConcurrentDictionary</span>&lt;<span class="typ">long</span>, <span class="typ">Lazy</span>&lt;<span class="typ">Task</span>&lt;<span class="typ">byte</span>[]?&gt;&gt;&gt; _inflight = <span class="kw">new</span>();
+
+    <span class="kw">public</span> <span class="fn">TaoCache</span>(<span class="typ">IGraphStore</span> store) =&gt; _store = store;
+    <span class="kw">private static</span> <span class="typ">string</span> <span class="fn">Key</span>(<span class="typ">long</span> id, <span class="typ">string</span> t) =&gt; $<span class="str">"{id}:{t}"</span>;
+
+    <span class="cmt">// READ: served from RAM on a hit; one coalesced DB read on a miss.</span>
+    <span class="kw">public</span> <span class="typ">Task</span>&lt;<span class="typ">byte</span>[]?&gt; <span class="fn">GetObjectAsync</span>(<span class="typ">long</span> id)
+    {
+        <span class="kw">if</span> (_objs.<span class="fn">TryGetValue</span>(id, <span class="kw">out var</span> hit))
+            <span class="kw">return</span> <span class="typ">Task</span>.<span class="fn">FromResult</span>&lt;<span class="typ">byte</span>[]?&gt;(hit);        <span class="cmt">// &gt;96% path</span>
+
+        <span class="cmt">// Lazy ensures only ONE task hits the DB even if 1000 callers race.</span>
+        <span class="kw">var</span> lazy = _inflight.<span class="fn">GetOrAdd</span>(id, k =&gt; <span class="kw">new</span> <span class="typ">Lazy</span>&lt;<span class="typ">Task</span>&lt;<span class="typ">byte</span>[]?&gt;&gt;(
+            <span class="kw">async</span> () =&gt;
+            {
+                <span class="kw">var</span> v = <span class="kw">await</span> _store.<span class="fn">GetObjectAsync</span>(k);
+                <span class="kw">if</span> (v <span class="kw">is not null</span>) _objs[k] = v;        <span class="cmt">// fill cache</span>
+                _inflight.<span class="fn">TryRemove</span>(k, <span class="kw">out</span> _);
+                <span class="kw">return</span> v;
+            }));
+        <span class="kw">return</span> lazy.Value;
+    }
+
+    <span class="cmt">// RANGE: newest-k edges — a prefix of the time-sorted list.</span>
+    <span class="kw">public</span> <span class="typ">IReadOnlyList</span>&lt;<span class="typ">Assoc</span>&gt; <span class="fn">AssocRange</span>(<span class="typ">long</span> id1, <span class="typ">string</span> atype, <span class="typ">int</span> limit) =&gt;
+        _assocs.<span class="fn">TryGetValue</span>(<span class="fn">Key</span>(id1, atype), <span class="kw">out var</span> list)
+            ? list.<span class="fn">Take</span>(limit).<span class="fn">ToList</span>() : <span class="typ">Array</span>.Empty&lt;<span class="typ">Assoc</span>&gt;();
+
+    <span class="cmt">// COUNT: O(1) from the materialized counter.</span>
+    <span class="kw">public</span> <span class="typ">long</span> <span class="fn">AssocCount</span>(<span class="typ">long</span> id1, <span class="typ">string</span> atype) =&gt;
+        _counts.<span class="fn">GetValueOrDefault</span>(<span class="fn">Key</span>(id1, atype));
+
+    <span class="cmt">// WRITE-THROUGH: persist first, then update cache + counter in place.</span>
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">AddAssocAsync</span>(<span class="typ">Assoc</span> a)
+    {
+        <span class="kw">await</span> _store.<span class="fn">PutAssocAsync</span>(a);                    <span class="cmt">// source of truth first</span>
+        <span class="kw">var</span> key = <span class="fn">Key</span>(a.Id1, a.AType);
+        <span class="kw">var</span> list = _assocs.<span class="fn">GetOrAdd</span>(key, _ =&gt; <span class="kw">new</span>());
+        <span class="kw">lock</span> (list)                                    <span class="cmt">// keep sorted by Time DESC</span>
+        {
+            <span class="kw">int</span> i = list.<span class="fn">FindIndex</span>(x =&gt; x.Time &lt; a.Time);
+            list.<span class="fn">Insert</span>(i &lt; 0 ? list.Count : i, a);
+        }
+        _counts.<span class="fn">AddOrUpdate</span>(key, 1, (_, c) =&gt; c + 1);  <span class="cmt">// writer sees it immediately</span>
+    }
+}</pre>
+    <p>The <code>Lazy&lt;Task&gt;</code> trick is <strong>single-flight request coalescing</strong> — the real defense against a viral object melting the database. In production TAO this coalescing happens at the leader tier; the .NET <code>Lazy&lt;T&gt;</code> guarantees the factory runs once even under a stampede of concurrent callers. Swap the in-process dictionaries for Redis and the store for Aurora/DynamoDB and you have the AWS design above.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <p><strong>Eventual consistency is the headline trade.</strong> TAO gives up global strong consistency to get availability and sub-ms local reads at a billion QPS. The mitigation — write-through so the writer gets <em>read-after-write</em> — is what keeps it acceptable to users ("I posted a comment and I can see it"). Be ready to explain <em>why</em> a social feed tolerates a few seconds of cross-region staleness (nobody notices if a distant friend's like count lags briefly) whereas a bank ledger would not.</p>
+    <p><strong>Hot keys / celebrity problem.</strong> A viral object gets read by millions simultaneously. Defenses stack: follower caches absorb most of it from RAM; the leader <strong>coalesces</strong> concurrent misses into one DB read; and hot shards can be <strong>cloned/migrated</strong>. This is the single most common follow-up — have the layered answer ready.</p>
+    <p><strong>Cache invalidation across regions.</strong> After a write to the primary, secondary regions must converge. This rides MySQL replication plus cache invalidation messages — and it's where staleness lives. The classic hard problem ("there are only two hard things… cache invalidation") shows up exactly here.</p>
+    <p><strong>Why keep MySQL at all?</strong> TAO didn't throw away the relational store — it kept MySQL as the durable, well-understood source of truth and put a graph-aware cache in front. The lesson: you don't always need a new database; sometimes you need the <em>right cache</em> with the right data model over a proven one.</p>
+
+    <div class="qa">
+      <p class="q">Q: How does TAO handle a celebrity with 100M followers (a hot key)?</p>
+      <p class="a">Layered: RAM at the follower tier serves most reads; the leader coalesces concurrent misses into a single MySQL read (kills the thundering herd); and hot shards can be cloned or migrated to spread load. No single object read path hits the database at scale.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: What consistency does TAO actually guarantee?</p>
+      <p class="a">Eventual consistency by default, with read-after-write for the client that made the change (because the write is applied write-through on its local cache). Stronger cross-region consistency is available on request at higher latency.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: Why did memcache + MySQL stop working?</p>
+      <p class="a">MySQL's buffer pool assumes spatial locality but the workload has creation-time locality; negative lookups (edges that don't exist) polluted the cache; and engineers had to hand-sync two data models. TAO makes the cache graph-aware so objects, edges, counts, and inverse edges are first-class.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: Why store associations sorted by time?</p>
+      <p class="a">Social browsing is overwhelmingly "show me the newest N." Keeping each edge list sorted by time descending turns range queries into cheap prefix reads and matches the creation-time locality of the workload.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "TAO is Meta's read-optimized store for the social graph. It models data as <em>objects</em> (nodes) and <em>associations</em> (typed, time-sorted edges) and serves them from a two-tier, geo-distributed, write-through cache — <em>follower</em> caches face clients, <em>leader</em> caches front sharded MySQL. The workload is ~500:1 reads-to-writes with a 96%+ cache hit rate, so it's all about caching reads in RAM and keeping the cache correct on writes. It chooses eventual consistency for availability but gives the writer read-after-write, protects hot keys by coalescing misses at the leader, and shards into hundreds of thousands of MySQL databases that can be cloned to smooth spikes."</div>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li><strong>&gt;1 billion reads/sec</strong>, millions of writes/sec (Meta blog).</li>
+      <li><strong>~500:1</strong> read:write ratio; <strong>&gt;96%</strong> cache hit rate (TAO paper).</li>
+      <li><strong>Hundreds of thousands</strong> of shards (1 shard = 1 MySQL DB).</li>
+      <li><strong>2 cache tiers</strong>: followers (client-facing) + leaders (DB-facing).</li>
+      <li>Each shard has <strong>one primary region</strong>; others are secondaries.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li><strong>Read-heavy ⇒ cache-first</strong> — 500:1 ratio drives the entire design.</li>
+      <li><strong>Objects &amp; associations</strong> — graph-aware cache, edges sorted by time, O(1) counts.</li>
+      <li><strong>Leader/follower tiers</strong> — followers scale reads; leaders coalesce misses &amp; invalidate.</li>
+      <li><strong>Write-through + eventual consistency</strong> — availability with read-after-write for the writer.</li>
+      <li><strong>Sharding + hot-key defense</strong> — clone/migrate shards; coalesce the thundering herd.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://engineering.fb.com/2013/06/25/core-infra/tao-the-power-of-the-graph/">TAO: The power of the graph</a> — Meta (Facebook) Engineering Blog, 2013: the problem, objects/associations model, why memcache+MySQL was replaced, leader/follower tiers, sharding, eventual consistency, and the &gt;1B reads/sec &amp; millions of writes/sec figures.</li>
+      <li>Bronson et al., <em>"TAO: Facebook's Distributed Data Store for the Social Graph"</em> — USENIX ATC 2013: the ~500:1 read:write ratio, 96%+ cache hit rate, the object/association API (assoc_get / assoc_range / assoc_count), write-through and consistency details. <span style="color:var(--muted)">(Ratio &amp; hit-rate figures are the widely-cited paper numbers; the PDF blocked automated fetch, so treat them as the standard published values.)</span></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

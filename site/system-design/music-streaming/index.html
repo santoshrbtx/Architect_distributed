@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Design a Music Streaming Platform (Spotify) — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c; --scenario-bg: #fff0f4;
+    --reqs: #f4a259; --reqs-bg: #fff7ed;
+    --arch: #4361ee; --arch-bg: #eef2ff;
+    --dsa: #7048e8; --dsa-bg: #f3effe;
+    --aws: #ff9900; --aws-bg: #fff6e6;
+    --code-bg: #1e2430; --code-ink: #e7ecf3; --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08); --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #1db954 0%, #4361ee 55%, #7048e8 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { position: relative; padding: 10px 0 10px 46px; margin: 0; border-bottom: 1px dashed var(--line); }
+  .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 10px; width: 30px; height: 30px; border-radius: 50%; background: var(--arch); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: .9rem; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #1db954 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .kv { display:flex; gap:10px; flex-wrap:wrap; margin:14px 0; }
+  .kv .box { background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px 16px; flex:1 1 150px; }
+  .kv .box b { display:block; font-size:1.35rem; color:var(--arch); }
+  .kv .box span { font-size:.82rem; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>🎵 Design a Music Streaming Platform</h1>
+    <p>Spotify / Apple Music / YouTube Music at scale: how you serve 100M+ songs to 700M+ users at low latency — audio pipeline, CDN, metadata, search, and recommendations.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 The scenario & where it's used</span>
+    <h2>Streaming audio to hundreds of millions, instantly</h2>
+    <p>A music streaming platform lets users search a huge catalog, hit play, and hear audio start within a fraction of a second — then keep listening smoothly on a train, on wifi, or on a flaky mobile connection. The canonical example is <strong>Spotify</strong> (as of early 2026: <strong>~761 million monthly active users</strong>, ~293M paying subscribers, a catalog of <strong>over 100 million songs</strong> and 7M+ podcasts), alongside Apple Music, YouTube Music, Amazon Music, and Tidal. The defining characteristic versus video (Netflix/YouTube) is that audio files are <em>small</em> — a few megabytes — so the hard problems shift away from raw bandwidth toward <strong>catalog metadata at scale, discovery/search, personalized recommendations, and instant start-up latency</strong>.</p>
+    <p>Interviewers love this problem because it's a rich mix: a read-heavy content-delivery problem (serve the same audio to millions ⇒ CDN + caching), a big-data metadata problem (100M songs, billions of playlist entries), a search problem (autocomplete + fuzzy matching), and an ML problem (Discover Weekly-style recommendations). It lets you show breadth — but the winning move is to <strong>lead with the audio delivery path and the read-heavy caching story</strong>, because that's the core of "streaming."</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>A jukebox in every corner store on Earth</h2>
+    <p>Imagine you and a <strong>billion strangers</strong> all reach for the same "play" button at once. In under a second, each of you has to hear music. Not "loading… loading…" — actual sound. How on earth does one company pull that off?</p>
+    <p>Here's the trick: Spotify doesn't keep all its songs in one giant warehouse in California and pipe them to your phone. That would be like everyone in the world calling the same pizza shop — the phone line would jam. Instead, Spotify runs <strong>thousands of tiny jukeboxes</strong> tucked into cities all over the planet — often inside your own phone company's building. When you tap play, your phone asks the <em>nearest</em> jukebox first. It almost always has the song, because that jukebox is quietly stocked with whatever's trending near you — the top hits in your country, your saved playlists, your morning workout mix.</p>
+    <p>The songs themselves are also chopped into <strong>small three-second chunks</strong>, like a book split into single pages. Your phone grabs one page, starts reading (playing) it, and quietly fetches the next page in the background. If your train dips into a tunnel, you're never stuck mid-page — the next few pages are already in your pocket. And if the signal gets bad, Spotify quietly slips you a <strong>lower-quality</strong> version of the next page so the music never stops, then upgrades again when your wifi comes back.</p>
+    <p>The <strong>really hard part</strong> isn't the audio at all — a song is only about 4 megabytes, which is nothing. The hard part is <strong>finding</strong> what you want among <strong>100 million songs</strong>. Type "sha" and you expect "Shape of You" to appear before your finger lifts. That's a giant, ever-updating index — like a librarian who's memorized every book on Earth. And then there's the eerie magic of <strong>Discover Weekly</strong>: 30 songs you've never heard that somehow feel like yours. That's the computer noticing which songs other people-like-you keep replaying, then quietly slipping them onto your playlist. A jukebox that knows your taste better than your best friend does.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements & back-of-the-envelope</span>
+    <h2>Requirements and capacity estimation</h2>
+    <h3>Functional</h3>
+    <ul>
+      <li>Search the catalog (songs, artists, albums, playlists) with autocomplete.</li>
+      <li>Stream a track with instant playback and seek/skip; adapt quality to network.</li>
+      <li>Create/manage playlists, likes, follows; resume across devices.</li>
+      <li>Personalized recommendations &amp; home feed; offline download (Premium).</li>
+    </ul>
+    <h3>Non-functional</h3>
+    <ul>
+      <li><strong>Low start latency</strong> (&lt; 250 ms to first audio), smooth playback (no rebuffering).</li>
+      <li><strong>High availability</strong> (read-heavy; playback must never fail) &amp; global low latency.</li>
+      <li><strong>Massive scale</strong> &amp; cost-efficiency; strong <strong>DRM/licensing</strong> controls.</li>
+    </ul>
+    <h3>Capacity estimation (numbers to volunteer)</h3>
+    <div class="kv">
+      <div class="box"><b>~761M</b><span>monthly active users</span></div>
+      <div class="box"><b>~100M+</b><span>songs in catalog</span></div>
+      <div class="box"><b>~5 MB</b><span>avg encoded song (160 kbps)</span></div>
+      <div class="box"><b>&gt;99.9%</b><span>read:write ratio</span></div>
+    </div>
+    <table>
+      <tr><th>Estimate</th><th>Math</th><th>Result</th></tr>
+      <tr><td>Peak concurrent streams</td><td>~761M MAU → assume ~100M DAU, ~5% streaming at peak</td><td>~5M concurrent streams</td></tr>
+      <tr><td>Origin storage (one bitrate)</td><td>100M songs × 5 MB</td><td>~500 TB; ×3–4 bitrates + FLAC ⇒ several PB</td></tr>
+      <tr><td>Egress bandwidth at peak</td><td>5M streams × 160 kbps</td><td>~800 Gbps served (mostly from CDN, not origin)</td></tr>
+      <tr><td>Metadata size</td><td>100M songs × ~2 KB metadata</td><td>~200 GB — fits in a sharded DB + cache easily</td></tr>
+    </table>
+    <p>The key realization: audio is small and <strong>immutable</strong> (a track never changes once encoded), and the same popular tracks are played millions of times. That means <strong>the CDN does the heavy lifting</strong> and origin/bandwidth is not the bottleneck — the interesting scale problems are metadata, search, and recommendations.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The client talks to an <strong>API gateway</strong> behind a load balancer for everything <em>except</em> the audio bytes. Control-plane calls (search, playlists, "give me the stream URL for track X") hit stateless microservices backed by databases and caches. When the user presses play, the metadata/streaming service returns a <strong>signed, expiring CDN URL</strong>; the client then pulls the audio <strong>directly from the CDN edge</strong>, chunk by chunk — origin is bypassed on a cache hit. Uploads/ingestion run an <strong>async transcoding pipeline</strong> that produces multiple bitrates and pushes them to blob storage + CDN.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 780 420" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <defs>
+          <marker id="b" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#7aa2f7"/></marker>
+          <marker id="g" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#1db954"/></marker>
+          <marker id="o" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ff9e64"/></marker>
+        </defs>
+        <!-- client -->
+        <rect x="20" y="180" width="100" height="50" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="70" y="202" fill="#e7ecf3" font-size="12" text-anchor="middle">Client</text>
+        <text x="70" y="218" fill="#9aa7bd" font-size="9" text-anchor="middle">app / web</text>
+        <!-- gateway -->
+        <rect x="160" y="180" width="110" height="50" rx="10" fill="#152233" stroke="#4361ee"/>
+        <text x="215" y="202" fill="#e7ecf3" font-size="11" text-anchor="middle">API Gateway</text>
+        <text x="215" y="217" fill="#9aa7bd" font-size="9" text-anchor="middle">LB · auth</text>
+        <!-- services column -->
+        <rect x="330" y="30" width="150" height="40" rx="9" fill="#152233" stroke="#4361ee"/>
+        <text x="405" y="55" fill="#e7ecf3" font-size="11" text-anchor="middle">Metadata / Stream svc</text>
+        <rect x="330" y="82" width="150" height="38" rx="9" fill="#152233" stroke="#4361ee"/>
+        <text x="405" y="106" fill="#e7ecf3" font-size="11" text-anchor="middle">Search service</text>
+        <rect x="330" y="132" width="150" height="38" rx="9" fill="#152233" stroke="#4361ee"/>
+        <text x="405" y="156" fill="#e7ecf3" font-size="11" text-anchor="middle">Recommendation svc</text>
+        <rect x="330" y="182" width="150" height="38" rx="9" fill="#152233" stroke="#4361ee"/>
+        <text x="405" y="206" fill="#e7ecf3" font-size="11" text-anchor="middle">Playlist / User svc</text>
+        <!-- data stores -->
+        <rect x="540" y="30" width="120" height="36" rx="9" fill="#1e1a33" stroke="#7048e8"/>
+        <text x="600" y="53" fill="#e7ecf3" font-size="10" text-anchor="middle">Metadata DB (SQL)</text>
+        <rect x="540" y="78" width="120" height="36" rx="9" fill="#1e1a33" stroke="#7048e8"/>
+        <text x="600" y="101" fill="#e7ecf3" font-size="10" text-anchor="middle">Elasticsearch</text>
+        <rect x="540" y="126" width="120" height="36" rx="9" fill="#1e1a33" stroke="#7048e8"/>
+        <text x="600" y="149" fill="#e7ecf3" font-size="10" text-anchor="middle">Cassandra (events)</text>
+        <rect x="540" y="174" width="120" height="36" rx="9" fill="#2a2410" stroke="#ffd166"/>
+        <text x="600" y="197" fill="#ffd166" font-size="10" text-anchor="middle">Redis cache</text>
+        <!-- CDN + origin -->
+        <rect x="160" y="300" width="110" height="46" rx="10" fill="#132a1c" stroke="#1db954"/>
+        <text x="215" y="322" fill="#1db954" font-size="12" text-anchor="middle">CDN edge</text>
+        <text x="215" y="337" fill="#9aa7bd" font-size="9" text-anchor="middle">audio chunks</text>
+        <rect x="330" y="300" width="120" height="46" rx="10" fill="#132a1c" stroke="#1db954"/>
+        <text x="390" y="322" fill="#1db954" font-size="11" text-anchor="middle">Blob store (S3)</text>
+        <text x="390" y="337" fill="#9aa7bd" font-size="9" text-anchor="middle">origin audio</text>
+        <!-- pipeline -->
+        <rect x="510" y="300" width="150" height="46" rx="10" fill="#2a1c10" stroke="#ff9e64"/>
+        <text x="585" y="320" fill="#ff9e64" font-size="10" text-anchor="middle">Transcoding pipeline</text>
+        <text x="585" y="335" fill="#9aa7bd" font-size="9" text-anchor="middle">queue → encode → S3+CDN</text>
+        <!-- arrows control plane -->
+        <line x1="120" y1="205" x2="158" y2="205" stroke="#7aa2f7" stroke-width="2" marker-end="url(#b)"/>
+        <line x1="270" y1="195" x2="328" y2="120" stroke="#7aa2f7" stroke-width="1.6" marker-end="url(#b)"/>
+        <line x1="270" y1="200" x2="328" y2="200" stroke="#7aa2f7" stroke-width="1.6" marker-end="url(#b)"/>
+        <line x1="480" y1="50" x2="538" y2="50" stroke="#7048e8" stroke-width="1.6" marker-end="url(#b)"/>
+        <line x1="480" y1="100" x2="538" y2="96" stroke="#7048e8" stroke-width="1.6" marker-end="url(#b)"/>
+        <line x1="480" y1="150" x2="538" y2="144" stroke="#7048e8" stroke-width="1.6" marker-end="url(#b)"/>
+        <line x1="480" y1="200" x2="538" y2="192" stroke="#ffd166" stroke-width="1.6" marker-end="url(#b)"/>
+        <!-- audio data plane -->
+        <line x1="70" y1="230" x2="200" y2="298" stroke="#1db954" stroke-width="2.4" marker-end="url(#g)"/>
+        <text x="95" y="285" fill="#1db954" font-size="9">audio bytes</text>
+        <line x1="270" y1="323" x2="328" y2="323" stroke="#1db954" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#g)"/>
+        <text x="272" y="315" fill="#9aa7bd" font-size="8">cache miss</text>
+        <line x1="510" y1="323" x2="452" y2="323" stroke="#ff9e64" stroke-width="1.6" marker-end="url(#o)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7aa2f7"></span>control plane (metadata)</span>
+        <span><span class="dot" style="background:#1db954"></span>data plane (audio bytes)</span>
+        <span><span class="dot" style="background:#ff9e64"></span>ingestion pipeline</span>
+      </div>
+    </div>
+    <p>The crucial split is <strong>control plane vs data plane</strong>. Metadata (small, structured, must be fresh) goes through your services and databases. Audio (large-ish, immutable, cacheable) goes straight through the CDN and never touches your app servers on a cache hit. Keeping them separate is what lets the system scale — say this explicitly in the interview.</p>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+    <h3>Audio ingestion &amp; transcoding pipeline</h3>
+    <p>When a label uploads a master track, an async pipeline (triggered off a queue) <strong>transcodes it into multiple codecs and bitrates</strong> — e.g. Ogg Vorbis at 96/160/320 kbps and AAC at 128/256 kbps, plus FLAC for lossless — and segments each into small chunks. Spotify streams up to 160 kbps Vorbis on free and 256 kbps AAC / up to 24-bit FLAC on Premium. Outputs are written to <strong>blob storage (S3)</strong> as the origin and pushed/warmed into the CDN. This is done <em>once per track</em> and is embarrassingly parallel, so a queue + worker fleet (or serverless) handles it. The result is immutable objects with content-hash keys — perfect for caching.</p>
+    <h3>Streaming: chunks + adaptive bitrate</h3>
+    <p>Playback uses <strong>chunked, adaptive streaming</strong> — the same idea as HLS/DASH for video, applied to audio. The client fetches a manifest, then pulls small time-slices (a few seconds each). If the network degrades, it switches down to a lower bitrate for the next chunk (ABR), avoiding rebuffering; on seek, it jumps to the chunk covering that timestamp instead of re-downloading. To hit sub-250 ms start latency, the client requests a short low-bitrate opening chunk first, prefetches the next track in a playlist, and caches recently-played audio locally. Byte-range requests over HTTP against the CDN are the workhorse.</p>
+    <h3>Metadata store &amp; caching</h3>
+    <p>Track/artist/album metadata is relational-ish and read-heavy: store it in a <strong>sharded SQL database (PostgreSQL)</strong> or a wide-column store, fronted by <strong>Redis</strong> for the hot catalog. Because the catalog is ~200 GB and mostly static, caching hit rates are extremely high. User activity — plays, likes, listening history — is append-heavy and huge, so it goes into a horizontally-scalable store like <strong>Cassandra</strong> (an AP, write-optimized <a href="../cap-theorem/index.html">choice</a>) rather than the relational metadata DB.</p>
+    <h3>Search &amp; autocomplete</h3>
+    <p>Search runs on <strong>Elasticsearch</strong> (inverted index) for full-text/fuzzy matching across song/artist/album names, with a <strong>trie/prefix index</strong> for instant type-ahead autocomplete. Results are ranked by popularity and personalization signals.</p>
+    <h3>Recommendations</h3>
+    <p>Discovery (Discover Weekly, home feed, radio) is powered by <strong>collaborative filtering</strong> (matrix factorization over the user×track play matrix), content-based audio features, and NLP over playlists/reviews. It runs offline as batch ML jobs (Spark) writing precomputed recommendations to a fast store the recommendation service reads at request time — you don't compute a model on the hot path.</p>
+    <h3>DRM &amp; licensing</h3>
+    <p>Audio URLs are <strong>signed and short-lived</strong> so links can't be shared or scraped; premium/offline downloads are encrypted and license-checked. Geo-restrictions enforce per-market licensing at the edge.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <table>
+      <tr><th>Structure / algorithm</th><th>Where</th><th>Why</th></tr>
+      <tr><td><strong>Consistent hashing</strong></td><td>Sharding metadata &amp; cache; CDN node selection</td><td>Add/remove nodes with minimal key remapping.</td></tr>
+      <tr><td><strong>Inverted index</strong></td><td>Search (Elasticsearch)</td><td>Map term → list of matching docs for fast full-text/fuzzy search.</td></tr>
+      <tr><td><strong>Trie (prefix tree)</strong></td><td>Search autocomplete</td><td>O(p) prefix lookup for type-ahead suggestions.</td></tr>
+      <tr><td><strong>LRU cache</strong></td><td>Redis hot catalog; client-side audio cache</td><td>Keep the most-played tracks/metadata in memory.</td></tr>
+      <tr><td><strong>Matrix factorization / ANN</strong></td><td>Recommendations (collaborative filtering)</td><td>Embed users &amp; tracks in a latent space; approximate-nearest-neighbor (e.g. HNSW) finds similar tracks fast.</td></tr>
+      <tr><td><strong>Min-heap / priority queue</strong></td><td>Top-K popular / ranked results</td><td>Efficiently keep the top-K by score.</td></tr>
+      <tr><td><strong>Bloom filter</strong></td><td>"Has this user already heard this track?"</td><td>Cheap membership test to avoid recommending repeats. See <a href="../../algorithm/bloom-filter/index.html">Bloom filter</a>.</td></tr>
+    </table>
+    <table>
+      <tr><th>Operation</th><th>Complexity</th></tr>
+      <tr><td>Autocomplete prefix lookup (trie)</td><td>O(p + k) — p=prefix length, k=results</td></tr>
+      <tr><td>Search term match (inverted index)</td><td>~O(1) posting-list fetch + merge</td></tr>
+      <tr><td>ANN recommendation lookup (HNSW)</td><td>~O(log n)</td></tr>
+      <tr><td>Get stream URL (cache hit)</td><td>O(1)</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Audio origin storage</td><td>Amazon S3</td><td>Cheap, durable (11 nines), immutable objects — perfect for encoded audio.</td></tr>
+      <tr><td>CDN / edge delivery</td><td>CloudFront</td><td>Serves audio chunks from edge PoPs; signed URLs for DRM; byte-range support.</td></tr>
+      <tr><td>API gateway / LB</td><td>API Gateway / ALB</td><td>Routing, auth, throttling for control-plane calls.</td></tr>
+      <tr><td>Microservices compute</td><td>ECS / EKS / Lambda</td><td>Stateless metadata, search, playlist, recommendation services.</td></tr>
+      <tr><td>Metadata DB</td><td>Aurora PostgreSQL</td><td>Relational catalog, read replicas for the read-heavy load.</td></tr>
+      <tr><td>Activity / plays</td><td>DynamoDB or Keyspaces (Cassandra)</td><td>Write-heavy, horizontally scalable event log. See <a href="../dynamodb-design/index.html">DynamoDB</a>.</td></tr>
+      <tr><td>Cache</td><td>ElastiCache (Redis)</td><td>Hot catalog, sessions, precomputed home feed.</td></tr>
+      <tr><td>Search</td><td>OpenSearch</td><td>Inverted index + autocomplete.</td></tr>
+      <tr><td>Transcoding pipeline</td><td>SQS + Lambda / MediaConvert / Batch</td><td>Async multi-bitrate encoding on upload.</td></tr>
+      <tr><td>Recommendation batch</td><td>EMR (Spark) / SageMaker</td><td>Offline collaborative-filtering models.</td></tr>
+      <tr><td>Streaming events</td><td>Kinesis / MSK</td><td>Ingest play events for analytics &amp; ML features.</td></tr>
+    </table>
+    <p>Deployment: audio lives in S3 and is fronted by CloudFront with signed URLs; the control plane runs as containerized microservices across multi-AZ, with Aurora + read replicas for metadata, ElastiCache in front, and OpenSearch for search. Play events flow through Kinesis into a data lake feeding the recommendation models. (Note: real Spotify runs primarily on Google Cloud, but the pattern maps cleanly to AWS.)</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — the "get stream URL" hot path</h2>
+    <p>The single most-called endpoint is "give me a playable URL for this track at the right bitrate." It's a cache-first lookup that returns a <strong>signed, expiring CDN URL</strong> — never the raw origin — and picks the bitrate from the client's plan and network hint. This is the core of the streaming control plane.</p>
+    <pre><span class="kw">public sealed class</span> <span class="typ">StreamingService</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IDistributedCache</span> _cache;   <span class="cmt">// Redis</span>
+    <span class="kw">private readonly</span> <span class="typ">IMetadataRepo</span> _meta;         <span class="cmt">// Aurora/Postgres</span>
+    <span class="kw">private readonly</span> <span class="typ">ICdnSigner</span> _cdn;             <span class="cmt">// CloudFront signed URLs</span>
+
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">StreamManifest</span>&gt; <span class="fn">GetStreamAsync</span>(
+        <span class="kw">string</span> trackId, <span class="typ">UserPlan</span> plan, <span class="typ">NetworkHint</span> net)
+    {
+        <span class="cmt">// 1. Choose the best bitrate for this plan + measured bandwidth (ABR start).</span>
+        <span class="typ">Bitrate</span> br = <span class="fn">PickBitrate</span>(plan, net);
+
+        <span class="cmt">// 2. Cache-first metadata lookup (hot catalog lives in Redis).</span>
+        <span class="kw">string</span> cacheKey = <span class="str">$"track:{trackId}:{br}"</span>;
+        <span class="kw">var</span> cached = <span class="kw">await</span> _cache.GetStringAsync(cacheKey);
+        <span class="typ">TrackAsset</span> asset = cached is <span class="kw">not null</span>
+            ? <span class="typ">TrackAsset</span>.Deserialize(cached)
+            : <span class="kw">await</span> <span class="fn">LoadAndCache</span>(trackId, br, cacheKey);
+
+        <span class="cmt">// 3. Return a SIGNED, short-lived CDN url per chunk — DRM + no hotlinking.</span>
+        <span class="kw">var</span> url = _cdn.<span class="fn">SignUrl</span>(asset.CdnPath, <span class="typ">TimeSpan</span>.FromMinutes(<span class="str">30</span>));
+
+        <span class="cmt">// 4. Fire-and-forget the play event to Kinesis for history + ML features.</span>
+        _ = <span class="fn">EmitPlayEventAsync</span>(trackId, plan);
+
+        <span class="kw">return new</span> <span class="typ">StreamManifest</span>(
+            Url: url,
+            Bitrate: br,
+            Codec: asset.Codec,
+            ChunkSeconds: <span class="str">5</span>,               <span class="cmt">// client pulls ~5s ranges, switches bitrate per chunk</span>
+            ExpiresInSec: <span class="str">1800</span>);
+    }
+
+    <span class="kw">private async</span> <span class="typ">Task</span>&lt;<span class="typ">TrackAsset</span>&gt; <span class="fn">LoadAndCache</span>(<span class="kw">string</span> id, <span class="typ">Bitrate</span> br, <span class="kw">string</span> key)
+    {
+        <span class="kw">var</span> asset = <span class="kw">await</span> _meta.GetAssetAsync(id, br);   <span class="cmt">// DB on miss</span>
+        <span class="kw">await</span> _cache.SetStringAsync(key, asset.Serialize(),
+            <span class="kw">new</span>() { AbsoluteExpirationRelativeToNow = <span class="typ">TimeSpan</span>.FromHours(<span class="str">6</span>) });
+        <span class="kw">return</span> asset;                                    <span class="cmt">// immutable audio ⇒ safe to cache long</span>
+    }
+}</pre>
+    <p>Note what's <em>not</em> here: the service never proxies audio bytes. It hands back a signed CloudFront URL and the client streams directly from the edge. Alternatives: HLS/DASH manifests generated by the packager, gRPC instead of REST for internal calls, and Kafka in place of Kinesis for the event bus.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks & likely follow-ups</h2>
+    <div class="qa"><p class="q">"Why a CDN instead of serving audio from your servers?"</p><p class="a">Audio is immutable and the same popular tracks are played millions of times, giving near-100% cache hit rates. CDN edges serve bytes close to users at low latency and offload origin/bandwidth. Your app servers only handle small metadata calls.</p></div>
+    <div class="qa"><p class="q">"How do you get instant playback (low start latency)?"</p><p class="a">Chunked streaming with a short low-bitrate opening chunk, client-side prefetch of the next track, local caching of recent audio, and edge delivery. Adaptive bitrate then ramps quality up once buffered.</p></div>
+    <div class="qa"><p class="q">"SQL or NoSQL for storage?"</p><p class="a">Both. Catalog metadata is relational and read-heavy → Aurora/Postgres with read replicas + Redis. Play history/activity is write-heavy and enormous → Cassandra/DynamoDB. Split by access pattern.</p></div>
+    <div class="qa"><p class="q">"How do recommendations scale?"</p><p class="a">Compute offline in batch (Spark matrix factorization → user/track embeddings), store precomputed results, and serve them with an O(log n) ANN lookup at request time. Never train on the hot path.</p></div>
+    <div class="qa"><p class="q">"How is this different from designing Netflix/YouTube?"</p><p class="a">Same CDN + transcoding backbone, but audio files are ~1000× smaller than video, so bandwidth is a minor concern. The hard parts move to catalog metadata scale, search, and recommendations rather than raw video encoding/bitrate ladders.</p></div>
+    <div class="qa"><p class="q">"How do you stop link sharing / piracy?"</p><p class="a">Short-lived signed CDN URLs, encrypted downloads with DRM licensing, and geo-fencing at the edge for per-market rights.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "I'd split it into a control plane and a data plane. Audio is small, immutable, and hugely popular, so I transcode each track once into multiple bitrates, store it in S3, and serve it from a CDN via signed URLs — origin is bypassed on cache hits. The client streams in small chunks with adaptive bitrate for instant, smooth playback. The control plane is stateless microservices: metadata in Aurora+Redis (read-heavy), play history in Cassandra (write-heavy), search in Elasticsearch with a trie for autocomplete, and recommendations precomputed offline via collaborative filtering. That handles ~761M users because the CDN absorbs the bytes and each service scales independently."</div>
+    <ul>
+      <li><strong>Numbers:</strong> ~761M MAU, 100M+ songs, ~5 MB/song, &gt;99.9% read-heavy, ~5M peak concurrent streams.</li>
+      <li><strong>Control plane vs data plane</strong> — the core framing. CDN serves audio; services serve metadata.</li>
+      <li><strong>Pipeline:</strong> upload → queue → transcode to multi-bitrate (Vorbis/AAC/FLAC) → S3 + CDN warm.</li>
+      <li><strong>Streaming:</strong> chunked + adaptive bitrate + prefetch + signed URLs for sub-250 ms start.</li>
+      <li><strong>Storage split:</strong> Aurora+Redis (catalog) · Cassandra/DynamoDB (plays) · Elasticsearch+trie (search).</li>
+      <li><strong>Recommendations</strong> = offline collaborative filtering (matrix factorization) + ANN lookup.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://en.wikipedia.org/wiki/Spotify">Spotify — Wikipedia (scale, codecs, bitrates)</a></li>
+      <li><a href="https://engineering.atspotify.com/">Spotify Engineering Blog</a></li>
+      <li><a href="https://developer.spotify.com/documentation/web-api">Spotify Web API docs</a></li>
+      <li><a href="https://aws.amazon.com/media-services/">AWS Media Services (MediaConvert, CloudFront) — transcoding &amp; delivery</a></li>
+      <li><a href="https://www.allthingsdistributed.com/2008/12/eventually_consistent.html">Werner Vogels — Eventually Consistent (activity store rationale)</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

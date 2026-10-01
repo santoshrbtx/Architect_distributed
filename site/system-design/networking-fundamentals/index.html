@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Networking Fundamentals — OSI, IP, TCP/UDP, HTTP/HTTPS, DNS, Checksums, Proxy</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --laymen: #f4a259;
+    --laymen-bg: #fff7ed;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #0b3d91 0%, #4361ee 45%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.1rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.15rem; }
+  h4 { margin: 16px 0 6px; font-size: 1rem; color: var(--arch); }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .93rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; font-size: .82rem; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .topic-anchor { scroll-margin-top: 70px; }
+  .callout { background: rgba(255,255,255,.6); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin: 12px 0; font-size: .93rem; color: var(--muted); }
+  .callout strong { color: var(--ink); }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; }
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep · Networking Fundamentals</div>
+    <h1>🌐 Networking Fundamentals — OSI · IP · TCP/UDP · HTTP/HTTPS · DNS · Checksums · Proxies</h1>
+    <p>Seven networking topics every senior engineer should be able to draw on the whiteboard. Framed to answer "the network is broken" — and to justify every design choice from load balancer type to retry policy.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Why it matters</a>
+    <a href="#laymen">🧑‍🎓 In laymen terms</a>
+    <a href="#reqs">📋 Concepts &amp; numbers</a>
+    <a href="#arch">🏗️ How they stack up</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive (all 7)</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Why it matters</span>
+    <h2>Why an interviewer asks about networking</h2>
+    <p>Every distributed system runs on top of these seven ideas. When a senior interviewer asks you to design a chat app or a payments API, they're really asking two things: <em>"do you know how packets actually travel between hosts?"</em> and <em>"can you turn a vague failure like 'the site is slow' into a precise fix?"</em>. Someone who knows the OSI model, IP, TCP vs UDP, HTTP/HTTPS, DNS, checksums, and proxies can point at exactly the layer that broke and justify why they chose a Layer-4 network load balancer over a Layer-7 application load balancer.</p>
+    <p>You see all seven in every real product you use. <strong>WhatsApp</strong> picks UDP-based QUIC for calls and TCP for message delivery. <strong>Cloudflare</strong> is a reverse proxy at the edge that also does DNS resolution and TLS termination. <strong>Netflix</strong> uses DNS latency-based routing to steer you to the closest CDN edge. <strong>Amazon.com</strong> is fronted by an Application Load Balancer (a Layer-7 reverse proxy) that inspects HTTP hostnames and cookies. <strong>Zoom</strong> gracefully degrades from UDP to TCP if a firewall blocks UDP. Even <strong>GitHub</strong>'s <code>git clone</code> is HTTPS over TCP with SHA-1 checksums (moving to SHA-256) verifying every object it downloads.</p>
+    <p>In an interview these show up as follow-up ambush questions: "why does DNS use UDP?", "what does a 502 versus 504 mean?", "how would you migrate from HTTP/2 to HTTP/3?", "would you put your API behind an NLB or an ALB?", "how would you protect a webhook against tampering?". Answering any one crisply demonstrates that you actually understand the wire — not just the diagram on the whiteboard.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms — for a beginner</span>
+    <h2>The internet as a postal system</h2>
+    <p>Imagine the internet as a giant postal system that delivers letters between phones and computers. To send anything — a photo, a message, a video call — the postal service has to solve <strong>seven separate problems</strong>, and every one of the topics on this page is one of those problems.</p>
+    <p>First, the mail has to physically travel — a truck on a road, a plane in the air, or a signal on a wire (this is the <strong>physical and data-link layer</strong>). Then each house needs a unique address so the mail can find it — that's your <strong>IP address</strong>, like a house number. But you don't remember house numbers for your friends; you remember their names. So there's a giant phonebook that translates <em>"whatsapp.com"</em> into an actual address — that phonebook is <strong>DNS</strong>.</p>
+    <p>Once you know the address, you have to decide <strong>how careful</strong> the delivery should be. If you're sending a legal contract, you want a courier who guarantees delivery, has a signature on arrival, and re-sends anything lost — that's <strong>TCP</strong>. If you're sending a live news reporter's video feed, and losing one frame is fine because a new one will arrive in a fraction of a second, you send it by <strong>UDP</strong> — no signatures, no retries, just fast.</p>
+    <p>The <strong>letter itself</strong> — the shape of the request and answer — is written in a shared language called <strong>HTTP</strong>. When you want the letter to be <em>secret</em>, you put it inside a sealed, tamper-proof envelope — that's <strong>HTTPS</strong>. Every envelope has a small tamper-check sticker on it — if the sticker looks scratched, the receiver throws the letter out. That sticker is a <strong>checksum</strong>.</p>
+    <p>Finally, big companies don't want everyone knocking on their front door. They put a <strong>receptionist</strong> at the entrance who talks to visitors, checks their ID, hands out cached answers, and forwards real work to the right desk inside. That receptionist is a <strong>reverse proxy</strong>. On the other side, a company might also put a security guard between its own employees and the outside world — the guard is a <strong>forward proxy</strong>. <em>Same job, different sides of the door.</em></p>
+    <p><strong>Tiny example:</strong> You open Instagram. Your phone asks the phonebook "what's instagram.com's address?" (DNS). It gets back an address, calls that address, uses HTTPS to secure the call, uses TCP so nothing is lost, and hits a Cloudflare receptionist (reverse proxy) that says "I already have your feed cached — here you go" without ever bothering Instagram's actual servers. All that happened in about 200 milliseconds.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Concepts &amp; numbers</span>
+    <h2>The numbers to memorize</h2>
+    <p>These are the memorized facts an interviewer expects you to volunteer without hesitation. Say them out loud until they're automatic.</p>
+
+    <h3>OSI layers &amp; their protocols</h3>
+    <table>
+      <tr><th>#</th><th>Layer</th><th>Data unit</th><th>Address</th><th>Examples</th></tr>
+      <tr><td>7</td><td>Application</td><td>Data</td><td>URL / hostname</td><td>HTTP, HTTPS, DNS, SSH, gRPC, SMTP</td></tr>
+      <tr><td>6</td><td>Presentation</td><td>Data</td><td>—</td><td>TLS 1.3, JSON, Protobuf, gzip, UTF-8</td></tr>
+      <tr><td>5</td><td>Session</td><td>Data</td><td>—</td><td>TLS session, WebSocket, gRPC streams</td></tr>
+      <tr><td>4</td><td>Transport</td><td>Segment / datagram</td><td>Port</td><td>TCP, UDP, QUIC</td></tr>
+      <tr><td>3</td><td>Network</td><td>Packet</td><td>IP address</td><td>IPv4, IPv6, ICMP, BGP, OSPF</td></tr>
+      <tr><td>2</td><td>Data link</td><td>Frame</td><td>MAC</td><td>Ethernet, WiFi, ARP, VLAN</td></tr>
+      <tr><td>1</td><td>Physical</td><td>Bit</td><td>—</td><td>Copper, fibre, radio</td></tr>
+    </table>
+
+    <h3>Port numbers everyone should know</h3>
+    <table>
+      <tr><th>Port</th><th>Protocol</th><th>Port</th><th>Protocol</th></tr>
+      <tr><td>22</td><td>SSH</td><td>443</td><td>HTTPS</td></tr>
+      <tr><td>25</td><td>SMTP</td><td>3306</td><td>MySQL</td></tr>
+      <tr><td>53</td><td>DNS</td><td>5432</td><td>PostgreSQL</td></tr>
+      <tr><td>80</td><td>HTTP</td><td>6379</td><td>Redis</td></tr>
+      <tr><td>123</td><td>NTP</td><td>27017</td><td>MongoDB</td></tr>
+    </table>
+
+    <h3>TCP vs UDP at a glance</h3>
+    <table>
+      <tr><th>Dimension</th><th>TCP</th><th>UDP</th></tr>
+      <tr><td>Handshake</td><td>3-way (SYN / SYN-ACK / ACK)</td><td>None</td></tr>
+      <tr><td>Ordering</td><td>In-order byte stream</td><td>Per-datagram, no order</td></tr>
+      <tr><td>Retransmit</td><td>Yes, automatic</td><td>No, app must do it</td></tr>
+      <tr><td>Congestion / flow control</td><td>Built-in (window)</td><td>None</td></tr>
+      <tr><td>Header size</td><td>20 bytes base</td><td>8 bytes</td></tr>
+      <tr><td>Head-of-line blocking</td><td>Yes</td><td>No at UDP layer</td></tr>
+      <tr><td>Use cases</td><td>HTTP/1.1, HTTP/2, databases, SSH</td><td>DNS, VoIP, gaming, QUIC / HTTP/3</td></tr>
+    </table>
+
+    <h3>HTTP status-code buckets</h3>
+    <table>
+      <tr><td><strong>1xx</strong> informational</td><td>100 Continue, 101 Switching Protocols</td></tr>
+      <tr><td><strong>2xx</strong> success</td><td>200 OK, 201 Created, 204 No Content</td></tr>
+      <tr><td><strong>3xx</strong> redirect</td><td>301 Moved Permanently, 302 Found, 304 Not Modified</td></tr>
+      <tr><td><strong>4xx</strong> client error</td><td>400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 429 Too Many Requests</td></tr>
+      <tr><td><strong>5xx</strong> server error</td><td>500 Internal, 502 Bad Gateway, 503 Service Unavailable, 504 Gateway Timeout</td></tr>
+    </table>
+
+    <h3>Private IP ranges (RFC 1918) &amp; common CIDRs</h3>
+    <table>
+      <tr><th>Block</th><th>Prefix</th><th>Hosts</th><th>Where you see it</th></tr>
+      <tr><td>10.0.0.0/8</td><td>/8</td><td>16.7 M</td><td>AWS/Azure VPCs, big enterprise</td></tr>
+      <tr><td>172.16.0.0/12</td><td>/12</td><td>1.0 M</td><td>Docker default bridge, mid-size networks</td></tr>
+      <tr><td>192.168.0.0/16</td><td>/16</td><td>65 536</td><td>Home routers, labs</td></tr>
+      <tr><td>100.64.0.0/10</td><td>/10</td><td>4.2 M</td><td>Carrier-grade NAT (CGNAT)</td></tr>
+      <tr><td>169.254.0.0/16</td><td>/16</td><td>65 536</td><td>Link-local; typically DHCP failure</td></tr>
+    </table>
+
+    <h3>DNS record cheat-sheet</h3>
+    <table>
+      <tr><th>Type</th><th>What it does</th></tr>
+      <tr><td>A</td><td>Name → IPv4 address</td></tr>
+      <tr><td>AAAA</td><td>Name → IPv6 address</td></tr>
+      <tr><td>CNAME</td><td>Alias to another name</td></tr>
+      <tr><td>NS</td><td>Which nameservers own this zone</td></tr>
+      <tr><td>MX</td><td>Mail exchange target</td></tr>
+      <tr><td>TXT</td><td>Free-form text (SPF, DKIM, verification)</td></tr>
+      <tr><td>SOA</td><td>Zone metadata + TTLs</td></tr>
+      <tr><td>PTR</td><td>Reverse: IP → name</td></tr>
+    </table>
+
+    <div class="callout"><strong>Single sentence to volunteer:</strong> <em>"When I say the network is broken, I mean 'which OSI layer is misbehaving' — and 90% of production incidents live at L3 (routing), L4 (TCP timeouts), or L7 (bad status codes)."</em></div>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ How they stack up</span>
+    <h2>All seven topics in one picture</h2>
+    <p>The best way to hold all seven topics in your head is to picture a single HTTPS request from a phone to <em>google.com</em> and label every box it touches. Nothing on this diagram is optional in a modern deployment — every arrow uses one of the seven concepts we're studying.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 940 480" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/></marker>
+          <marker id="ah2-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/></marker>
+        </defs>
+        <style>
+          .b { stroke-width:1.5; rx:10; ry:10; }
+          .b-app { fill:#182036; stroke:#4361ee;}
+          .b-dns { fill:#2b1737; stroke:#7048e8;}
+          .b-net { fill:#0d3b3b; stroke:#00b4d8;}
+          .b-srv { fill:#2b2115; stroke:#ff9900;}
+          .lbl { fill:#e7ecf3; font: 700 12px sans-serif;}
+          .sub { fill:#8fa2cc; font: 400 10px sans-serif;}
+          .arr { stroke:#c6d0e0; stroke-width:2; fill:none;}
+          .arr-g { stroke:#2dc653; stroke-width:2; fill:none;}
+          .layer-tag { fill:#f7567c; font: 700 10px sans-serif; }
+        </style>
+
+        <!-- Client -->
+        <rect class="b b-app" x="30" y="30" width="150" height="70"/>
+        <text class="lbl" x="105" y="55" text-anchor="middle">Client (browser)</text>
+        <text class="sub" x="105" y="72" text-anchor="middle">https://google.com</text>
+        <text class="sub" x="105" y="88" text-anchor="middle">TLS + HTTP request</text>
+
+        <!-- DNS resolver -->
+        <rect class="b b-dns" x="230" y="30" width="150" height="70"/>
+        <text class="lbl" x="305" y="55" text-anchor="middle">Recursive Resolver</text>
+        <text class="sub" x="305" y="72" text-anchor="middle">8.8.8.8 · 1.1.1.1</text>
+        <text class="sub" x="305" y="88" text-anchor="middle">DNS/UDP:53</text>
+        <text class="layer-tag" x="305" y="20" text-anchor="middle">L7 · DNS</text>
+
+        <!-- Root/TLD/Authoritative -->
+        <rect class="b b-dns" x="430" y="30" width="180" height="70"/>
+        <text class="lbl" x="520" y="55" text-anchor="middle">Root → TLD → Authoritative</text>
+        <text class="sub" x="520" y="72" text-anchor="middle">A / AAAA record</text>
+        <text class="sub" x="520" y="88" text-anchor="middle">Answers: 142.250.190.14</text>
+
+        <!-- Public IP + TCP -->
+        <rect class="b b-net" x="660" y="30" width="140" height="70"/>
+        <text class="lbl" x="730" y="55" text-anchor="middle">Public IP</text>
+        <text class="sub" x="730" y="72" text-anchor="middle">142.250.190.14</text>
+        <text class="sub" x="730" y="88" text-anchor="middle">TCP :443</text>
+        <text class="layer-tag" x="730" y="20" text-anchor="middle">L3 · IP</text>
+
+        <!-- TCP + TLS -->
+        <rect class="b b-net" x="60" y="170" width="200" height="70"/>
+        <text class="lbl" x="160" y="195" text-anchor="middle">TCP 3-way handshake</text>
+        <text class="sub" x="160" y="212" text-anchor="middle">SYN → SYN/ACK → ACK</text>
+        <text class="sub" x="160" y="228" text-anchor="middle">headers include checksum</text>
+        <text class="layer-tag" x="160" y="160" text-anchor="middle">L4 · TCP</text>
+
+        <rect class="b b-net" x="290" y="170" width="200" height="70"/>
+        <text class="lbl" x="390" y="195" text-anchor="middle">TLS 1.3 handshake</text>
+        <text class="sub" x="390" y="212" text-anchor="middle">ClientHello · Cert · ECDHE</text>
+        <text class="sub" x="390" y="228" text-anchor="middle">1-RTT (or 0-RTT resume)</text>
+        <text class="layer-tag" x="390" y="160" text-anchor="middle">L6 · TLS</text>
+
+        <!-- Reverse Proxy / LB -->
+        <rect class="b b-srv" x="530" y="170" width="200" height="70"/>
+        <text class="lbl" x="630" y="195" text-anchor="middle">Reverse Proxy / L7 LB</text>
+        <text class="sub" x="630" y="212" text-anchor="middle">CloudFront · NGINX · ALB</text>
+        <text class="sub" x="630" y="228" text-anchor="middle">TLS termination · WAF · cache</text>
+        <text class="layer-tag" x="630" y="160" text-anchor="middle">L7 · Reverse Proxy</text>
+
+        <rect class="b b-srv" x="760" y="170" width="160" height="70"/>
+        <text class="lbl" x="840" y="195" text-anchor="middle">Backend fleet</text>
+        <text class="sub" x="840" y="212" text-anchor="middle">private IPs · 10.0.0.0/8</text>
+        <text class="sub" x="840" y="228" text-anchor="middle">ports 8080…</text>
+
+        <!-- HTTP request -->
+        <rect class="b b-app" x="60" y="310" width="820" height="60"/>
+        <text class="lbl" x="470" y="335" text-anchor="middle">HTTP/2 or HTTP/3 request over the TLS tunnel</text>
+        <text class="sub" x="470" y="352" text-anchor="middle">GET / HTTP/2 · Host: google.com · headers · optional body · idempotent</text>
+        <text class="layer-tag" x="470" y="300" text-anchor="middle">L7 · HTTP</text>
+
+        <!-- Forward proxy -->
+        <rect class="b b-dns" x="30" y="410" width="220" height="60"/>
+        <text class="lbl" x="140" y="435" text-anchor="middle">Forward Proxy (optional)</text>
+        <text class="sub" x="140" y="452" text-anchor="middle">Squid · corporate egress filter</text>
+
+        <rect class="b b-srv" x="300" y="410" width="620" height="60"/>
+        <text class="lbl" x="610" y="435" text-anchor="middle">Every hop verifies checksums · TLS integrity tags · TCP retransmits lost segments</text>
+        <text class="sub" x="610" y="452" text-anchor="middle">Integrity via CRC / TLS AEAD · Authenticity via digital signatures on the server certificate</text>
+
+        <!-- arrows -->
+        <line class="arr" x1="180" y1="60" x2="230" y2="60" marker-end="url(#ah2)"/>
+        <line class="arr" x1="380" y1="60" x2="430" y2="60" marker-end="url(#ah2)"/>
+        <line class="arr" x1="610" y1="60" x2="660" y2="60" marker-end="url(#ah2)"/>
+
+        <path class="arr-g" d="M105 100 C 105 150, 160 160, 160 170" marker-end="url(#ah2-g)"/>
+        <path class="arr-g" d="M260 205 L 290 205" marker-end="url(#ah2-g)"/>
+        <path class="arr-g" d="M490 205 L 530 205" marker-end="url(#ah2-g)"/>
+        <path class="arr-g" d="M730 205 L 760 205" marker-end="url(#ah2-g)"/>
+        <path class="arr-g" d="M730 100 C 730 130, 630 155, 630 170" marker-end="url(#ah2-g)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#4361ee"></span>Client &amp; app protocol</span>
+        <span><span class="dot" style="background:#7048e8"></span>DNS / proxy</span>
+        <span><span class="dot" style="background:#00b4d8"></span>Transport / TLS</span>
+        <span><span class="dot" style="background:#ff9900"></span>Server-side infra</span>
+        <span><span class="dot" style="background:#2dc653"></span>Request flow</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch one HTTPS request travel across all 7 layers</h2>
+    <p>This animation follows a single click on <em>google.com</em> as it walks the stack: DNS lookup → TCP handshake → TLS handshake → HTTP over the tunnel → reverse proxy → backend. Every step names the OSI layer it lives on.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 940 380" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="anim-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/></marker>
+        </defs>
+        <style>
+          .n-box { stroke-width:1.5; rx:10; ry:10;}
+          .n-lbl { fill:#e7ecf3; font: 700 12px sans-serif;}
+          .n-sub { fill:#8fa2cc; font: 400 10px sans-serif;}
+          .n-arr { stroke:#c6d0e0; stroke-width:2; fill:none;}
+          .n-app { fill:#182036; stroke:#4361ee;}
+          .n-dns { fill:#2b1737; stroke:#7048e8;}
+          .n-tcp { fill:#0d3b3b; stroke:#00b4d8;}
+          .n-tls { fill:#3a1f3a; stroke:#f7567c;}
+          .n-srv { fill:#2b2115; stroke:#ff9900;}
+          .n-back { fill:#152436; stroke:#2dc653;}
+        </style>
+
+        <rect id="n-client" class="n-box n-app" x="30" y="30" width="140" height="60"/>
+        <text class="n-lbl" x="100" y="55" text-anchor="middle">📱 Client</text>
+        <text class="n-sub" x="100" y="72" text-anchor="middle">taps google.com</text>
+
+        <rect id="n-dns" class="n-box n-dns" x="220" y="30" width="140" height="60"/>
+        <text class="n-lbl" x="290" y="55" text-anchor="middle">DNS Resolver</text>
+        <text class="n-sub" x="290" y="72" text-anchor="middle">UDP :53</text>
+
+        <rect id="n-auth" class="n-box n-dns" x="400" y="30" width="150" height="60"/>
+        <text class="n-lbl" x="475" y="55" text-anchor="middle">Authoritative NS</text>
+        <text class="n-sub" x="475" y="72" text-anchor="middle">A → 142.250.190.14</text>
+
+        <rect id="n-tcp" class="n-box n-tcp" x="30" y="140" width="140" height="60"/>
+        <text class="n-lbl" x="100" y="165" text-anchor="middle">TCP handshake</text>
+        <text class="n-sub" x="100" y="182" text-anchor="middle">SYN → SYN/ACK → ACK</text>
+
+        <rect id="n-tls" class="n-box n-tls" x="220" y="140" width="140" height="60"/>
+        <text class="n-lbl" x="290" y="165" text-anchor="middle">TLS 1.3</text>
+        <text class="n-sub" x="290" y="182" text-anchor="middle">ClientHello · Cert</text>
+
+        <rect id="n-http" class="n-box n-app" x="400" y="140" width="150" height="60"/>
+        <text class="n-lbl" x="475" y="165" text-anchor="middle">HTTP request</text>
+        <text class="n-sub" x="475" y="182" text-anchor="middle">GET / HTTP/2</text>
+
+        <rect id="n-rp" class="n-box n-srv" x="600" y="140" width="150" height="60"/>
+        <text class="n-lbl" x="675" y="165" text-anchor="middle">Reverse Proxy</text>
+        <text class="n-sub" x="675" y="182" text-anchor="middle">CloudFront / NGINX</text>
+
+        <rect id="n-be" class="n-box n-back" x="790" y="140" width="130" height="60"/>
+        <text class="n-lbl" x="855" y="165" text-anchor="middle">Backend</text>
+        <text class="n-sub" x="855" y="182" text-anchor="middle">10.0.5.12:8080</text>
+
+        <rect id="n-checksum" class="n-box n-back" x="220" y="270" width="500" height="60"/>
+        <text class="n-lbl" x="470" y="295" text-anchor="middle">Every hop checks the checksum + TLS auth tag</text>
+        <text class="n-sub" x="470" y="312" text-anchor="middle">TCP retransmits any lost segment · TLS drops any tampered record</text>
+
+        <!-- moving arrow indicator -->
+        <g id="arrow" class="a-hidden" data-anim>
+          <circle cx="0" cy="0" r="10" fill="#2dc653"/>
+        </g>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to walk the request across all 7 layers.</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        function place(x, y) {
+          const g = $('#arrow');
+          g.classList.remove('a-hidden');
+          g.setAttribute('transform', `translate(${x},${y})`);
+        }
+
+        const CFG = {
+          intro: 'Client → DNS → TCP → TLS → HTTP → Reverse Proxy → Backend, then a checksum recap.',
+          interval: 1700,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.remove('a-glow', 'a-dim');
+              el.removeAttribute('transform');
+            });
+            r.querySelectorAll('rect').forEach(el => el.classList.remove('a-glow'));
+            $('#arrow').classList.add('a-hidden');
+            $('#arrow').removeAttribute('transform');
+          },
+          steps: [
+            { caption: '① L7 · DNS lookup. Client asks the recursive resolver "what is the IP of google.com?" over UDP:53.',
+              apply: (r) => { $('#n-client').classList.add('a-glow'); $('#n-dns').classList.add('a-glow'); place(200, 60); } },
+            { caption: '② The resolver asks the authoritative nameserver, gets back an A record with 142.250.190.14.',
+              apply: (r) => { $('#n-auth').classList.add('a-glow'); place(380, 60); } },
+            { caption: '③ L3 · Client now has an IP address; time to build a connection. Packets get an IP header pointing at that IP.',
+              apply: (r) => { $('#n-auth').classList.remove('a-glow'); place(190, 100); } },
+            { caption: '④ L4 · TCP three-way handshake with 142.250.190.14 on port 443 — one round trip.',
+              apply: (r) => { $('#n-tcp').classList.add('a-glow'); place(100, 170); } },
+            { caption: '⑤ L6 · TLS 1.3 handshake — the server proves it owns the cert; both sides derive a shared session key.',
+              apply: (r) => { $('#n-tls').classList.add('a-glow'); place(290, 170); } },
+            { caption: '⑥ L7 · HTTP/2 GET request travels inside the TLS tunnel — headers, method, path, body.',
+              apply: (r) => { $('#n-http').classList.add('a-glow'); place(475, 170); } },
+            { caption: '⑦ The request lands on a reverse proxy — CloudFront / NGINX / ALB — which does TLS termination, WAF, and picks a backend.',
+              apply: (r) => { $('#n-rp').classList.add('a-glow'); place(675, 170); } },
+            { caption: '⑧ Backend on a private IP inside the VPC (10.0.5.12:8080) generates the response.',
+              apply: (r) => { $('#n-be').classList.add('a-glow'); place(855, 170); } },
+            { caption: '⑨ Every hop verified TCP + IP + TLS checksums. Any corrupted segment was silently retransmitted; any tampered TLS record was rejected.',
+              apply: (r) => { $('#n-checksum').classList.add('a-glow'); place(470, 300); } },
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive — all 7 topics</h2>
+
+    <h3 id="osi" class="topic-anchor">1. OSI Model — the seven-layer diagnostic tool</h3>
+    <p>The OSI model isn't a protocol; it's a <strong>diagnostic vocabulary</strong>. When production says "the network is broken", OSI turns it into a specific accusation: "the client got a TCP RST from the LB, so it's a Layer-4 problem", or "the TLS handshake fails with <em>unknown_ca</em>, so it's a Layer-6 issue". Real systems implement the tighter 4-layer TCP/IP model, but interviewers ask about the 7-layer OSI because its finer granularity makes it easier to point at exactly what broke.</p>
+    <p>Memorize the mnemonic <em>"Please Do Not Throw Sausage Pizza Away"</em> — Physical, Data-Link, Network, Transport, Session, Presentation, Application. When you're picking infrastructure, the key question is <strong>which layer does this thing operate at?</strong> An AWS Network Load Balancer is L4 (TCP-only, fast, protocol-agnostic). An AWS Application Load Balancer is L7 (understands HTTP, can route on Host / Path / cookies, can terminate TLS). A service mesh like Istio uses L4 for connection handling but adds L7 for mTLS and traffic policy.</p>
+    <p>Modern reality: layer boundaries have blurred. TLS lives ambiguously between L5 and L6. QUIC is technically L4 (transport) but bundles TLS 1.3 and reliability. gRPC is L7 but rides HTTP/2 which is also L7. Don't get stuck on where <em>exactly</em> a protocol lives; know why you're naming it.</p>
+
+    <h3 id="ip" class="topic-anchor">2. IP Address — routing coordinates, not identity</h3>
+    <p>An IP address is a location for a network interface, not an identity for a machine or a user. IPv4 uses 32 bits (~4.3 billion addresses, exhausted); IPv6 uses 128 bits with a common /64 subnet size. Real systems typically deploy <strong>dual-stack</strong>: both an A record (IPv4) and an AAAA record (IPv6) point at the same service. In cloud VPCs, the private ranges from RFC 1918 (10/8, 172.16/12, 192.168/16) are used internally, and a NAT gateway or LB is what makes the service reachable from the public internet.</p>
+    <p><strong>CIDR</strong> (Classless Inter-Domain Routing) is how modern networks slice address space. Notation is <code>network/prefix-length</code>: <code>10.0.0.0/16</code> means "the first 16 bits identify the network, the last 16 bits identify hosts" — 65 536 addresses. Routers use <strong>longest prefix match</strong>: if two routes cover the same destination, the more specific one (larger prefix) wins.</p>
+    <p><strong>NAT</strong> keeps IPv4 alive by rewriting private source IPs to a shared public IP as traffic leaves the network. It works beautifully for outbound, painfully for inbound (you need port forwarding or a load balancer). NAT is why the true client IP arrives in the <code>X-Forwarded-For</code> / <code>Forwarded</code> header rather than the TCP source field — and why rate-limiting purely by IP is dangerous: an entire CGNAT block might share one public address.</p>
+
+    <h3 id="tcp-udp" class="topic-anchor">3. TCP vs UDP — the "what if data is late or missing?" question</h3>
+    <p>The single best framing for TCP vs UDP is <em>"what should the application do when data is late, lost, duplicated, or reordered?"</em>. TCP answers: <em>"I'll hide all of that from you — you get an in-order byte stream and I retransmit whatever gets lost."</em> UDP answers: <em>"here's your datagram, good luck, deal with loss yourself."</em></p>
+    <p><strong>TCP</strong> opens with a three-way handshake (SYN → SYN-ACK → ACK), then guarantees ordered delivery, retransmits on loss, and applies flow control (receiver window) and congestion control (sender adjusts rate). Header is 20 bytes base. Suffers from <strong>head-of-line blocking</strong>: a lost segment freezes later bytes in the buffer even if they arrived. That's why HTTP/2 didn't solve everything and HTTP/3 moved to UDP.</p>
+    <p><strong>UDP</strong> has no handshake, no reordering, no retransmission, 8-byte header. Perfect for real-time media (a lost 20 ms of audio doesn't matter — a fresh frame is already on the way), DNS (a single query fits in one packet; if it's lost, ask again), and modern QUIC / HTTP/3.</p>
+    <p><strong>QUIC</strong> is the plot twist: built on UDP but adds TLS 1.3, retransmission, congestion control, and multiplexed streams — all in userspace. Its killer features are 1-RTT (or 0-RTT resumption) connection setup and <em>connection migration</em>, so your call survives a WiFi-to-cellular switch. When an interviewer asks "TCP or UDP?", the real 2026 answer is often "QUIC — because I want TCP-like reliability without TCP head-of-line blocking".</p>
+
+    <h3 id="http" class="topic-anchor">4. HTTP / HTTPS — the application-layer contract</h3>
+    <p>HTTP is a request-response protocol: method + target line, headers, optional body. It's <strong>stateless</strong> at the protocol level — every request should carry enough context to be understood on its own. Methods have two important properties: <strong>safe</strong> (no side-effect, e.g. GET, HEAD) and <strong>idempotent</strong> (calling twice = calling once, e.g. GET, PUT, DELETE). POST is neither safe nor idempotent by default, which is why retrying a POST needs an idempotency key.</p>
+    <p><strong>Status codes</strong> matter because they define the client's next move. 2xx = success. 3xx = follow the redirect / use cache. 4xx = don't retry blindly — you did something wrong. 5xx = server is broken; safe to retry with backoff, but only if the request is idempotent. The pair 502 vs 504 is a classic interview question: <em>502 Bad Gateway</em> means the reverse proxy got a broken response from upstream; <em>504 Gateway Timeout</em> means the reverse proxy didn't hear back in time.</p>
+    <p><strong>HTTPS</strong> wraps HTTP inside TLS. The TLS 1.3 handshake takes 1-RTT: ClientHello (SNI + ALPN + supported ciphers) → ServerHello + Certificate + ephemeral ECDHE key share → client verifies chain + derives keys → encrypted HTTP begins. Forward secrecy is guaranteed by ephemeral DH. TLS 1.3 also supports <strong>0-RTT</strong> for repeat connections, but replay-vulnerable, so use only for idempotent reads.</p>
+    <p><strong>HTTP versions:</strong> HTTP/1.1 is text-based, one request per TCP connection (or serialized with keep-alive) — a slow response blocks the connection. HTTP/2 is binary and multiplexes many streams over one TCP connection but still suffers <em>TCP-layer</em> head-of-line blocking. HTTP/3 runs over QUIC (UDP) with per-stream loss recovery and connection migration. HTTP/2 server push turned out to be a bad idea and is effectively deprecated.</p>
+
+    <h3 id="dns" class="topic-anchor">5. DNS — the internet's phonebook</h3>
+    <p>DNS translates human names into IP addresses. When you visit <em>google.com</em>, your OS asks a <strong>recursive resolver</strong> (your ISP's, or a public one like 8.8.8.8 or 1.1.1.1). If the resolver doesn't have a cached answer, it walks the hierarchy: <strong>root</strong> nameserver → <strong>TLD</strong> nameserver (for <em>.com</em>) → <strong>authoritative</strong> nameserver for <em>google.com</em>. The authoritative server hands back an A record (IPv4) or AAAA record (IPv6). The whole thing usually completes in tens of milliseconds because of caching.</p>
+    <p>Every DNS record has a <strong>TTL</strong> (time-to-live) telling downstream caches how long they may reuse the answer. Long TTLs are cheaper but make cutovers slow; short TTLs make cutovers fast but multiply query volume. Most production systems use 60-300 s TTLs for A records and much longer for stable records like MX or NS.</p>
+    <p>DNS's underrated superpower is <strong>traffic steering</strong>: geo-routing, latency-based routing, weighted round-robin, health-check-driven failover. AWS Route 53, Cloudflare, Akamai FastDNS all do this. Your <em>netflix.com</em> resolves to a completely different IP address depending on where you are — that's DNS deciding for you which CDN edge is closest.</p>
+    <p>DNS is stateless UDP by default (single-packet request/response on port 53). Large responses fall back to TCP:53. Modern deployments use <strong>DoT (DNS over TLS)</strong> or <strong>DoH (DNS over HTTPS)</strong> to hide queries from network operators. <strong>DNSSEC</strong> adds authenticity: authoritative servers sign records so resolvers can verify they weren't tampered with — but adoption is patchy.</p>
+
+    <h3 id="checksums" class="topic-anchor">6. Checksums — integrity, not authenticity</h3>
+    <p>A checksum is a compact value computed from a block of data; you recompute it on the receiver and compare. It's how Ethernet frames, IPv4 headers, TCP segments, and UDP datagrams detect accidental corruption on the wire. IPv6 dropped the IP-layer checksum because L2 and L4 already provide integrity, and doing it once at each layer is enough.</p>
+    <p>The key distinction to volunteer: <strong>checksums catch accidents; they do not stop adversaries</strong>. A CRC-32 is fast and hardware-accelerated (CRC-32C in particular) and reliably catches burst bit-flips — perfect for a lossy WiFi link. But if an attacker modifies the payload, they can also recompute a valid CRC. So a checksum gives you <em>integrity</em> ("did the bytes change accidentally?"), not <em>authenticity</em> ("did the right person send them?").</p>
+    <p>When authenticity matters, use a <strong>cryptographic hash</strong> (SHA-256, BLAKE3) as a fingerprint (Git object IDs, container image digests), or better, an <strong>HMAC</strong> (shared-secret keyed hash — great for webhook signatures) or a <strong>digital signature</strong> (asymmetric — anyone with the public key can verify, only the private-key holder can sign — great for signed package releases). MD5 and SHA-1 should not be used where security matters.</p>
+
+    <h3 id="proxy" class="topic-anchor">7. Proxy vs Reverse Proxy — same box, different side of the door</h3>
+    <p>The single-sentence definition: <strong>a forward proxy is on the client's side, a reverse proxy is on the server's side</strong>. Both sit between clients and servers, but they exist for opposite reasons. A forward proxy is your outbound gatekeeper — corporate egress filtering, content blocking, audit logging, or plain caching for many clients. A reverse proxy is the server's front door — one stable public endpoint that hides a farm of backends behind it.</p>
+    <p>Everything modern lives behind a reverse proxy. <strong>NGINX, HAProxy, Envoy, Caddy, Traefik</strong> for self-hosted; <strong>Cloudflare, Fastly, AWS ALB, GCP HTTPS LB, Azure App Gateway</strong> for managed. In a K8s cluster, an <em>ingress controller</em> is a reverse proxy. In a service mesh, every sidecar (Envoy under Istio, linkerd-proxy) is a reverse proxy for that pod. What do reverse proxies actually do? <strong>TLS termination</strong>, <strong>load balancing</strong>, <strong>routing</strong> (host/path/header), <strong>caching</strong>, <strong>compression</strong>, <strong>WAF</strong>, <strong>rate limiting</strong>, <strong>auth-token check</strong>, <strong>logging &amp; tracing</strong>.</p>
+    <p>The other big distinction: <strong>L4 vs L7 proxies</strong>. An L4 proxy (an NLB, or NGINX in <code>stream</code> mode) forwards TCP/UDP bytes without opening them — fast, protocol-agnostic, works for anything. An L7 proxy (an ALB, NGINX HTTP mode) reads HTTP requests, so it can route on host name, URL path, method, header, or JWT claim. You pay for that intelligence with latency and CPU.</p>
+    <p><strong>TLS handling has three modes</strong>: (a) <em>TLS termination</em> — proxy decrypts, gets full L7 visibility, re-encrypts (or not) to backend; (b) <em>TLS pass-through</em> — proxy forwards encrypted bytes, keeps end-to-end encryption but loses L7 features; (c) <em>TLS re-encryption</em> — decrypt, inspect, re-encrypt to backend — the safest common pattern. Also: when a proxy is in front, the backend sees the proxy's IP as the source. Preserve the true client identity in <code>X-Forwarded-For</code> and only trust that header from proxies you control.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms hiding inside</h2>
+    <p>Networking looks like a plumbing topic, but every layer runs an algorithm. Naming them is what turns "I've read about it" into "I understand it".</p>
+    <table>
+      <tr><th>Where it lives</th><th>DS / algorithm</th><th>Why</th><th>Complexity</th></tr>
+      <tr><td>Router forwarding table</td><td><strong>Trie</strong> (longest prefix match)</td><td>Route lookup on 32-bit IPv4 (or 128-bit IPv6) prefixes.</td><td>O(k) — k = 32 or 128</td></tr>
+      <tr><td>DNS resolver cache</td><td><strong>Hash map</strong> keyed by <em>(name, type)</em> + <strong>min-heap</strong> for TTL expiry</td><td>Constant-time answer lookup; heap drops entries as TTLs pass.</td><td>O(1) lookup, O(log N) expire</td></tr>
+      <tr><td>TCP retransmit</td><td><strong>Sliding window</strong> + selective ACK bitmap</td><td>Track in-flight bytes; retransmit only the missing ones.</td><td>O(window)</td></tr>
+      <tr><td>TCP congestion control</td><td><strong>AIMD</strong> (Reno) / <strong>BBR</strong> model of bandwidth × RTT</td><td>Additive-increase, multiplicative-decrease finds the pipe size.</td><td>O(1) per ACK</td></tr>
+      <tr><td>TLS handshake</td><td><strong>ECDHE</strong> key exchange (elliptic-curve Diffie-Hellman)</td><td>Ephemeral shared secret gives forward secrecy.</td><td>O(1) crypto ops</td></tr>
+      <tr><td>Load balancer picking a backend</td><td><strong>Consistent hashing</strong> ring (for session stickiness) or <strong>Power-of-Two-Choices</strong> for load-aware</td><td>Client always maps to same backend without full re-hash on membership change.</td><td>O(log N)</td></tr>
+      <tr><td>Rate limiter at reverse proxy</td><td><strong>Token bucket</strong> per client IP / API key</td><td>Cheap, allows bursts up to bucket capacity.</td><td>O(1) per request</td></tr>
+      <tr><td>HTTP cache freshness</td><td><strong>LRU</strong> + <strong>ETag</strong> comparison</td><td>Evict least-recently-used; return 304 if ETag matches.</td><td>O(1)</td></tr>
+      <tr><td>Checksum (TCP/IP)</td><td><strong>One's-complement 16-bit sum</strong></td><td>Cheap, hardware-friendly; detects most bit errors.</td><td>O(n)</td></tr>
+      <tr><td>Cryptographic hash</td><td><strong>SHA-256 / BLAKE3</strong> (Merkle-Damgård / tree)</td><td>Collision-resistant fingerprint of arbitrary bytes.</td><td>O(n)</td></tr>
+      <tr><td>HMAC signing</td><td><strong>Keyed hash</strong> over payload</td><td>Proves the sender knew the shared secret.</td><td>O(n)</td></tr>
+      <tr><td>WAF / L7 routing</td><td><strong>Aho-Corasick / regex FSM</strong> over URL + headers</td><td>Match many rules against every request in one pass.</td><td>O(n + matches)</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the seven concepts to AWS</h2>
+    <p>An interviewer will want you to name concrete AWS services and defend the choice. This is the mapping to talk through.</p>
+    <table>
+      <tr><th>Concept</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>OSI L3/L4 networking</td><td>VPC + subnets + route tables + NACLs</td><td>Isolated CIDR block; NACLs are L3/L4 packet filters, Security Groups are stateful L4.</td></tr>
+      <tr><td>IP address / CIDR</td><td>VPC CIDR (typ. <code>10.0.0.0/16</code>) + subnets + Elastic IPs</td><td>10/16 fits ~65k hosts; public-facing services get an Elastic IP or ALB DNS name.</td></tr>
+      <tr><td>NAT for private subnets</td><td>NAT Gateway</td><td>Managed source-NAT for outbound internet from private subnets; billed per GB.</td></tr>
+      <tr><td>L4 proxy (TCP/UDP)</td><td>Network Load Balancer (NLB)</td><td>Ultra-low latency, protocol-agnostic, preserves source IP; used for gRPC/TCP/UDP.</td></tr>
+      <tr><td>L7 reverse proxy</td><td>Application Load Balancer (ALB) + CloudFront</td><td>Host/path routing, cookie stickiness, WAF, TLS termination, HTTP/2/3.</td></tr>
+      <tr><td>DNS</td><td>Route 53</td><td>Authoritative DNS with latency-based, geo, weighted, and failover routing policies.</td></tr>
+      <tr><td>DNS inside VPC</td><td>Route 53 Resolver + PrivateHostedZones</td><td>Internal-only resolution; hybrid resolution to on-prem via inbound/outbound endpoints.</td></tr>
+      <tr><td>HTTPS certs</td><td>AWS Certificate Manager (ACM)</td><td>Free public certs, auto-renewed; attach to ALB / CloudFront / API Gateway.</td></tr>
+      <tr><td>Forward proxy for egress</td><td>NAT Gateway + optional Network Firewall / third-party proxy</td><td>Egress control, DNS-based blocking, TLS inspection.</td></tr>
+      <tr><td>CDN reverse proxy at edge</td><td>CloudFront</td><td>Global anycast IPs, edge TLS termination, HTTP/3 (QUIC) support, Lambda@Edge.</td></tr>
+      <tr><td>WAF at L7</td><td>AWS WAF (in front of CloudFront/ALB/API Gateway)</td><td>Rule engine for OWASP Top 10, geo blocks, rate rules, bot control.</td></tr>
+      <tr><td>Checksum / object integrity</td><td>S3 (SHA-256 checksums), Signature v4</td><td>S3 verifies uploads with configurable checksum algorithms; SigV4 signs every request.</td></tr>
+      <tr><td>DDoS protection</td><td>Shield Standard/Advanced</td><td>Anycast + scrubbing; L3/L4 defence for everything behind CloudFront/Route 53.</td></tr>
+    </table>
+    <p><strong>Deployment shape:</strong> a public-facing service typically lives as <em>Route 53</em> → <em>CloudFront</em> (edge L7 proxy) → <em>ALB</em> in the VPC (L7 LB) → <em>ECS/EKS/Lambda</em> in private subnets. Route 53 handles DNS + failover, CloudFront terminates TLS at the edge and caches, ALB routes on host/path to services, and NAT Gateway lets private subnets reach out for updates without giving them public IPs.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>Three of the most testable pieces: <strong>parsing a CIDR</strong> and checking whether an IP is inside it, computing the classic <strong>TCP/IP one's-complement 16-bit checksum</strong>, and signing/verifying an outgoing webhook with an <strong>HMAC-SHA256</strong> — exactly what production reverse proxies do to prove authenticity end-to-end.</p>
+
+<pre><code><span class="cmt">// ---- 1) CIDR containment check ---------------------------------------
+// "Is 10.0.5.42 inside 10.0.0.0/16?"  Used by IP allow-lists / NACL rules.</span>
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> <span class="typ">Cidr</span>
+{
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">bool</span> <span class="fn">Contains</span>(<span class="kw">string</span> cidr, <span class="kw">string</span> ip)
+    {
+        <span class="kw">var</span> parts = cidr.Split(<span class="str">'/'</span>);
+        <span class="kw">uint</span> network = <span class="fn">Ip4ToUint</span>(parts[<span class="str">0</span>]);
+        <span class="kw">int</span> prefix   = <span class="kw">int</span>.Parse(parts[<span class="str">1</span>]);
+        <span class="kw">uint</span> mask    = prefix == <span class="str">0</span> ? <span class="str">0u</span> : <span class="str">0xFFFFFFFFu</span> &lt;&lt; (<span class="str">32</span> - prefix);
+        <span class="kw">return</span> (<span class="fn">Ip4ToUint</span>(ip) &amp; mask) == (network &amp; mask);
+    }
+
+    <span class="kw">private</span> <span class="kw">static</span> <span class="kw">uint</span> <span class="fn">Ip4ToUint</span>(<span class="kw">string</span> s)
+    {
+        <span class="kw">var</span> o = s.Split(<span class="str">'.'</span>);
+        <span class="kw">return</span> ((<span class="kw">uint</span>)<span class="kw">byte</span>.Parse(o[<span class="str">0</span>]) &lt;&lt; <span class="str">24</span>)
+             | ((<span class="kw">uint</span>)<span class="kw">byte</span>.Parse(o[<span class="str">1</span>]) &lt;&lt; <span class="str">16</span>)
+             | ((<span class="kw">uint</span>)<span class="kw">byte</span>.Parse(o[<span class="str">2</span>]) &lt;&lt;  <span class="str">8</span>)
+             |  (<span class="kw">uint</span>)<span class="kw">byte</span>.Parse(o[<span class="str">3</span>]);
+    }
+}
+
+<span class="cmt">// ---- 2) Classic TCP/IP 16-bit one's-complement checksum -------------
+// Same algorithm used in IPv4 / TCP / UDP headers. Detects accidental
+// bit flips, NOT tampering (no key involved).</span>
+<span class="kw">public</span> <span class="kw">static</span> <span class="kw">class</span> <span class="typ">InetChecksum</span>
+{
+    <span class="kw">public</span> <span class="kw">static</span> <span class="kw">ushort</span> <span class="fn">Compute</span>(<span class="typ">ReadOnlySpan</span>&lt;<span class="kw">byte</span>&gt; data)
+    {
+        <span class="kw">uint</span> sum = <span class="str">0</span>;
+        <span class="kw">int</span> i = <span class="str">0</span>;
+        <span class="kw">for</span> (; i + <span class="str">1</span> &lt; data.Length; i += <span class="str">2</span>)
+            sum += (<span class="kw">uint</span>)((data[i] &lt;&lt; <span class="str">8</span>) | data[i + <span class="str">1</span>]);
+        <span class="kw">if</span> (i &lt; data.Length) sum += (<span class="kw">uint</span>)(data[i] &lt;&lt; <span class="str">8</span>);   <span class="cmt">// odd length pad</span>
+        <span class="kw">while</span> ((sum &gt;&gt; <span class="str">16</span>) != <span class="str">0</span>) sum = (sum &amp; <span class="str">0xFFFF</span>) + (sum &gt;&gt; <span class="str">16</span>);
+        <span class="kw">return</span> (<span class="kw">ushort</span>)~sum;
+    }
+}
+
+<span class="cmt">// ---- 3) HMAC-SHA256 webhook signing ---------------------------------
+// Reverse-proxy / API gateway signs every outgoing webhook so the
+// receiver can prove it wasn't tampered with AND came from us.</span>
+<span class="kw">using</span> System.Security.Cryptography;
+<span class="kw">using</span> System.Text;
+
+<span class="kw">public</span> <span class="kw">sealed</span> <span class="kw">class</span> <span class="typ">WebhookSigner</span>
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">byte</span>[] _key;
+    <span class="kw">public</span> <span class="fn">WebhookSigner</span>(<span class="kw">string</span> secret) =&gt; _key = <span class="typ">Encoding</span>.UTF8.GetBytes(secret);
+
+    <span class="kw">public</span> <span class="kw">string</span> <span class="fn">Sign</span>(<span class="kw">string</span> body, <span class="kw">long</span> unixTs)
+    {
+        <span class="kw">var</span> payload = <span class="typ">Encoding</span>.UTF8.GetBytes(<span class="str">$"{unixTs}.{body}"</span>);
+        <span class="kw">using</span> <span class="kw">var</span> h = <span class="kw">new</span> <span class="typ">HMACSHA256</span>(_key);
+        <span class="kw">var</span> mac = h.ComputeHash(payload);
+        <span class="kw">return</span> <span class="str">$"t={unixTs},v1={</span><span class="typ">Convert</span>.ToHexString(mac).ToLowerInvariant()<span class="str">}"</span>;
+    }
+
+    <span class="kw">public</span> <span class="kw">bool</span> <span class="fn">Verify</span>(<span class="kw">string</span> body, <span class="kw">string</span> header, <span class="typ">TimeSpan</span> tolerance)
+    {
+        <span class="kw">var</span> parts = header.Split(<span class="str">','</span>);
+        <span class="kw">long</span> ts = <span class="kw">long</span>.Parse(parts[<span class="str">0</span>][<span class="str">2</span>..]);
+        <span class="kw">string</span> given = parts[<span class="str">1</span>][<span class="str">3</span>..];
+        <span class="kw">if</span> (<span class="typ">Math</span>.Abs(<span class="typ">DateTimeOffset</span>.UtcNow.ToUnixTimeSeconds() - ts)
+            &gt; tolerance.TotalSeconds) <span class="kw">return</span> <span class="kw">false</span>;                          <span class="cmt">// replay window</span>
+
+        <span class="kw">using</span> <span class="kw">var</span> h = <span class="kw">new</span> <span class="typ">HMACSHA256</span>(_key);
+        <span class="kw">var</span> expected = h.ComputeHash(<span class="typ">Encoding</span>.UTF8.GetBytes(<span class="str">$"{ts}.{body}"</span>));
+        <span class="kw">return</span> <span class="typ">CryptographicOperations</span>.FixedTimeEquals(          <span class="cmt">// constant-time compare</span>
+            expected, <span class="typ">Convert</span>.FromHexString(given));
+    }
+}
+</code></pre>
+    <p>In production ASP.NET Core, CIDR checks are usually delegated to <code>System.Net.IPNetwork</code> (available in .NET 8+), the TCP checksum lives inside the kernel and you rarely compute it in userspace, and the HMAC pattern above is exactly what Stripe, GitHub, Slack, and AWS SNS use for their signed webhooks. Always constant-time-compare MACs (<code>CryptographicOperations.FixedTimeEquals</code>) — a naive <code>==</code> is a timing-side-channel bug.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs &amp; likely follow-ups</h2>
+
+    <h3>Which trade-off dominates each topic</h3>
+    <ul>
+      <li><strong>TCP vs UDP:</strong> reliability vs latency. TCP hides loss at the cost of head-of-line blocking; UDP exposes loss but never freezes a stream.</li>
+      <li><strong>HTTP/2 vs HTTP/3:</strong> HTTP/3 wins under packet loss and network changes; HTTP/2 wins where UDP is blocked (some corporate firewalls).</li>
+      <li><strong>L4 vs L7 load balancer:</strong> speed &amp; protocol-agnosticism vs routing intelligence. NLB for gRPC/TCP passthrough, ALB for host/path routing.</li>
+      <li><strong>DNS TTL length:</strong> short = agile failover, more query load; long = cheap, slow to change. 60-300 s is the modern default for A records.</li>
+      <li><strong>TLS termination at edge vs backend:</strong> edge = simpler certs and better L7 features; backend = end-to-end encryption but harder cert management.</li>
+      <li><strong>CRC vs cryptographic hash:</strong> speed vs tamper resistance. CRC for accidental bit-flips; SHA-256/HMAC for anything an attacker might touch.</li>
+    </ul>
+
+    <h3>Common interviewer follow-ups</h3>
+
+    <div class="qa"><div class="q">"Why does DNS use UDP instead of TCP?"</div>
+      <div class="a">A typical DNS query and response each fit in one packet (~50–100 bytes), so the ~1 RTT TCP handshake would be pure overhead. UDP is 8-byte header and connectionless — if a query is lost, the resolver just asks again. DNS falls back to TCP when the response is larger than 512 bytes (zone transfers, DNSSEC-signed records).</div>
+    </div>
+
+    <div class="qa"><div class="q">"What's the difference between 502 and 504?"</div>
+      <div class="a">Both come from a reverse proxy. 502 <em>Bad Gateway</em> = the proxy contacted the upstream and got a broken/invalid response back (e.g., connection reset, malformed HTTP). 504 <em>Gateway Timeout</em> = the proxy contacted the upstream and never heard back within the timeout. The debugging move is opposite: 502 → check upstream logs / crash; 504 → check upstream load / slow downstream / bad timeout config.</div>
+    </div>
+
+    <div class="qa"><div class="q">"Would you use an NLB or an ALB for your service?"</div>
+      <div class="a">NLB (L4) when I want minimum latency, protocol-agnostic passthrough, preserved source IP, or when running non-HTTP protocols like raw TCP, gRPC-over-h2c, or MQTT. ALB (L7) when I need host- or path-based routing, cookie stickiness, WAF, or TLS termination with modern cipher suites. In a modern web service the answer is usually "CloudFront in front of ALB in front of ECS" — you get edge caching plus L7 routing plus health checks.</div>
+    </div>
+
+    <div class="qa"><div class="q">"How would you prevent tampering on a webhook?"</div>
+      <div class="a">HMAC-SHA256 the payload with a shared secret, put the tag plus a timestamp in a header, and validate on the receiver with a constant-time compare and a small replay window (say 5 minutes). Never rely on the checksum alone — a plain checksum has no key, so an attacker can recompute it after modifying the payload.</div>
+    </div>
+
+    <div class="qa"><div class="q">"You have a service that sees traffic drop after a deployment even though the app is fine. First guess?"</div>
+      <div class="a">Something in the path is misclassifying traffic. Walk the stack: L3 — did the security group / NACL change? L4 — is the LB target-group health check failing on the new pods (wrong port / path / expected status)? L6 — did TLS cert renew but a client bundle now rejects it? L7 — did the ingress route on Host header stop matching? The OSI model is the checklist.</div>
+    </div>
+
+    <div class="qa"><div class="q">"Client IP shows up as the load balancer's IP in the backend logs — why?"</div>
+      <div class="a">The reverse proxy terminated the client TCP connection and opened a new one to the backend, so the backend sees the proxy's IP. The true client IP is forwarded in the <code>X-Forwarded-For</code> header (or <code>Forwarded</code>, or via Proxy Protocol at L4). Only trust that header from proxies you control — anyone can send it.</div>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch">"Networking is a stack of seven decisions per request. DNS to resolve the name, IP + CIDR to route the packet, TCP or UDP to decide what happens on loss, TLS to encrypt, HTTP to structure the conversation, a reverse proxy at the server's front door to load-balance and terminate TLS, and checksums at every hop to catch accidental corruption. Ninety percent of prod incidents live at L3, L4, or L7 — naming the layer is half the fix."</p>
+    <ul>
+      <li><strong>OSI in one line:</strong> Please Do Not Throw Sausage Pizza Away — Physical, Data-Link, Network, Transport, Session, Presentation, Application.</li>
+      <li><strong>TCP vs UDP:</strong> "what should the app do when data is late or lost?" — TCP hides it, UDP exposes it. QUIC (UDP + TLS + reliability) is the modern default.</li>
+      <li><strong>HTTP methods:</strong> GET/HEAD safe &amp; idempotent; PUT/DELETE idempotent; POST is neither → needs idempotency keys.</li>
+      <li><strong>Status codes:</strong> 2xx OK, 3xx redirect, 4xx you broke it, 5xx we broke it. 502 = broken upstream response, 504 = upstream timeout.</li>
+      <li><strong>DNS:</strong> UDP:53, TTL controls agility vs load. Route 53 does latency-based / geo / weighted / failover routing.</li>
+      <li><strong>CIDR:</strong> <code>10.0.0.0/16</code> = 65k addresses, prefix bits identify the network. Routers use longest prefix match.</li>
+      <li><strong>Checksums:</strong> integrity ≠ authenticity. CRC / TCP checksum catches accidents. HMAC / signatures catch attackers.</li>
+      <li><strong>Reverse proxy:</strong> one endpoint hiding a fleet — TLS termination, L7 routing, WAF, caching, rate limiting.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li>algomaster.io — <em>OSI Model (Learn System Design)</em>. <a href="https://algomaster.io/learn/system-design/osi">algomaster.io/learn/system-design/osi</a></li>
+      <li>algomaster.io — <em>TCP vs UDP</em>. <a href="https://algomaster.io/learn/system-design/tcp-vs-udp">algomaster.io/learn/system-design/tcp-vs-udp</a></li>
+      <li>algomaster.io — <em>HTTP / HTTPS</em>. <a href="https://algomaster.io/learn/system-design/http-https">algomaster.io/learn/system-design/http-https</a></li>
+      <li>algomaster.io — <em>IP Address</em>. <a href="https://algomaster.io/learn/system-design/ip-address">algomaster.io/learn/system-design/ip-address</a></li>
+      <li>algomaster.io — <em>Checksums</em>. <a href="https://algomaster.io/learn/system-design/checksums">algomaster.io/learn/system-design/checksums</a></li>
+      <li>algomaster.io — <em>Proxy vs Reverse Proxy</em>. <a href="https://algomaster.io/learn/system-design/proxy-vs-reverse-proxy">algomaster.io/learn/system-design/proxy-vs-reverse-proxy</a></li>
+      <li>RFC 793 (TCP), RFC 768 (UDP), RFC 9110 (HTTP semantics), RFC 8446 (TLS 1.3), RFC 1918 (private IP), RFC 9000 (QUIC).</li>
+      <li>AWS docs — NLB vs ALB, Route 53 routing policies, CloudFront features.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

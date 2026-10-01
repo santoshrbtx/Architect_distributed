@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>URL Shortener — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: #c6d0e0; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); margin-top: 4px; }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  .pill { display:inline-block; background:#fff; border:1px solid var(--line); border-radius:999px; padding:4px 12px; margin:3px 4px 3px 0; font-size:.85rem; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>🔗 URL Shortener</h1>
+    <p>Turn a long, ugly link into a tiny one like <strong>bit.ly/3xY9aZ</strong> — and serve the redirect in milliseconds, billions of times a day.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building & where it's used</h2>
+    <p>A <strong>URL shortener</strong> is a service that takes a long URL — say a 200-character product link with tracking parameters — and returns a compact alias such as <code>https://bit.ly/3xY9aZ</code>. When anyone visits the short link, the service looks up the original URL and issues an HTTP redirect so the browser lands on the real page. It sounds trivial, but it's a favourite interview question precisely because it hides almost every distributed-systems concept behind a one-sentence problem statement: unique ID generation, read-heavy caching, horizontal sharding, the consistency-vs-availability trade-off, and global low-latency delivery.</p>
+    <p>You use one every day. <strong>Bit.ly</strong> and <strong>TinyURL</strong> are the classic public shorteners; <strong>t.co</strong> is Twitter/X's internal shortener that wraps every link in a tweet; <strong>lnkd.in</strong> (LinkedIn), <strong>fb.me</strong> (Facebook), <strong>youtu.be</strong> (YouTube), and <strong>g.co</strong> (Google) are first-party shorteners. Companies build them for very practical reasons:</p>
+    <ul>
+      <li><strong>Shareability</strong> — short links fit in SMS, tweets, QR codes, and printed ads where character count or pixels matter.</li>
+      <li><strong>Analytics &amp; attribution</strong> — every click can be logged, so marketers see geography, device, referrer, and campaign performance in real time.</li>
+      <li><strong>Link management</strong> — the destination behind a short code can be changed later, links can expire, and malicious destinations can be revoked centrally.</li>
+      <li><strong>Safety &amp; branding</strong> — wrapping outbound links (like t.co) lets a platform scan for spam/malware and present a branded domain.</li>
+    </ul>
+    <p><em>Say this in the interview:</em> "It's a read-heavy, write-light key-value lookup at global scale where the hard parts are generating collision-free short keys and serving redirects in single-digit milliseconds."</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The tiny sticker with a code, and the giant address book</h2>
+    <p>You've probably tried to text a friend a link to a product on Amazon and watched a horrifying <strong>250-character monster</strong> tumble into the chat — full of question marks, equals signs, and random numbers. Nobody wants to type or share that. What you really want is something like <code>bit.ly/xyz</code> — six letters, easy to say out loud, fits on a business card. That's the whole job of a URL shortener.</p>
+    <p>Think of it like this. Imagine you're organising a wedding and you print out little <strong>sticker codes</strong> to hand to guests — "Table&nbsp;7", "Table&nbsp;14". Each sticker is short and cheap, but the code by itself doesn't tell you anything. It only makes sense because there's a <strong>huge printed address book</strong> at the entrance saying "Table 7 → Aunt Sarah's family in the red van, seated left of the DJ." The sticker is the short link; the address book is the shortener's database. When someone shows up with a sticker, the greeter flips to that entry and points them to the real destination.</p>
+    <p>You use these every day. When you click a link in a tweet, that <code>t.co/abc</code> you glimpsed is a sticker Twitter attached — it looks it up in <em>its</em> address book and quietly redirects you to the real article. Bit.ly, TinyURL, LinkedIn's <code>lnkd.in</code>, YouTube's <code>youtu.be</code> — all doing the same trick. The reason companies bother: short links fit in text messages, look tidy on posters, print nicely on receipts, and — bonus — the sticker can be counted every time someone touches it, so marketers can see which poster actually worked.</p>
+    <p>The hard part? <strong>Making sure no two stickers ever collide</strong>, and answering "which sticker is this?" in the blink of an eye when a billion people are asking at once. That's what all the clever machinery underneath is quietly solving.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements & scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+    <p>Always split requirements into <strong>functional</strong> (what it does) and <strong>non-functional</strong> (how well it must do it). Interviewers grade you on volunteering the non-functional ones and the capacity math without being asked.</p>
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Given a long URL, return a unique short URL.</li>
+      <li>Given a short URL, redirect (HTTP 301/302) to the original long URL.</li>
+      <li>Optional: custom aliases (vanity links), link expiration (TTL), and per-link click analytics.</li>
+    </ul>
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>High availability</strong> — if the redirect path is down, every link everywhere breaks. Target 99.9%+.</li>
+      <li><strong>Low latency</strong> — redirects must feel instant (&lt; ~10&nbsp;ms server-side, single-digit ms from cache/edge).</li>
+      <li><strong>Scalable &amp; read-heavy</strong> — reads dominate writes by ~100:1.</li>
+      <li><strong>Short codes must be unpredictable-ish and unique</strong> — no collisions, hard to enumerate.</li>
+    </ul>
+    <h3>Capacity estimation (the numbers to quote)</h3>
+    <p>Assume <strong>100 million new URLs per month</strong> with a <strong>100:1 read:write ratio</strong> — a common interview setup. The math falls out from there:</p>
+    <table>
+      <tr><th>Metric</th><th>Estimate</th><th>How you derive it</th></tr>
+      <tr><td>New URLs (writes)</td><td>100M / month</td><td>given assumption</td></tr>
+      <tr><td>Write QPS</td><td>~40 writes/sec</td><td>100M ÷ (30 × 24 × 3600 ≈ 2.5M sec)</td></tr>
+      <tr><td>Read QPS</td><td>~4,000 reads/sec</td><td>40 × 100 (read:write ratio)</td></tr>
+      <tr><td>Storage / record</td><td>~500 bytes</td><td>short code + long URL + metadata + timestamps</td></tr>
+      <tr><td>Storage / year</td><td>~600 GB/yr (~3 TB over 5 yr)</td><td>1.2B records/yr × 500 B</td></tr>
+      <tr><td>Read bandwidth</td><td>~2 MB/sec</td><td>4,000 reads/sec × 500 B</td></tr>
+      <tr><td>Cache memory (hot 20%)</td><td>~35 GB/day</td><td>cache the 20% of links driving 80% of reads</td></tr>
+      <tr><td>Key length</td><td>7 chars (Base62)</td><td>62⁷ ≈ 3.5 trillion combinations</td></tr>
+    </table>
+    <p><em>The punchline to say out loud:</em> "Storage is small and writes are trivial — only ~40/sec. The system is utterly dominated by reads, so my design is really a <strong>distributed cache in front of a key-value store</strong>, optimised for redirect latency." Note: the canonical <em>system-design-primer</em> pastebin variant uses smaller numbers (~4 writes/sec, ~40 reads/sec, 360M links over 3 years); the shape is identical — pick a scale and stay consistent.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>There are two distinct paths and you should draw them separately. The <strong>write path</strong> (create a short link) is rare and can afford a little work: a request hits the load balancer, lands on a stateless write service, which obtains a unique ID, Base62-encodes it into a 7-char code, and persists the <code>code → long URL</code> mapping in the database. The <strong>read path</strong> (resolve &amp; redirect) is the hot path and must be brutally fast: the request hits a CDN/edge, then the load balancer, then a stateless read service that checks <strong>Redis cache first</strong> and only falls through to the database on a miss, returning a <code>301/302</code> redirect. Click events are emitted asynchronously to a queue so analytics never slow the redirect.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 860 430" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif" font-size="13">
+        <defs>
+          <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#7aa2f7"/>
+          </marker>
+          <marker id="arrA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#f4a259"/>
+          </marker>
+          <marker id="arrG" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#2dc653"/>
+          </marker>
+        </defs>
+        <!-- boxes -->
+        <g>
+          <rect x="20" y="180" rx="10" width="110" height="56" fill="#1b2940" stroke="#4361ee"/>
+          <text x="75" y="205" fill="#e7ecf3" text-anchor="middle">Client /</text>
+          <text x="75" y="222" fill="#e7ecf3" text-anchor="middle">Browser</text>
+
+          <rect x="170" y="180" rx="10" width="110" height="56" fill="#1b2940" stroke="#7048e8"/>
+          <text x="225" y="205" fill="#e7ecf3" text-anchor="middle">CDN /</text>
+          <text x="225" y="222" fill="#e7ecf3" text-anchor="middle">Load Balancer</text>
+
+          <rect x="330" y="95" rx="10" width="130" height="56" fill="#1b2940" stroke="#f7567c"/>
+          <text x="395" y="120" fill="#e7ecf3" text-anchor="middle">Write Service</text>
+          <text x="395" y="137" fill="#9aa7bd" text-anchor="middle" font-size="11">POST /shorten</text>
+
+          <rect x="330" y="265" rx="10" width="130" height="56" fill="#1b2940" stroke="#4361ee"/>
+          <text x="395" y="290" fill="#e7ecf3" text-anchor="middle">Read Service</text>
+          <text x="395" y="307" fill="#9aa7bd" text-anchor="middle" font-size="11">GET /{code}</text>
+
+          <rect x="520" y="30" rx="10" width="120" height="50" fill="#1b2940" stroke="#2dc653"/>
+          <text x="580" y="60" fill="#e7ecf3" text-anchor="middle">ID / Key Gen</text>
+
+          <rect x="520" y="265" rx="10" width="120" height="50" fill="#1b2940" stroke="#ff9900"/>
+          <text x="580" y="295" fill="#e7ecf3" text-anchor="middle">Redis Cache</text>
+
+          <rect x="700" y="170" rx="10" width="130" height="56" fill="#1b2940" stroke="#4361ee"/>
+          <text x="765" y="195" fill="#e7ecf3" text-anchor="middle">Key-Value DB</text>
+          <text x="765" y="212" fill="#9aa7bd" text-anchor="middle" font-size="11">(sharded)</text>
+
+          <rect x="520" y="350" rx="10" width="120" height="50" fill="#1b2940" stroke="#f4a259"/>
+          <text x="580" y="380" fill="#e7ecf3" text-anchor="middle">Queue → Analytics</text>
+        </g>
+        <!-- request flow (blue) -->
+        <line x1="130" y1="208" x2="168" y2="208" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="280" y1="195" x2="328" y2="135" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="280" y1="220" x2="328" y2="290" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="460" y1="115" x2="518" y2="70" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="460" y1="120" x2="698" y2="190" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="460" y1="290" x2="518" y2="290" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="640" y1="285" x2="698" y2="205" stroke="#7aa2f7" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+        <!-- async flow (amber) -->
+        <line x1="420" y1="321" x2="540" y2="350" stroke="#f4a259" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrA)"/>
+        <text x="430" y="345" fill="#f4a259" font-size="11">click event</text>
+        <text x="500" y="255" fill="#ff9900" font-size="11">cache hit ✓</text>
+        <text x="650" y="250" fill="#9aa7bd" font-size="11">miss → DB</text>
+      </svg>
+      <div class="legend">
+        <span><i class="dot" style="background:#7aa2f7"></i> Synchronous request path</span>
+        <span><i class="dot" style="background:#f4a259"></i> Async (fire-and-forget) analytics</span>
+        <span><i class="dot" style="background:#ff9900"></i> Cache</span>
+      </div>
+    </div>
+    <p><strong>Walk the interviewer through the redirect:</strong> client requests <code>/3xY9aZ</code> → edge/LB routes to a read service → Redis lookup → on hit, return <code>301</code> immediately; on miss, read the DB, populate the cache, then redirect → fire a click event onto the queue and return. That's the whole hot path, and it's why latency stays in single-digit milliseconds.</p>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+    <h3>1. Short-code generation (the heart of the design)</h3>
+    <p>This is what the interviewer is really testing. There are three credible strategies, and you should name the trade-offs:</p>
+    <ul>
+      <li><strong>Hash + truncate (MD5/SHA → Base62, take 7 chars):</strong> hash the long URL (plus a salt like timestamp), Base62-encode, and keep the first 7 characters. Simple and stateless, but <em>can collide</em>, so you must check the DB and retry on collision, and identical URLs naturally map to the same code.</li>
+      <li><strong>Counter + Base62 (recommended):</strong> keep a globally unique, monotonically increasing 64-bit counter; Base62-encode the number to get the code. <em>Zero collisions by construction</em> and O(1) generation. The challenge becomes distributing the counter — solved with a <strong>Key Generation Service (KGS)</strong> that hands out ranges/tickets to each app server, or a <strong>Snowflake-style</strong> ID (timestamp + machine-id + sequence).</li>
+      <li><strong>Pre-generated keys (KGS):</strong> a separate service generates random unique 7-char keys in advance, stores them, and hands them to write servers in batches. Generation is moved off the critical path entirely.</li>
+    </ul>
+    <p>Most strong answers settle on <strong>counter-based Base62 via a KGS or Snowflake</strong> because it eliminates the collision-check round-trip and keeps writes O(1).</p>
+    <h3>2. Caching strategy</h3>
+    <p>Because reads dominate, an in-memory cache (Redis/Memcached) sits in front of the DB using a <strong>cache-aside (lazy loading)</strong> pattern with an <strong>LRU eviction</strong> policy — the 20% of links that are "hot" (a viral campaign, a pinned tweet) serve the bulk of traffic from memory. Mappings are immutable once created, so cache invalidation is a non-issue except for deletions/expiry; you can cache aggressively with long TTLs.</p>
+    <h3>3. Datastore &amp; partitioning</h3>
+    <p>The access pattern is a pure key lookup (<code>code → long URL</code>), so a <strong>NoSQL key-value store</strong> (DynamoDB, Cassandra) is the natural fit — it scales horizontally and gives single-digit-ms reads. Partition/shard <strong>by the short code</strong> (hash-based sharding) so reads and writes spread evenly across nodes; range-based sharding risks hot partitions. A relational DB works at smaller scale with the short code as the primary key.</p>
+    <h3>4. Redirect type: 301 vs 302</h3>
+    <p>A subtle point that impresses: <strong>301 (permanent)</strong> lets browsers cache the redirect, cutting load — but then you lose per-click analytics because repeat visits never hit your server. <strong>302 (temporary)</strong> forces every click through your service, preserving analytics at the cost of more traffic. Analytics-driven products (bit.ly) lean 302.</p>
+    <h3>5. Analytics &amp; rate limiting</h3>
+    <p>Click events are pushed to a queue (Kafka/SQS) and aggregated offline so the redirect never waits on analytics writes. A <strong>rate limiter</strong> on the create endpoint (by API key/IP) prevents abuse and key-space exhaustion.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures & algorithms</h2>
+    <p>Behind the buzzwords, a URL shortener runs on a few classic data-structures-and-algorithms ideas:</p>
+    <ul>
+      <li><strong>Base62 encoding</strong> — convert a 64-bit integer ID into <code>[0-9a-zA-Z]</code> (62 symbols). It's just base conversion: repeatedly take <code>n % 62</code> and <code>n /= 62</code>. 7 digits give 62⁷ ≈ 3.5 trillion codes. Base62 (not Base64) avoids the URL-unsafe <code>+</code> and <code>/</code> characters.</li>
+      <li><strong>Distributed counter / Snowflake ID</strong> — a 64-bit unique ID assembled from a timestamp, a machine/worker id, and a per-ms sequence counter, guaranteeing global uniqueness without coordination on every request.</li>
+      <li><strong>Hashing (MD5/SHA-256)</strong> — used by the hash-and-truncate strategy to map a long URL to a fixed-width, uniformly-distributed value before Base62.</li>
+      <li><strong>Hash table</strong> — the cache and the KV store are conceptually one giant hash map: O(1) average lookup from code to URL.</li>
+      <li><strong>Bloom filter</strong> — a probabilistic set used to answer "have we seen this short code / custom alias before?" in O(1) memory-cheap time, avoiding a DB round-trip on most negatives.</li>
+    </ul>
+    <table>
+      <tr><th>Operation</th><th>Technique</th><th>Time complexity</th><th>Why</th></tr>
+      <tr><td>Encode ID → code</td><td>Base62</td><td>O(k), k=7 digits</td><td>fixed tiny constant</td></tr>
+      <tr><td>Generate unique ID</td><td>Counter / Snowflake</td><td>O(1)</td><td>no collision check needed</td></tr>
+      <tr><td>Resolve code → URL</td><td>Hash table (cache/KV)</td><td>O(1) average</td><td>pure key lookup</td></tr>
+      <tr><td>Custom-alias exists?</td><td>Bloom filter → DB</td><td>O(1) expected</td><td>skip most DB hits</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>Here's how each logical component maps to a concrete AWS service — naming these in an interview shows you can actually ship it:</p>
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why this one</th></tr>
+      <tr><td>DNS</td><td>Route 53</td><td>Health-checked, latency-based routing for the short domain.</td></tr>
+      <tr><td>Edge cache / TLS</td><td>CloudFront</td><td>Caches 301 redirects at edge POPs close to users — cuts latency globally.</td></tr>
+      <tr><td>Entry / routing</td><td>API Gateway or ALB</td><td>Terminates HTTPS, routes, throttles, integrates auth.</td></tr>
+      <tr><td>Compute (read/write services)</td><td>Lambda or ECS/EKS Fargate</td><td>Stateless and auto-scaling; Lambda for spiky traffic, ECS for steady high QPS.</td></tr>
+      <tr><td>Primary datastore</td><td>DynamoDB</td><td>Single-digit-ms key-value lookups, on-demand horizontal scaling, partition by code.</td></tr>
+      <tr><td>Cache</td><td>ElastiCache (Redis) / DAX</td><td>Hot-link cache in front of the DB; DAX is a DynamoDB-native read cache.</td></tr>
+      <tr><td>Unique ID / counter</td><td>DynamoDB atomic counter or Snowflake on app</td><td>Atomic <code>UpdateItem ADD</code> for ranges, handed out in batches (KGS).</td></tr>
+      <tr><td>Click event stream</td><td>SQS / Kinesis</td><td>Decouples analytics from the redirect hot path.</td></tr>
+      <tr><td>Analytics store</td><td>S3 + Athena / Redshift</td><td>Cheap durable event log, queried offline.</td></tr>
+    </table>
+    <p><strong>Deployment story:</strong> Route 53 → CloudFront → API Gateway → Lambda (or ECS Fargate behind an ALB) for both the <code>POST /shorten</code> and <code>GET /{code}</code> handlers. DynamoDB holds the <code>code → longUrl</code> table fronted by DAX; ElastiCache can cache hot codes app-side. Each Lambda holds a small pre-allocated range of IDs from a DynamoDB atomic counter (the KGS pattern), so writes never coordinate per request. Click events go to Kinesis → S3, analysed with Athena. The whole thing is serverless and scales to zero between spikes.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>The core logic is the <strong>Base62 codec</strong> plus the shorten/resolve handlers. Here's a clean, correct C# reference. The encoder converts a unique 64-bit ID to a short code; the service caches resolves and falls through to the store on a miss.</p>
+    <pre><code><span class="cmt">// ---- Base62 codec: converts a unique long ID to/from a short string ----</span>
+<span class="kw">public static class</span> <span class="typ">Base62</span>
+{
+    <span class="kw">private const string</span> Alphabet =
+        <span class="str">"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"</span>; <span class="cmt">// 62 chars</span>
+
+    <span class="kw">public static string</span> <span class="fn">Encode</span>(<span class="kw">long</span> id)
+    {
+        <span class="kw">if</span> (id == <span class="str">0</span>) <span class="kw">return</span> Alphabet[<span class="str">0</span>].ToString();
+        <span class="kw">var</span> sb = <span class="kw">new</span> <span class="typ">StringBuilder</span>();
+        <span class="kw">while</span> (id > <span class="str">0</span>)
+        {
+            sb.<span class="fn">Insert</span>(<span class="str">0</span>, Alphabet[(<span class="kw">int</span>)(id % <span class="str">62</span>)]); <span class="cmt">// take remainder = next digit</span>
+            id /= <span class="str">62</span>;                              <span class="cmt">// shrink toward 0</span>
+        }
+        <span class="kw">return</span> sb.ToString();
+    }
+
+    <span class="kw">public static long</span> <span class="fn">Decode</span>(<span class="kw">string</span> code)
+    {
+        <span class="kw">long</span> id = <span class="str">0</span>;
+        <span class="kw">foreach</span> (<span class="kw">var</span> c <span class="kw">in</span> code)
+            id = id * <span class="str">62</span> + Alphabet.<span class="fn">IndexOf</span>(c); <span class="cmt">// Horner's method</span>
+        <span class="kw">return</span> id;
+    }
+}
+
+<span class="cmt">// ---- Service: shorten + resolve with cache-aside ----</span>
+<span class="kw">public class</span> <span class="typ">UrlShortener</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IIdGenerator</span> _ids;   <span class="cmt">// KGS / Snowflake: hands out unique 64-bit ids</span>
+    <span class="kw">private readonly</span> <span class="typ">ICache</span> _cache;       <span class="cmt">// Redis / ElastiCache</span>
+    <span class="kw">private readonly</span> <span class="typ">IUrlStore</span> _store;     <span class="cmt">// DynamoDB</span>
+
+    <span class="kw">public</span> <span class="fn">UrlShortener</span>(<span class="typ">IIdGenerator</span> ids, <span class="typ">ICache</span> cache, <span class="typ">IUrlStore</span> store)
+        => (_ids, _cache, _store) = (ids, cache, store);
+
+    <span class="kw">public async</span> <span class="typ">Task&lt;string&gt;</span> <span class="fn">ShortenAsync</span>(<span class="kw">string</span> longUrl)
+    {
+        <span class="kw">long</span> id = <span class="kw">await</span> _ids.<span class="fn">NextIdAsync</span>();   <span class="cmt">// unique → no collision check needed</span>
+        <span class="kw">string</span> code = <span class="typ">Base62</span>.<span class="fn">Encode</span>(id);
+        <span class="kw">await</span> _store.<span class="fn">SaveAsync</span>(code, longUrl); <span class="cmt">// persist code -> longUrl</span>
+        <span class="kw">await</span> _cache.<span class="fn">SetAsync</span>(code, longUrl, <span class="typ">TimeSpan</span>.<span class="fn">FromHours</span>(<span class="str">24</span>));
+        <span class="kw">return</span> <span class="str">$"https://sho.rt/{code}"</span>;
+    }
+
+    <span class="kw">public async</span> <span class="typ">Task&lt;string?&gt;</span> <span class="fn">ResolveAsync</span>(<span class="kw">string</span> code)
+    {
+        <span class="kw">var</span> hit = <span class="kw">await</span> _cache.<span class="fn">GetAsync</span>(code);   <span class="cmt">// 1) cache first (hot path)</span>
+        <span class="kw">if</span> (hit <span class="kw">is not null</span>) <span class="kw">return</span> hit;
+
+        <span class="kw">var</span> url = <span class="kw">await</span> _store.<span class="fn">GetAsync</span>(code);   <span class="cmt">// 2) miss → datastore</span>
+        <span class="kw">if</span> (url <span class="kw">is not null</span>)
+            <span class="kw">await</span> _cache.<span class="fn">SetAsync</span>(code, url, <span class="typ">TimeSpan</span>.<span class="fn">FromHours</span>(<span class="str">24</span>)); <span class="cmt">// 3) backfill</span>
+        <span class="kw">return</span> url;
+    }
+}
+
+<span class="cmt">// ---- ASP.NET Core minimal API: the redirect endpoint ----</span>
+<span class="cmt">// app.MapGet("/{code}", async (string code, UrlShortener svc) => {</span>
+<span class="cmt">//     var url = await svc.ResolveAsync(code);</span>
+<span class="cmt">//     return url is null ? Results.NotFound() : Results.Redirect(url, permanent: false); // 302</span>
+<span class="cmt">// });</span></code></pre>
+    <p><strong>Other tools you could mention:</strong> the same design ships just as well in <strong>Go</strong> or <strong>Java/Spring Boot</strong>; the ID generator could be Twitter's <strong>Snowflake</strong>, <strong>Zookeeper sequential nodes</strong>, or Redis <code>INCR</code>; the store could be <strong>Cassandra</strong> or <strong>PostgreSQL</strong> at smaller scale.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks & likely follow-ups</h2>
+    <p><strong>Where it breaks under load:</strong> the redirect read path is the bottleneck, mitigated by caching and edge CDN. The unique-ID generator is the second risk — a single global counter is a single point of failure and a write hotspot, which is exactly why you distribute it (KGS ranges or Snowflake). Hot keys (one viral link) can overload a single cache node; mitigate with client-side caching, request coalescing, or replicating the hot entry.</p>
+    <p><strong>Consistency vs availability:</strong> a URL mapping is immutable after creation, so eventual consistency is fine — favour <strong>availability (AP)</strong> on the read path. A brief replication lag just means a freshly created link might 404 for a few hundred ms; acceptable. Never sacrifice redirect availability for strong consistency.</p>
+    <div class="qa">
+      <div class="q">Q: How do you avoid two servers generating the same short code?</div>
+      <div class="a">A: Don't hash-and-hope. Use a globally unique 64-bit ID source — a KGS handing out non-overlapping ranges, or Snowflake (timestamp+machineId+sequence) — then Base62-encode it. Uniqueness is guaranteed by construction, so no collision check is needed.</div>
+    </div>
+    <div class="qa">
+      <div class="q">Q: 301 or 302 redirect?</div>
+      <div class="a">A: 302 if you want per-click analytics (every visit hits your server); 301 if you want to offload traffic by letting browsers cache the redirect, at the cost of losing repeat-click data.</div>
+    </div>
+    <div class="qa">
+      <div class="q">Q: How do you handle custom/vanity aliases?</div>
+      <div class="a">A: Treat the alias as a chosen key; check existence (Bloom filter → DB) and reject duplicates. Keep custom and generated keys in the same namespace so they can't collide.</div>
+    </div>
+    <div class="qa">
+      <div class="q">Q: How do you expire or delete links?</div>
+      <div class="a">A: Store a TTL/expiry timestamp; lazily treat expired rows as 404 on read and sweep them with a background job (or DynamoDB native TTL). Evict from cache on delete.</div>
+    </div>
+    <div class="qa">
+      <div class="q">Q: How do you stop abuse and key-space exhaustion?</div>
+      <div class="a">A: Rate-limit the create endpoint per API key/IP (token bucket), require auth for bulk creation, and scan destinations for malware/spam.</div>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "A URL shortener is a read-heavy, write-light key-value service. I generate a unique 64-bit ID per URL — via a distributed Key-Generation Service or Snowflake — Base62-encode it into a 7-character code, and store the <code>code→URL</code> mapping in a horizontally-sharded NoSQL store like DynamoDB. Reads go through Redis with cache-aside, fronted by a CDN, so redirects return a 301/302 in single-digit milliseconds. Click events fire async to a queue for analytics. It's available (AP) over strongly consistent because mappings are immutable."</div>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>100:1 read:write ratio → ~40 writes/sec, ~4,000 reads/sec (at 100M new URLs/month)</li>
+      <li>7 Base62 chars → 62⁷ ≈ 3.5 trillion unique codes</li>
+      <li>~500 bytes/record → ~600 GB/year storage</li>
+      <li>Cache the hot 20% of links (serves ~80% of reads)</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li><strong>Unique IDs by construction</strong> (KGS/Snowflake + Base62) — not hash-and-retry.</li>
+      <li><strong>Read path = cache + CDN</strong>; the DB is almost a fallback.</li>
+      <li><strong>Shard by short code</strong> (hash partitioning) to avoid hot partitions.</li>
+      <li><strong>301 vs 302</strong> trade-off framed around analytics.</li>
+      <li><strong>AP over CP</strong> because mappings are immutable; async analytics off the hot path.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <div class="faq-item">
+      <p class="q">Why is horizontal scaling necessary here, not vertical scaling?</p>
+      <p class="a"><strong>Vertical</strong> = one bigger box; <strong>horizontal</strong> = more boxes sharing load. Horizontal wins because: (1) <strong>data outgrows one machine</strong> — ~600&nbsp;GB/yr forever → multi-TB, past any single server's disk/RAM ceiling; sharding spreads it across N nodes. (2) <strong>availability</strong> — a single big box is a single point of failure, fatal when the whole job is "always up"; many nodes across AZs survive a node/AZ loss. (3) <strong>hard ceiling vs near-unlimited growth</strong> — the biggest instance is finite, but you meet 10× spikes by adding stateless read nodes. (4) <strong>cost/elasticity</strong> — commodity nodes are cheaper per unit throughput and auto-scale out/in, vs paying for one peak-sized monster 24/7. (5) the design is <strong>already built for it</strong> — stateless services + hash-partitioned KV + cache/CDN, all of which add identical copies behind a load balancer. Balanced note: scale vertically first for simplicity, then out once you outgrow one node — but a global always-on service inevitably ends up horizontal.</p>
+      <p class="meta">asked 2026-06-26</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="q">It's read-heavy, so why choose NoSQL — and how is sharding chosen for NoSQL?</p>
+      <p class="a">NoSQL isn't picked <em>because</em> it's read-heavy (SQL reads fast too) — it's picked because the workload is a <strong>pure key lookup</strong> (<code>GET by short_code</code>, no joins/scans/transactions), needs <strong>billions of rows with automatic horizontal scaling</strong>, and tolerates <strong>eventual consistency / favours availability (AP)</strong> since mappings are immutable. At small scale, PostgreSQL with short_code as PK is perfectly fine; NoSQL wins on scale + access-pattern fit, not because SQL "can't". <strong>Sharding:</strong> partition by <strong>hash of the short_code</strong> (DynamoDB internal hash; Cassandra Murmur3 on a consistent-hashing ring). Hash — not range — because counter-based Base62 codes are sequential, so range sharding would dump all new/hot links on the last shard (hotspot); hashing scatters them uniformly. Reads stay single-shard (you know the exact code → route to one partition → O(1)). Consistent hashing means adding a node remaps only a few keys. Viral hot keys are absorbed by the cache/CDN, not by changing the shard key.</p>
+      <p class="meta">asked 2026-06-26</p>
+    </div>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/pastebin/README.md">System Design Primer — Design Pastebin.com / a URL shortener (donnemartin)</a> — capacity estimation, Base62 + MD5 key generation, caching and storage model.</li>
+      <li><a href="https://github.com/karanpratapsingh/system-design">System Design course — karanpratapsingh (GitHub)</a> — URL shortener section: KGS, counters, sharding, 301 vs 302.</li>
+      <li><a href="https://github.com/donnemartin/system-design-primer">System Design Primer (main repo)</a> — caching patterns (cache-aside, write-through), sharding, SQL vs NoSQL trade-offs.</li>
+    </ul>
+    <p style="color:var(--muted);font-size:.85rem;">Numbers are rounded, defensible interview estimates; the system-design-primer pastebin variant uses a smaller scale (~4 writes/sec) — the architecture is identical.</p>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+  <script src="../../nav.js"></script>
+</body>
+</html>

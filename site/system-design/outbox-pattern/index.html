@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Transactional Outbox Pattern — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;   /* pink — real-world scenario */
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;       /* amber — requirements/scale */
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;       /* blue — architecture */
+    --arch-bg: #eef2ff;
+    --dsa: #7048e8;        /* purple — DSA */
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;        /* AWS orange */
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  .note { background: #fff8e6; border-left: 4px solid #f4a259; border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: .92rem; }
+  .warn { background: #fff0f4; border-left: 4px solid #f7567c; border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: .92rem; }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Transactional Outbox Pattern</h1>
+    <p>How to update your database and publish an event <em>atomically</em> — the go-to answer when a FAANG interviewer asks "how do you avoid the dual-write problem?"</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building & where it's used</h2>
+    <p>Almost every event-driven system at scale eventually hits the same wall. A service handles a command — say <em>"place order"</em> — and it must do two things: <strong>(1)</strong> write the new order row to its own database, and <strong>(2)</strong> publish an <code>OrderPlaced</code> event to a message broker (Kafka, SQS, RabbitMQ) so that downstream services — payments, inventory, notifications, analytics — can react. The interviewer's trap is this: <em>these are two separate systems, and there is no shared transaction across them.</em> If you commit the DB row and then crash before publishing, the rest of the company never learns the order exists. If you publish first and the DB rollback fires, you've told everyone about an order that doesn't exist. This is the famous <strong>dual-write problem</strong>, and the <strong>transactional outbox pattern</strong> is the canonical, battle-tested answer.</p>
+    <p>The core idea is deceptively simple: <strong>don't write to two systems — write to one.</strong> Inside the <em>same local database transaction</em> that saves your business data, you also insert a row into an <code>outbox</code> table describing the event you want to publish. Because it's one transaction, it's all-or-nothing: the order and its "please publish this" record commit together or roll back together. A separate background process — the <strong>message relay</strong> — later reads the outbox and forwards those events to the broker, retrying until they land.</p>
+    <p>This pattern is everywhere in production: it's a first-class feature of <strong>Debezium</strong> (Red Hat's CDC platform), it underpins how companies like <strong>Uber, Netflix, Airbnb, Shopify, and DoorDash</strong> keep their microservices consistent, and it's the recommended alternative to distributed transactions in Chris Richardson's <em>Microservices Patterns</em> and Sam Newman's books. If you can whiteboard it and defend the trade-offs, you've demonstrated the single most important reliability pattern in event-driven architecture.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The waiter's notepad trick</h2>
+    <p>Picture a busy restaurant. You order a paneer tikka. The <strong>waiter</strong> has to do <em>two</em> things: (1) update the bill on your table, and (2) run to the kitchen and tell the chef. Both have to happen — no bill without a dish, no dish without a bill. But what if the waiter writes the bill, then trips on the way to the kitchen and forgets? You get charged, no food arrives. What if he tells the chef first, then his pen runs out and he never writes the bill? You eat free.</p>
+    <p>Now here's the clever trick real restaurants actually use. The waiter carries <strong>one notepad</strong>. On a single page, he writes <em>both</em>: "Table 7: paneer tikka, ₹280" AND "Kitchen: make one paneer tikka." He tears the page — <strong>one single action</strong> — and drops it in a box. Then a separate helper comes along, picks up the paper, and walks the "make one paneer tikka" half to the kitchen. If the waiter trips, the whole page is either torn or not torn — never half. Either <strong>both</strong> things happen or <strong>neither</strong> does.</p>
+    <p>That's the <strong>outbox pattern</strong>, and it's how big websites keep their promises. Say you pay for a train ticket on <strong>IRCTC</strong>. The website has to: (1) mark your seat as booked in the database, and (2) tell the SMS system to text you the PNR. If it tries to do both separately, one might fail — you'd get a seat with no confirmation SMS, or an SMS with no seat. Disaster.</p>
+    <p>So instead, in <em>one single write</em>, the website scribbles both the booking AND a little sticky note that says "please send an SMS to +91-98…" into the same table. Then a background helper program quietly walks over, picks up the sticky note, and hands it to the SMS system — <strong>retrying until the SMS actually sends</strong>. If the whole website crashes right after you paid, the sticky note is still safely there, waiting to be delivered when things come back up.</p>
+    <p>The <strong>catch</strong>: the SMS might arrive a few seconds late, and if the helper is clumsy it might send the same SMS twice — so the receiving side has to be smart enough to ignore duplicates. But you'll <em>never</em> get "money taken, no seat, no message." That's the whole point.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements & scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+    <p>This is a <em>pattern</em>, not a product, so "requirements" means the reliability properties you must guarantee. The interviewer wants to hear you name them precisely, because each one drives a design decision.</p>
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>An event is published <strong>if and only if</strong> the business transaction commits (no phantom events, no lost events).</li>
+      <li>Downstream consumers eventually receive every event — <strong>eventual consistency</strong> across service boundaries.</li>
+      <li>Events for the same aggregate/entity are delivered <strong>in commit order</strong>.</li>
+    </ul>
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Durability</strong> — a crash of the service, relay, or broker must never drop an event.</li>
+      <li><strong>At-least-once delivery</strong> — we accept possible duplicates and make consumers idempotent, rather than paying for true exactly-once.</li>
+      <li><strong>Low added latency</strong> — publishing should trail the commit by milliseconds, not minutes.</li>
+      <li><strong>No 2PC</strong> — we must not require distributed transactions between DB and broker.</li>
+    </ul>
+    <h3>Back-of-the-envelope: does the outbox table become a bottleneck?</h3>
+    <p>Suppose an e-commerce service does <strong>5,000 writes/sec</strong> at peak, each producing one event. That's 5,000 extra <code>INSERT</code>s/sec into the outbox — trivial for Postgres/MySQL, which comfortably handle tens of thousands of small inserts per second, especially since they piggyback on an existing transaction (no extra round-trip). The numbers interviewers expect you to reason about:</p>
+    <table>
+      <tr><th>Quantity</th><th>Estimate</th><th>Why it matters</th></tr>
+      <tr><td>Extra write amplification</td><td>1 outbox INSERT per business txn</td><td>Same transaction → ~0 extra round-trips; negligible</td></tr>
+      <tr><td>Outbox row size</td><td>~0.5–2 KB (id, type, aggregate, JSON payload, timestamp)</td><td>Payload dominates; keep events lean</td></tr>
+      <tr><td>Relay latency (polling)</td><td>poll interval (e.g. 100 ms–1 s)</td><td>Tunable; trades DB load vs freshness</td></tr>
+      <tr><td>Relay latency (CDC / log tailing)</td><td><strong>~10–99 ms</strong> (two-digit ms, per Debezium/Postgres WAL)</td><td>Near-real-time, no polling load</td></tr>
+      <tr><td>Table growth at 5k/s</td><td>~432M rows/day if never purged</td><td>Must delete/archive after publish, or the table explodes</td></tr>
+      <tr><td>Purge strategy</td><td>DELETE on publish, or TTL/partition drop</td><td>Keeps the hot table tiny and indexes fast</td></tr>
+    </table>
+    <p class="note"><strong>The number to volunteer:</strong> "The outbox adds one small INSERT per transaction — negligible write cost — and with log-based CDC the end-to-end publish latency is <em>two-digit milliseconds</em>. The only real operational concern is <em>housekeeping</em>: at 5k writes/sec the table would grow ~430M rows/day, so I purge published rows or use a log-only outbox."</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The flow has two independent halves connected only through the database. On the <strong>write path</strong> (solid arrows), the service opens one local transaction, writes the business row <em>and</em> the outbox row, and commits — atomically. On the <strong>relay path</strong> (dashed arrows), a separate process observes the outbox (by polling it or by tailing the DB's transaction log) and publishes each event to the broker, marking it done only after the broker acknowledges. Consumers read from the broker and apply idempotency to tolerate the duplicates that at-least-once delivery inevitably produces.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 860 430" xmlns="http://www.w3.org/2000/svg" font-family="SF Mono, Consolas, monospace">
+        <defs>
+          <marker id="arw" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#7aa2f7"/>
+          </marker>
+          <marker id="arwG" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#2dc653"/>
+          </marker>
+        </defs>
+
+        <!-- Client -->
+        <rect x="20" y="180" width="120" height="60" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="80" y="205" fill="#c6d0e0" font-size="13" text-anchor="middle">Client</text>
+        <text x="80" y="223" fill="#7f8aa0" font-size="11" text-anchor="middle">POST /order</text>
+
+        <!-- Service -->
+        <rect x="190" y="160" width="150" height="100" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="265" y="190" fill="#fff" font-size="13" text-anchor="middle" font-weight="bold">Order Service</text>
+        <text x="265" y="212" fill="#9ece6a" font-size="10.5" text-anchor="middle">BEGIN TX</text>
+        <text x="265" y="228" fill="#c6d0e0" font-size="10.5" text-anchor="middle">insert order</text>
+        <text x="265" y="244" fill="#c6d0e0" font-size="10.5" text-anchor="middle">insert outbox</text>
+
+        <!-- DB with two tables -->
+        <rect x="400" y="130" width="180" height="170" rx="10" fill="#12203a" stroke="#4361ee"/>
+        <text x="490" y="153" fill="#fff" font-size="13" text-anchor="middle" font-weight="bold">Service Database</text>
+        <rect x="420" y="168" width="140" height="46" rx="6" fill="#1b2940" stroke="#7aa2f7"/>
+        <text x="490" y="188" fill="#c6d0e0" font-size="11" text-anchor="middle">orders</text>
+        <text x="490" y="203" fill="#7f8aa0" font-size="9.5" text-anchor="middle">business rows</text>
+        <rect x="420" y="224" width="140" height="56" rx="6" fill="#241b40" stroke="#7048e8"/>
+        <text x="490" y="244" fill="#d7c9ff" font-size="11" text-anchor="middle" font-weight="bold">outbox</text>
+        <text x="490" y="259" fill="#9a86d4" font-size="9.5" text-anchor="middle">pending events</text>
+        <text x="490" y="272" fill="#9a86d4" font-size="9.5" text-anchor="middle">(same TX!)</text>
+
+        <!-- Relay -->
+        <rect x="400" y="340" width="180" height="66" rx="10" fill="#14261a" stroke="#2dc653"/>
+        <text x="490" y="366" fill="#fff" font-size="13" text-anchor="middle" font-weight="bold">Message Relay</text>
+        <text x="490" y="386" fill="#9ece6a" font-size="10" text-anchor="middle">poll  OR  tail WAL (CDC)</text>
+
+        <!-- Broker -->
+        <rect x="650" y="180" width="170" height="70" rx="10" fill="#14261a" stroke="#2dc653"/>
+        <text x="735" y="208" fill="#fff" font-size="13" text-anchor="middle" font-weight="bold">Broker</text>
+        <text x="735" y="228" fill="#9ece6a" font-size="10.5" text-anchor="middle">Kafka / SQS / SNS</text>
+
+        <!-- Consumers -->
+        <rect x="650" y="330" width="170" height="80" rx="10" fill="#1b2940" stroke="#f7567c"/>
+        <text x="735" y="356" fill="#fff" font-size="12.5" text-anchor="middle" font-weight="bold">Consumers</text>
+        <text x="735" y="376" fill="#f9a8c4" font-size="10" text-anchor="middle">payments · inventory</text>
+        <text x="735" y="392" fill="#f9a8c4" font-size="10" text-anchor="middle">idempotent apply</text>
+
+        <!-- write path (solid) -->
+        <line x1="140" y1="210" x2="185" y2="210" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arw)"/>
+        <line x1="340" y1="210" x2="395" y2="210" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arw)"/>
+
+        <!-- relay path (dashed green) -->
+        <line x1="490" y1="300" x2="490" y2="338" stroke="#2dc653" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arwG)"/>
+        <path d="M580,373 C620,373 620,240 648,222" fill="none" stroke="#2dc653" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arwG)"/>
+        <line x1="735" y1="250" x2="735" y2="328" stroke="#2dc653" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arwG)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7aa2f7"></span> write path (one local TX)</span>
+        <span><span class="dot" style="background:#2dc653"></span> async relay path (at-least-once)</span>
+        <span><span class="dot" style="background:#7048e8"></span> outbox table</span>
+      </div>
+    </div>
+    <ol class="steps">
+      <li>Client calls the service (<code>POST /order</code>).</li>
+      <li>Service opens <strong>one</strong> local DB transaction and writes both the <code>orders</code> row and an <code>outbox</code> row, then <code>COMMIT</code>. Atomic — no partial state possible.</li>
+      <li>The message relay observes the new outbox row (polling query, or transaction-log tailing via CDC).</li>
+      <li>Relay publishes the event to the broker and waits for the broker's ack.</li>
+      <li>On ack, the relay marks the outbox row published (or deletes it). If it crashed before this step, it republishes on restart → <strong>at-least-once</strong>.</li>
+      <li>Consumers read from the broker and <strong>deduplicate</strong> using the event ID / log offset before applying side effects.</li>
+    </ol>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. The outbox table schema</h3>
+    <p>The outbox is an ordinary table in the <em>same</em> database as your business data — that co-location is the whole point, because it's what makes the shared transaction possible. A typical schema:</p>
+    <pre><span class="kw">CREATE TABLE</span> outbox (
+  id             <span class="typ">UUID</span> <span class="kw">PRIMARY KEY</span>,      <span class="cmt">-- event id (dedup key for consumers)</span>
+  aggregate_type <span class="typ">VARCHAR</span>,            <span class="cmt">-- e.g. 'Order' → routes to a topic</span>
+  aggregate_id   <span class="typ">VARCHAR</span>,            <span class="cmt">-- e.g. order id → Kafka partition key (ordering!)</span>
+  event_type     <span class="typ">VARCHAR</span>,            <span class="cmt">-- e.g. 'OrderPlaced'</span>
+  payload        <span class="typ">JSONB</span>,              <span class="cmt">-- the serialized event</span>
+  created_at     <span class="typ">TIMESTAMPTZ</span> <span class="kw">DEFAULT</span> now(),
+  published_at   <span class="typ">TIMESTAMPTZ</span>          <span class="cmt">-- NULL = not yet relayed (polling mode)</span>
+);</pre>
+    <p>The <code>aggregate_id</code> is doing double duty: consumers need it, and the relay uses it as the broker <strong>partition key</strong> so that all events for one order land on the same partition and stay ordered.</p>
+
+    <h3>2. The message relay — polling vs. log tailing (the key decision)</h3>
+    <p>This is where interviewers push hardest, because it's the real engineering trade-off. There are two ways to get events out of the outbox:</p>
+
+    <p><strong>(a) Polling Publisher.</strong> A background job runs <code>SELECT * FROM outbox WHERE published_at IS NULL ORDER BY created_at LIMIT N</code> on a timer, publishes each row, then marks it published. Simple, works on any database, easy to reason about. The downsides: it adds constant query load, forces a latency-vs-load trade-off via the poll interval, and — subtly — <em>ordering can be wrong</em>. Because a row is written when a transaction <em>starts</em> its insert but only becomes visible when it <em>commits</em>, two concurrent transactions can commit in a different order than their <code>created_at</code>/sequence suggests, so a naive poller can even <em>skip</em> a row that committed late. You mitigate with <code>SELECT ... FOR UPDATE SKIP LOCKED</code> for safe concurrent workers and careful ordering logic.</p>
+
+    <p><strong>(b) Transaction Log Tailing (CDC) — usually preferred.</strong> Instead of querying the table, a tool like <strong>Debezium</strong> reads the database's write-ahead log (Postgres WAL, MySQL binlog). Every committed insert to the outbox appears in the log <em>in exact commit order</em>, so ordering is correct by construction, there's no polling load, and latency drops to <strong>two-digit milliseconds</strong>. This is what most large-scale deployments use. The cost is operational complexity — you now run and monitor a CDC connector and (often) Kafka Connect.</p>
+
+    <p class="note"><strong>Interview power move:</strong> "I'd start with a polling relay for simplicity, but at scale I'd move to log-based CDC with Debezium — it gives correct ordering for free from the commit log and cuts latency to tens of milliseconds without loading the database."</p>
+
+    <h3>3. Delivery semantics & idempotent consumers</h3>
+    <p>The relay gives <strong>at-least-once</strong> delivery: if it publishes to the broker and then crashes <em>before</em> recording success, it will republish on restart. (Brokers deliver at-least-once anyway, so this is rarely a new burden.) Therefore <strong>consumers must be idempotent</strong>. Two standard techniques:</p>
+    <ul>
+      <li><strong>Dedup journal (UUID):</strong> the consumer stores the IDs of processed events and drops anything it's seen. Simple, but you must decide how long to retain IDs (too short → miss a late duplicate; too long → the journal bloats).</li>
+      <li><strong>Monotonic watermark (better):</strong> store only the <em>highest</em> offset/LSN seen and reject anything ≤ it. Use the <em>transaction-log offset</em> (Postgres LSN, Kafka offset) — <strong>not</strong> a database sequence, which isn't reliably monotonic across concurrent transactions.</li>
+    </ul>
+
+    <h3>4. Housekeeping</h3>
+    <p>At high write rates the outbox grows fast, so you must prune it: delete rows on successful publish, run a periodic cleanup, or partition by day and drop old partitions. A neat CDC trick: <code>INSERT</code> then <code>DELETE</code> the outbox row in the <em>same</em> transaction — CDC still captures the insert from the log, but the table stays empty. Postgres goes further with <code>pg_logical_emit_message()</code>, writing the event straight to the WAL with <strong>no table at all</strong> ("log-only outbox").</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures & algorithms</h2>
+    <p>The outbox pattern isn't algorithm-heavy, but a strong candidate names the data structures that make it correct and the abstractions each component is really an instance of.</p>
+    <table>
+      <tr><th>Structure / technique</th><th>Where it's used</th><th>Why / complexity</th></tr>
+      <tr><td><strong>Append-only log (WAL / binlog)</strong></td><td>CDC relay reads it in commit order</td><td>Sequential O(1) append & read; the log <em>is</em> the source of truth for ordering</td></tr>
+      <tr><td><strong>FIFO queue semantics</strong></td><td>Outbox drained oldest-first per aggregate</td><td>Preserves per-key ordering; O(1) enqueue/dequeue</td></tr>
+      <tr><td><strong>Monotonic counter / high-water mark</strong></td><td>Idempotent consumer dedup</td><td>O(1) compare "seen ≤ latest?"; constant memory vs a growing set</td></tr>
+      <tr><td><strong>Hash set / dedup journal</strong></td><td>UUID-based consumer dedup</td><td>O(1) membership test; memory grows with retention window</td></tr>
+      <tr><td><strong>Consistent-hash partitioning</strong></td><td><code>aggregate_id</code> → broker partition</td><td>Keeps one entity's events co-located & ordered</td></tr>
+      <tr><td><strong>Optimistic locking / <code>SKIP LOCKED</code></strong></td><td>Multiple polling workers, no double-send</td><td>Lets N relays drain the table concurrently without contention</td></tr>
+    </table>
+    <p>The deepest insight to state out loud: <strong>the outbox turns a distributed-transaction problem into a single-node log-ordering problem.</strong> Ordering and durability come "for free" from the database's own transaction log — the same mechanism that already guarantees ACID — rather than from an expensive cross-system coordinator like two-phase commit.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>On AWS the pattern maps cleanly, and the relay choice mirrors the polling-vs-CDC decision above. The managed sweet spot is <strong>Aurora/RDS → DynamoDB isn't needed → DMS or Lambda relay → SNS/SQS/Kinesis/MSK</strong>.</p>
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Service + outbox DB</td><td><strong>Aurora / RDS (Postgres or MySQL)</strong></td><td>Same-transaction insert of business + outbox row; WAL/binlog available for CDC</td></tr>
+      <tr><td>NoSQL variant</td><td><strong>DynamoDB + DynamoDB Streams</strong></td><td>The "outbox" is the item's change itself; Streams is a built-in log-tailing relay — very popular AWS answer</td></tr>
+      <tr><td>CDC / log tailing relay</td><td><strong>AWS DMS</strong> or self-managed <strong>Debezium on MSK Connect</strong></td><td>Tails Aurora WAL/binlog, publishes in commit order, ~ms latency</td></tr>
+      <tr><td>Polling relay</td><td><strong>Lambda on EventBridge Scheduler</strong> or ECS task</td><td>Simple <code>SELECT … WHERE published IS NULL</code> loop; no CDC infra</td></tr>
+      <tr><td>Message broker</td><td><strong>SNS + SQS</strong>, <strong>Kinesis</strong>, or <strong>MSK (Kafka)</strong></td><td>SQS FIFO for ordering+dedup; Kinesis/MSK for high-throughput ordered streams</td></tr>
+      <tr><td>Idempotent consumers</td><td><strong>Lambda + DynamoDB</strong> dedup table</td><td>Conditional write on event id / offset watermark</td></tr>
+      <tr><td>Housekeeping</td><td><strong>TTL on DynamoDB</strong> / partitioned RDS purge job</td><td>Auto-expire relayed rows</td></tr>
+    </table>
+    <p>The most idiomatic <em>serverless</em> AWS expression of this pattern skips a separate outbox table entirely: write to <strong>DynamoDB</strong>, enable <strong>DynamoDB Streams</strong>, and attach a <strong>Lambda</strong> that forwards each change to <strong>EventBridge/SNS</strong>. The stream <em>is</em> your ordered, durable, log-tailed outbox — atomicity is guaranteed because the stream record and the item write are the same operation. For SQL shops, Aurora + DMS (or Debezium on MSK Connect) → MSK/Kinesis is the direct analog of the classic Postgres-WAL-to-Kafka design.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>The heart of the pattern is one method: save the entity and the outbox record in a <em>single</em> EF Core <code>SaveChanges</code> (one transaction). Then a separate polling relay drains the outbox. This is the correct, idiomatic .NET version.</p>
+    <pre><span class="cmt">// ---------- 1. The outbox row ----------</span>
+<span class="kw">public class</span> <span class="typ">OutboxMessage</span> {
+    <span class="kw">public</span> <span class="typ">Guid</span>     Id           { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="typ">Guid</span>.NewGuid(); <span class="cmt">// dedup key</span>
+    <span class="kw">public string</span>   AggregateId  { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="str">""</span>;   <span class="cmt">// partition key → ordering</span>
+    <span class="kw">public string</span>   EventType    { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="str">""</span>;
+    <span class="kw">public string</span>   Payload      { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="str">""</span>;   <span class="cmt">// serialized JSON</span>
+    <span class="kw">public</span> <span class="typ">DateTime</span> CreatedAt    { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="typ">DateTime</span>.UtcNow;
+    <span class="kw">public</span> <span class="typ">DateTime</span>? PublishedAt  { <span class="kw">get</span>; <span class="kw">set</span>; }        <span class="cmt">// null = pending</span>
+}
+
+<span class="cmt">// ---------- 2. Write path: business row + event in ONE transaction ----------</span>
+<span class="kw">public async</span> <span class="typ">Task</span> PlaceOrderAsync(<span class="typ">Order</span> order) {
+    _db.Orders.Add(order);
+
+    <span class="cmt">// Same DbContext → same SaveChanges → same transaction. Atomic!</span>
+    _db.Outbox.Add(<span class="kw">new</span> <span class="typ">OutboxMessage</span> {
+        AggregateId = order.Id.ToString(),
+        EventType   = <span class="str">"OrderPlaced"</span>,
+        Payload     = <span class="typ">JsonSerializer</span>.Serialize(<span class="kw">new</span> { order.Id, order.Total })
+    });
+
+    <span class="kw">await</span> _db.SaveChangesAsync(); <span class="cmt">// commit both, or neither — no dual write</span>
+}
+
+<span class="cmt">// ---------- 3. Polling relay: drain the outbox, publish, mark done ----------</span>
+<span class="kw">public async</span> <span class="typ">Task</span> RelayLoopAsync(<span class="typ">CancellationToken</span> ct) {
+    <span class="kw">while</span> (!ct.IsCancellationRequested) {
+        <span class="cmt">// FOR UPDATE SKIP LOCKED lets many relay workers run safely in parallel.</span>
+        <span class="kw">var</span> batch = <span class="kw">await</span> _db.Outbox
+            .FromSqlRaw(<span class="str">@"SELECT * FROM outbox WHERE published_at IS NULL
+                          ORDER BY created_at
+                          LIMIT 100 FOR UPDATE SKIP LOCKED"</span>)
+            .ToListAsync(ct);
+
+        <span class="kw">foreach</span> (<span class="kw">var</span> msg <span class="kw">in</span> batch) {
+            <span class="cmt">// Event Id is the idempotency key — consumers dedup on it.</span>
+            <span class="kw">await</span> _broker.PublishAsync(msg.EventType, msg.AggregateId, msg.Payload, msg.Id, ct);
+            msg.PublishedAt = <span class="typ">DateTime</span>.UtcNow; <span class="cmt">// crash before this ⇒ republish (at-least-once)</span>
+        }
+        <span class="kw">await</span> _db.SaveChangesAsync(ct);
+        <span class="kw">if</span> (batch.Count == 0) <span class="kw">await</span> <span class="typ">Task</span>.Delay(200, ct); <span class="cmt">// backoff when idle</span>
+    }
+}
+
+<span class="cmt">// ---------- 4. Idempotent consumer: watermark / dedup on event Id ----------</span>
+<span class="kw">public async</span> <span class="typ">Task</span> HandleAsync(<span class="typ">Guid</span> eventId, <span class="kw">string</span> payload) {
+    <span class="kw">if</span> (<span class="kw">await</span> _seen.ExistsAsync(eventId)) <span class="kw">return</span>; <span class="cmt">// already processed → drop duplicate</span>
+    <span class="cmt">// ... apply side effect ...</span>
+    <span class="kw">await</span> _seen.RecordAsync(eventId);                <span class="cmt">// mark processed (same TX as side effect)</span>
+}</pre>
+    <p class="note"><strong>The one bug interviewers look for:</strong> publishing inside a different transaction, or publishing before <code>SaveChanges</code>. The whole pattern collapses unless the business write and the outbox write share <em>one</em> commit. In .NET that means: same <code>DbContext</code>, one <code>SaveChangesAsync</code>.</p>
+    <p>Alternatives worth a sentence: instead of hand-rolling the relay, production teams use <strong>Debezium</strong> (log-based CDC) or a library like <strong>MassTransit</strong>, whose built-in <em>Transactional Outbox</em> does exactly this within its message-consumer pipeline.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks & likely follow-ups</h2>
+    <p><strong>Why not just use two-phase commit (2PC)?</strong> Because the broker often can't participate in an XA transaction (Kafka, SQS don't), 2PC couples the service to the availability of both systems, blocks on the coordinator, and scales poorly. The outbox deliberately trades strong cross-system atomicity for <em>local</em> atomicity plus <em>eventual</em> consistency — the right trade for microservices.</p>
+    <p><strong>Why accept at-least-once instead of exactly-once?</strong> True exactly-once across a DB and a broker requires distributed coordination that's expensive and fragile. At-least-once + idempotent consumers gets you effectively-once <em>results</em> at a fraction of the cost, and brokers already force you to handle duplicates.</p>
+
+    <h3>Bottlenecks & failure modes</h3>
+    <ul>
+      <li><strong>Outbox table bloat</strong> — the #1 operational issue. Solve with purge-on-publish, partition-drop, or a log-only outbox.</li>
+      <li><strong>Polling load & latency</strong> — polling adds DB load and floor latency; CDC removes both but adds infra.</li>
+      <li><strong>Ordering under concurrency</strong> — commit order ≠ insert/sequence order; rely on the log (LSN) or a per-aggregate partition key, not <code>created_at</code>.</li>
+      <li><strong>Relay is a moving part</strong> — it must be HA; use leader election or <code>SKIP LOCKED</code> so multiple relays don't double-publish or stall.</li>
+      <li><strong>Developer discipline</strong> — someone can forget to write the outbox row. Enforce via a repository/UoW abstraction or domain-event dispatch so it's automatic.</li>
+    </ul>
+
+    <div class="qa">
+      <p class="q">Q: How do you guarantee ordering of events?</p>
+      <p class="a">A: Use the transaction log (WAL/binlog) which is in commit order, and key the broker partition by <code>aggregate_id</code> so all events for one entity stay on one ordered partition. Don't trust a DB sequence or timestamp — they aren't monotonic across concurrent commits.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: What if the relay publishes but crashes before marking the row published?</p>
+      <p class="a">A: On restart it republishes — that's the at-least-once guarantee. Consumers dedup on the event id / offset watermark, so the duplicate is harmless.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: Polling vs CDC — which and why?</p>
+      <p class="a">A: Polling for simplicity and any-DB portability; CDC (Debezium/DynamoDB Streams) for correct ordering from the log, no polling load, and ~10–99 ms latency. I default to CDC at scale.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: How is this different from event sourcing?</p>
+      <p class="a">A: Event sourcing makes the event log the <em>source of truth</em> and rebuilds state from it. The outbox keeps current-state tables as truth and merely uses a table/log to reliably <em>publish</em> events. The outbox is a smaller, additive change; event sourcing is a whole storage philosophy.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: How does this relate to the Saga pattern?</p>
+      <p class="a">A: Sagas coordinate a multi-service business transaction through a chain of local transactions + events. The outbox is how each saga step <em>reliably emits</em> its event/command — sagas are a primary reason the outbox exists.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch">
+      <strong>30-second pitch:</strong> "To update my database and publish an event atomically without 2PC, I use the transactional outbox. In the same local transaction that writes the business row, I insert a row into an <em>outbox</em> table. A separate relay — polling, or better, log-based CDC like Debezium — reads the outbox and publishes to the broker with at-least-once delivery, and consumers dedup on the event id. This solves the dual-write problem: the event is published if and only if the transaction commits."
+    </div>
+    <ul>
+      <li><strong>Name the enemy:</strong> "dual-write problem" — two systems, no shared transaction.</li>
+      <li><strong>One transaction:</strong> business row + outbox row commit together or not at all.</li>
+      <li><strong>Relay = polling vs CDC:</strong> CDC (WAL/binlog, Debezium, DynamoDB Streams) wins at scale — correct ordering, ~ms latency, no polling load.</li>
+      <li><strong>Delivery = at-least-once + idempotent consumers:</strong> dedup by UUID journal or monotonic offset/LSN watermark.</li>
+      <li><strong>Ordering:</strong> from the commit log + partition-by-aggregate-id — not from timestamps or DB sequences.</li>
+      <li><strong>Don't forget housekeeping:</strong> purge/partition the outbox, or go log-only (<code>pg_logical_emit_message</code>).</li>
+      <li><strong>Numbers to quote:</strong> one small INSERT per txn (negligible), CDC latency two-digit ms, table grows ~430M rows/day at 5k writes/s if unpruned.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://microservices.io/patterns/data/transactional-outbox.html">Chris Richardson — Pattern: Transactional Outbox (microservices.io)</a></li>
+      <li><a href="https://www.decodable.co/blog/revisiting-the-outbox-pattern">Gunnar Morling — Revisiting the Outbox Pattern (Decodable)</a></li>
+      <li><a href="https://microservices.io/patterns/data/polling-publisher.html">microservices.io — Polling Publisher & Transaction Log Tailing</a></li>
+      <li><a href="https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html">Debezium — Outbox Event Router documentation</a></li>
+      <li><a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html">AWS Prescriptive Guidance — Transactional outbox pattern</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

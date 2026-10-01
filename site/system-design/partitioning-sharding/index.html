@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Database Sharding &amp; Partitioning — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --laymen: #ffb703;
+    --laymen-bg: #fff8e6;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen   .badge { background: var(--laymen); color: #4a3300; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  .mini {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .mini h4 { margin: 0 0 6px; font-size: 1rem; color: var(--arch); }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Database Sharding &amp; Partitioning</h1>
+    <p>How one big database becomes many — the classic scaling move that every large system eventually makes, and every interviewer eventually asks about.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're solving &amp; where it's used</h2>
+    <p>You started with a single PostgreSQL or MySQL box and it served you beautifully — until traffic climbed, tables grew to hundreds of millions of rows, indexes stopped fitting in RAM, backups started taking hours, and a single hot query could freeze the whole application. The classic answer is <strong>partitioning</strong> (split the data into smaller pieces) and eventually <strong>sharding</strong> (put those pieces on <em>different physical machines</em>). This is how every large system — Instagram, Discord, Slack, Shopify, Notion, Uber, Pinterest, Figma, YouTube — keeps its database responsive as it grows past what any single server can hold.</p>
+    <p>The video this page is based on — <em>Database Sharding and Partitioning</em> by <strong>Arpit Bhayani</strong> — frames it exactly this way: <strong>partitioning</strong> is <em>logically splitting</em> a big table into smaller pieces (still on one machine), and <strong>sharding</strong> is <em>physically distributing</em> those pieces across independent database servers so read and write throughput scale horizontally. The distinction is small in wording but massive in operational impact: partitioning is a query-planner optimization; sharding is a distributed-systems commitment.</p>
+    <p>Interviewers love this topic because a good answer proves you understand the whole ladder — vertical scaling → read replicas → caching → partitioning → sharding — and can articulate <em>when</em> to pull each lever, not just <em>how</em>. The wrong answer is "just shard everything"; the right answer names the shard key, the strategy, the resharding pain, and the cross-shard query trap before the interviewer has to ask.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Explaining it to someone who's never touched a database</h2>
+    <p>Imagine you run a <strong>giant library</strong> that started with a single, beautiful room full of books. At first, one librarian at the front desk could handle everyone — someone walks in, asks for "Harry Potter," she walks to the shelf, finds it, hands it over. Simple.</p>
+    <p>Now imagine your library becomes wildly popular. Fifty people show up every second asking for books. Your one librarian is running around, sweating, dropping things. The room itself is packed floor to ceiling — you literally can't fit more shelves in it. What do you do?</p>
+    <p><strong>You open more rooms.</strong> But now you have a problem: if the books are randomly scattered across ten rooms, every request means checking every room. So instead, you agree on a <strong>rule</strong> for where each book lives. Maybe: "books whose title starts with A–E go in Room 1, F–J in Room 2, K–O in Room 3…" Now a visitor asking for "Harry Potter" is sent straight to Room 2, and the other nine rooms don't even know the request happened. Each room has its own librarian. Everyone's fast again.</p>
+    <p>That's <strong>sharding</strong>. Each "room" is a separate database server, each "rule for where things live" is called a <strong>shard key</strong>, and the person at the front door who sends you to the right room is a <strong>router</strong>. Instagram does this with your photos, WhatsApp does this with your chats, Uber does this with rides — the trick is exactly the library trick, just with computers.</p>
+    <p>The hard parts, in plain English: (1) picking a bad rule means one room gets slammed while the others sit empty (imagine everyone asks for "Harry Potter" — poor Room 2). (2) Some questions can't be answered from one room — "how many books do we have in total?" — so you have to walk to every room and add up. And (3) once you've split things up, <strong>merging them back or changing the rule is a nightmare</strong>, because you have to physically move millions of books between rooms without closing the library.</p>
+    <p>Think of it as: <strong>one giant filing cabinet → many smaller filing cabinets, each in a different room, with a receptionist who knows exactly which cabinet holds your file.</strong> That's the whole idea. Everything else is engineers arguing about the receptionist's algorithm.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>When sharding is (and isn't) the right answer</h2>
+    <p>Sharding is not a first move — it's the last big lever you pull before you're in true "large-system" territory. Interviewers expect you to name the ladder of cheaper alternatives you'd try first, then justify why sharding is unavoidable.</p>
+
+    <h3>The scaling ladder (try these <em>before</em> sharding)</h3>
+    <table>
+      <thead><tr><th>Rung</th><th>What it does</th><th>Ceiling</th></tr></thead>
+      <tbody>
+        <tr><td><strong>1. Vertical scale</strong></td><td>Bigger box: more RAM, faster NVMe, more cores.</td><td>~1–2 TB working set; expensive at the top end.</td></tr>
+        <tr><td><strong>2. Read replicas</strong></td><td>Async replicas serve reads; primary takes writes.</td><td>Read-heavy only; writes still bottlenecked on primary.</td></tr>
+        <tr><td><strong>3. Caching</strong></td><td>Redis / Memcached in front of the DB.</td><td>Great for hot keys, useless for uncached queries.</td></tr>
+        <tr><td><strong>4. Partitioning</strong></td><td>Split one table into many smaller tables inside <em>one</em> DB.</td><td>Same machine limits — CPU, RAM, disk I/O.</td></tr>
+        <tr><td><strong>5. Sharding</strong></td><td>Split across many DBs on many machines.</td><td>Near-infinite; complexity explodes.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Signals it's time to shard</h3>
+    <ul>
+      <li><strong>Data doesn't fit on one box.</strong> Working set exceeds ~1 TB and the index no longer fits in RAM.</li>
+      <li><strong>Writes overwhelm the primary.</strong> Read replicas don't help — you need write parallelism.</li>
+      <li><strong>Backups &amp; DDL become impossible.</strong> A single table migration takes 12 hours and locks the app.</li>
+      <li><strong>Blast radius is unacceptable.</strong> One noisy tenant can freeze all tenants; you need physical isolation.</li>
+    </ul>
+
+    <h3>Order-of-magnitude numbers to quote in interviews</h3>
+    <table>
+      <thead><tr><th>Metric</th><th>Order of magnitude</th></tr></thead>
+      <tbody>
+        <tr><td>Single Postgres/MySQL box comfortably handles</td><td>~10k–50k QPS, ~1 TB working set</td></tr>
+        <tr><td>Rows per shard target</td><td>100M–1B (keep indexes RAM-resident)</td></tr>
+        <tr><td>Typical shard count for a large SaaS</td><td>16, 64, 256, 1024 (powers of 2 &mdash; makes hash rebalancing cleaner)</td></tr>
+        <tr><td>Cross-shard fan-out queries per request</td><td>Try to keep ≤ 1; scatter-gather kills p99</td></tr>
+        <tr><td>Resharding cost</td><td>Days-to-weeks of engineer time + one migration incident scar</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The core architecture has four moving parts: the <strong>application</strong> (which knows nothing about physical shards), a <strong>shard router / proxy</strong> (which knows exactly which shard holds which key), a set of <strong>shards</strong> (independent DB clusters, each often replicated for HA), and a <strong>metadata / config store</strong> (which holds the shard map — key ranges or hash-bucket-to-shard assignments). A write for user <code>u42</code> flows: app → router → hash(<code>u42</code>) → shard 3 → primary → replicas. A cross-user query (e.g. "top posts across the platform") requires <strong>scatter-gather</strong>: the router fans the query out to every shard, waits for all responses, merges them.</p>
+
+    <p>The two axes of splitting to keep separate in your head:</p>
+    <div class="grid2">
+      <div class="mini">
+        <h4>Vertical partitioning</h4>
+        <p>Split a wide table by <em>columns</em> — put hot columns (<code>user_id, name, email</code>) on one server and cold ones (<code>bio, avatar_blob, prefs_json</code>) on another. Reduces row width and I/O per read. Common inside a single DB.</p>
+      </div>
+      <div class="mini">
+        <h4>Horizontal partitioning (a.k.a. sharding)</h4>
+        <p>Split a table by <em>rows</em> — users 1–10M on shard 1, users 10M–20M on shard 2, etc. Each shard has the <em>same schema</em>, different subsets. This is what people usually mean by "sharding."</p>
+      </div>
+    </div>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Shard architecture">
+        <defs>
+          <marker id="arw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="arwGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/>
+          </marker>
+        </defs>
+
+        <rect x="30" y="180" rx="12" ry="12" width="140" height="70" fill="#1b2940" stroke="#4361ee" stroke-width="2"/>
+        <text x="100" y="210" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="15" font-weight="700">Application</text>
+        <text x="100" y="230" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="11">read/write user u42</text>
+
+        <rect x="230" y="170" rx="12" ry="12" width="170" height="90" fill="#1b2940" stroke="#00b4d8" stroke-width="2"/>
+        <text x="315" y="200" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="15" font-weight="700">Shard Router</text>
+        <text x="315" y="220" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="11">hash(u42) → shard 3</text>
+        <text x="315" y="240" text-anchor="middle" fill="#7fa2ff" font-family="sans-serif" font-size="11">reads shard map</text>
+
+        <rect x="230" y="30" rx="10" ry="10" width="170" height="60" fill="#0f1420" stroke="#f4a259" stroke-width="2"/>
+        <text x="315" y="55" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="13" font-weight="700">Config / Metadata</text>
+        <text x="315" y="75" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="11">shard map (ranges / hash)</text>
+        <line x1="315" y1="90" x2="315" y2="170" stroke="#f4a259" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arw)"/>
+
+        <g>
+          <rect x="470" y="30" rx="12" ry="12" width="160" height="110" fill="#1b2940" stroke="#7048e8" stroke-width="2"/>
+          <text x="550" y="55" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="14" font-weight="700">Shard 1</text>
+          <text x="550" y="75" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="11">users 0–10M</text>
+          <rect x="480" y="88" width="60" height="12" fill="#2dc653" opacity=".8"/>
+          <text x="510" y="98" text-anchor="middle" fill="#0f1420" font-family="sans-serif" font-size="9" font-weight="700">primary</text>
+          <rect x="550" y="88" width="70" height="12" fill="#4361ee" opacity=".7"/>
+          <text x="585" y="98" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="9" font-weight="700">replica</text>
+          <rect x="480" y="108" width="140" height="12" fill="#4361ee" opacity=".4"/>
+          <text x="550" y="118" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="9">replica</text>
+        </g>
+        <g>
+          <rect x="470" y="160" rx="12" ry="12" width="160" height="110" fill="#1b2940" stroke="#7048e8" stroke-width="2"/>
+          <text x="550" y="185" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="14" font-weight="700">Shard 2</text>
+          <text x="550" y="205" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="11">users 10M–20M</text>
+          <rect x="480" y="218" width="60" height="12" fill="#2dc653" opacity=".8"/>
+          <text x="510" y="228" text-anchor="middle" fill="#0f1420" font-family="sans-serif" font-size="9" font-weight="700">primary</text>
+          <rect x="550" y="218" width="70" height="12" fill="#4361ee" opacity=".7"/>
+          <text x="585" y="228" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="9" font-weight="700">replica</text>
+          <rect x="480" y="238" width="140" height="12" fill="#4361ee" opacity=".4"/>
+          <text x="550" y="248" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="9">replica</text>
+        </g>
+        <g>
+          <rect x="470" y="290" rx="12" ry="12" width="160" height="110" fill="#1b2940" stroke="#f7567c" stroke-width="3"/>
+          <text x="550" y="315" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="14" font-weight="700">Shard 3 ← u42</text>
+          <text x="550" y="335" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="11">users 20M–30M</text>
+          <rect x="480" y="348" width="60" height="12" fill="#2dc653" opacity=".9"/>
+          <text x="510" y="358" text-anchor="middle" fill="#0f1420" font-family="sans-serif" font-size="9" font-weight="700">primary</text>
+          <rect x="550" y="348" width="70" height="12" fill="#4361ee" opacity=".7"/>
+          <text x="585" y="358" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="9" font-weight="700">replica</text>
+          <rect x="480" y="368" width="140" height="12" fill="#4361ee" opacity=".4"/>
+          <text x="550" y="378" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="9">replica</text>
+        </g>
+
+        <line x1="170" y1="215" x2="228" y2="215" stroke="#7fa2ff" stroke-width="2" marker-end="url(#arw)"/>
+
+        <line x1="400" y1="200" x2="468" y2="85"  stroke="#7fa2ff" stroke-width="1.5" opacity=".55" marker-end="url(#arw)"/>
+        <line x1="400" y1="215" x2="468" y2="215" stroke="#7fa2ff" stroke-width="1.5" opacity=".55" marker-end="url(#arw)"/>
+        <line x1="400" y1="230" x2="468" y2="345" stroke="#2dc653" stroke-width="2.5" marker-end="url(#arwGreen)"/>
+
+        <g font-family="sans-serif" font-size="11" fill="#c6d0e0">
+          <rect x="700" y="35" width="180" height="120" rx="8" fill="#0f1420" stroke="#2a3652"/>
+          <text x="712" y="55" font-weight="700" fill="#fff">Legend</text>
+          <rect x="712" y="65"  width="12" height="12" fill="#2dc653"/><text x="730" y="76">chosen shard route</text>
+          <rect x="712" y="83"  width="12" height="12" fill="#7fa2ff" opacity=".7"/><text x="730" y="94">possible routes</text>
+          <rect x="712" y="101" width="12" height="12" fill="#f4a259"/><text x="730" y="112">shard map lookup</text>
+          <rect x="712" y="119" width="12" height="12" fill="#4361ee" opacity=".55"/><text x="730" y="130">async replica</text>
+          <rect x="712" y="137" width="12" height="12" fill="#2dc653" opacity=".9"/><text x="730" y="148">primary (writes)</text>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a shard route resolve, step by step</h2>
+    <p>This animation shows the single most important flow: a request for user <code>u42</code> enters the router, the router hashes the key, consults the shard map, and forwards the request to exactly one shard. Then we show the hot-shard failure mode and a resharding split — the two things every interviewer probes.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sharding animation">
+        <defs>
+          <marker id="arw2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+
+        <rect id="a-app" x="30" y="150" rx="10" ry="10" width="110" height="60" fill="#1b2940" stroke="#4361ee" stroke-width="2" class="a-el" data-anim="node"/>
+        <text x="85" y="185" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="13" font-weight="700">App</text>
+
+        <rect id="a-router" x="220" y="140" rx="10" ry="10" width="150" height="80" fill="#1b2940" stroke="#00b4d8" stroke-width="2" class="a-el" data-anim="node"/>
+        <text x="295" y="170" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="13" font-weight="700">Shard Router</text>
+        <text id="a-hash" x="295" y="195" text-anchor="middle" fill="#7fa2ff" font-family="monospace" font-size="12" class="a-el a-hidden" data-anim="hash">hash(u42) = 7</text>
+        <text id="a-map"  x="295" y="212" text-anchor="middle" fill="#f4a259" font-family="monospace" font-size="11" class="a-el a-hidden" data-anim="map">7 mod 4 = shard 3</text>
+
+        <rect id="s1" x="450" y="40"  rx="10" ry="10" width="140" height="60" fill="#1b2940" stroke="#7048e8" stroke-width="2" class="a-el" data-anim="shard"/>
+        <text x="520" y="65" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="13" font-weight="700">Shard 0</text>
+        <text x="520" y="85" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="10">hash % 4 = 0</text>
+
+        <rect id="s2" x="450" y="115" rx="10" ry="10" width="140" height="60" fill="#1b2940" stroke="#7048e8" stroke-width="2" class="a-el" data-anim="shard"/>
+        <text x="520" y="140" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="13" font-weight="700">Shard 1</text>
+        <text x="520" y="160" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="10">hash % 4 = 1</text>
+
+        <rect id="s3" x="450" y="190" rx="10" ry="10" width="140" height="60" fill="#1b2940" stroke="#7048e8" stroke-width="2" class="a-el" data-anim="shard"/>
+        <text x="520" y="215" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="13" font-weight="700">Shard 2</text>
+        <text x="520" y="235" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="10">hash % 4 = 2</text>
+
+        <rect id="s4" x="450" y="265" rx="10" ry="10" width="140" height="60" fill="#1b2940" stroke="#7048e8" stroke-width="2" class="a-el" data-anim="shard"/>
+        <text x="520" y="290" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="13" font-weight="700">Shard 3</text>
+        <text x="520" y="310" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="10">hash % 4 = 3</text>
+
+        <rect id="s5" x="650" y="265" rx="10" ry="10" width="140" height="60" fill="#1b2940" stroke="#2dc653" stroke-width="2" class="a-el a-hidden" data-anim="newshard"/>
+        <text id="s5t" x="720" y="290" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="13" font-weight="700" class="a-el a-hidden" data-anim="newshard">Shard 4 (new)</text>
+        <text id="s5s" x="720" y="310" text-anchor="middle" fill="#c6d0e0" font-family="sans-serif" font-size="10" class="a-el a-hidden" data-anim="newshard">gets ½ of shard 3</text>
+
+        <circle id="req" cx="85" cy="180" r="10" fill="#f7567c" class="a-el a-hidden" data-anim="req"/>
+        <text id="reqLabel" x="85" y="184" text-anchor="middle" fill="#fff" font-family="monospace" font-size="9" font-weight="700" class="a-el a-hidden" data-anim="req">u42</text>
+
+        <line x1="370" y1="175" x2="448" y2="70"  stroke="#4a5b80" stroke-width="1.5" opacity=".4"/>
+        <line x1="370" y1="180" x2="448" y2="145" stroke="#4a5b80" stroke-width="1.5" opacity=".4"/>
+        <line x1="370" y1="185" x2="448" y2="220" stroke="#4a5b80" stroke-width="1.5" opacity=".4"/>
+        <line id="pickedRoute" x1="370" y1="190" x2="448" y2="295" stroke="#2dc653" stroke-width="3" opacity="0" class="a-el" data-anim="picked"/>
+
+        <text id="hotLabel" x="520" y="355" text-anchor="middle" fill="#f7567c" font-family="sans-serif" font-size="13" font-weight="800" class="a-el a-hidden" data-anim="hot">🔥 HOT SHARD</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+    (function () {
+      const root = document.getElementById('anim1');
+      if (!root) return;
+      const $  = (sel) => root.querySelector(sel);
+      const $$ = (sel) => root.querySelectorAll(sel);
+      const label = $('.anim-step-label');
+      const cap   = $('.anim-step-caption');
+      const btnPlay  = root.querySelector('[data-act="play"]');
+      const btnNext  = root.querySelector('[data-act="next"]');
+      const btnPrev  = root.querySelector('[data-act="prev"]');
+      const btnReset = root.querySelector('[data-act="reset"]');
+
+      const CFG = {
+        intro: 'A request for user u42 arrives, gets hashed, mapped to a shard, and served. Then we show hot-shard failure and a live reshard.',
+        interval: 1800,
+        reset: (r) => {
+          r.querySelectorAll('[data-anim]').forEach(el => {
+            el.classList.remove('a-glow', 'a-dim');
+            el.removeAttribute('transform');
+          });
+          r.querySelector('#req').classList.add('a-hidden');
+          r.querySelector('#reqLabel').classList.add('a-hidden');
+          r.querySelector('#a-hash').classList.add('a-hidden');
+          r.querySelector('#a-map').classList.add('a-hidden');
+          r.querySelector('#pickedRoute').style.opacity = '0';
+          r.querySelector('#hotLabel').classList.add('a-hidden');
+          r.querySelector('#s5').classList.add('a-hidden');
+          r.querySelector('#s5t').classList.add('a-hidden');
+          r.querySelector('#s5s').classList.add('a-hidden');
+          r.querySelector('#s3').style.stroke = '#7048e8';
+          r.querySelector('#req').setAttribute('cx', '85');
+          r.querySelector('#reqLabel').setAttribute('x', '85');
+          r.querySelector('#req').style.fill = '#f7567c';
+        },
+        steps: [
+          { caption: 'App fires a write for user u42.',
+            apply: (r, $) => {
+              $('#req').classList.remove('a-hidden');
+              $('#reqLabel').classList.remove('a-hidden');
+              $('#a-app').classList.add('a-glow');
+            } },
+          { caption: 'Request reaches the shard router.',
+            apply: (r, $) => {
+              $('#a-app').classList.remove('a-glow');
+              $('#req').setAttribute('cx', '295');
+              $('#reqLabel').setAttribute('x', '295');
+              $('#a-router').classList.add('a-glow');
+            } },
+          { caption: 'Router hashes the shard key: hash(u42) = 7.',
+            apply: (r, $) => { $('#a-hash').classList.remove('a-hidden'); } },
+          { caption: 'Router consults the shard map: 7 mod 4 → Shard 3.',
+            apply: (r, $) => { $('#a-map').classList.remove('a-hidden'); } },
+          { caption: 'Route to Shard 3 lights up; other shards are dimmed.',
+            apply: (r, $) => {
+              $('#pickedRoute').style.opacity = '1';
+              $('#s1').classList.add('a-dim');
+              $('#s2').classList.add('a-dim');
+              $('#s3').classList.add('a-glow');
+              $('#s4').classList.add('a-dim');
+              $('#a-router').classList.remove('a-glow');
+            } },
+          { caption: 'Request lands on Shard 3 — only 1 of 4 shards did work.',
+            apply: (r, $) => {
+              $('#req').setAttribute('cx', '520');
+              $('#reqLabel').setAttribute('x', '520');
+            } },
+          { caption: 'Failure mode: one celebrity user gets 90% of traffic → Shard 3 becomes a hot shard.',
+            apply: (r, $) => {
+              $('#s3').style.stroke = '#f7567c';
+              $('#hotLabel').classList.remove('a-hidden');
+              $('#req').style.fill = '#ffa500';
+            } },
+          { caption: 'Fix: reshard by splitting Shard 3 into two — half its keys migrate to a new Shard 4.',
+            apply: (r, $) => {
+              $('#s5').classList.remove('a-hidden');
+              $('#s5t').classList.remove('a-hidden');
+              $('#s5s').classList.remove('a-hidden');
+              $('#hotLabel').classList.add('a-hidden');
+              $('#s3').style.stroke = '#7048e8';
+            } }
+        ]
+      };
+
+      let idx = -1, playing = false, timer = null;
+      function goto(i) {
+        if (i < 0 || i >= CFG.steps.length) return;
+        CFG.reset(root);
+        for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+        idx = i;
+        label.textContent = 'Step ' + (i + 1) + '/' + CFG.steps.length;
+        cap.textContent = CFG.steps[i].caption;
+      }
+      function reset() {
+        idx = -1; playing = false;
+        if (timer) { clearTimeout(timer); timer = null; }
+        CFG.reset(root);
+        label.textContent = 'Ready';
+        cap.textContent = CFG.intro;
+        btnPlay.textContent = '▶ Play';
+      }
+      function play() {
+        if (playing) {
+          playing = false;
+          if (timer) clearTimeout(timer);
+          btnPlay.textContent = '▶ Play';
+          return;
+        }
+        if (idx >= CFG.steps.length - 1) reset();
+        playing = true; btnPlay.textContent = '⏸ Pause';
+        function tick() {
+          if (!playing) return;
+          if (idx + 1 < CFG.steps.length) goto(idx + 1);
+          if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+          else { playing = false; btnPlay.textContent = '▶ Replay'; }
+        }
+        timer = setTimeout(tick, 400);
+      }
+      btnPlay.addEventListener('click', play);
+      btnReset.addEventListener('click', reset);
+      btnNext.addEventListener('click', () => {
+        if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+        goto(idx + 1);
+      });
+      btnPrev.addEventListener('click', () => {
+        if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+        goto(idx - 1);
+      });
+      reset();
+    })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>Partitioning vs sharding — the strict definition</h3>
+    <p>Arpit's key clarification (and the one interviewers reward): <strong>partitioning is a logical split; sharding is a physical distribution</strong>. Partitioning a table into monthly chunks inside one PostgreSQL keeps everything on one machine — the query planner just prunes irrelevant partitions. Sharding takes those partitions and puts them on <em>different</em> boxes with independent CPU, RAM, storage, and network. Sharding <em>is</em> horizontal partitioning, but not all horizontal partitioning is sharding.</p>
+
+    <h3>The four sharding strategies</h3>
+
+    <h4>1) Range-based sharding</h4>
+    <p>Assign contiguous key ranges to shards: <code>user_id 0–10M → S1</code>, <code>10M–20M → S2</code>. Perfect for <em>range queries</em> (give me all orders from Jan–Mar) because they hit one or two shards. The killer downside: <strong>skew</strong>. If new users are always assigned the highest ID, the last shard becomes a hot write shard while shard 1 sees nothing. Time-series data is famously bad at this — the "current day" partition takes every write.</p>
+
+    <h4>2) Hash-based sharding</h4>
+    <p><code>shard = hash(shard_key) mod N</code>. This spreads writes evenly and needs no lookup table — the router computes the shard from the key. The trade-off: <strong>range queries are broadcast</strong> (every shard has some of the requested rows), and <strong>changing N is catastrophic</strong> because almost every key moves. The fix is <strong>consistent hashing</strong>, which limits the moved fraction to roughly <code>1/N</code>.</p>
+
+    <h4>3) Directory-based sharding</h4>
+    <p>A lookup table maps <code>shard_key → shard_id</code>. Maximum flexibility — you can move any key anywhere, add shards dynamically, target hot users. The cost: the lookup service becomes a <strong>hot path on every request</strong> and a potential single point of failure. In practice the map is cached aggressively on the router (a "shard cache" in Instagram parlance).</p>
+
+    <h4>4) Geo-based sharding</h4>
+    <p>Shard key encodes region: EU users on EU shards, US users on US shards. Great for <strong>latency</strong> (users hit the nearest data center) and <strong>compliance</strong> (GDPR data residency). It's really just range-based sharding with a geographic dimension. The classic pain is <em>the traveling user</em> — someone flies from Berlin to New York and their data is still on eu-central-1.</p>
+
+    <h3>Shard key selection — the highest-leverage decision</h3>
+    <p>Nothing you do later can save a bad shard key. Two properties matter:</p>
+    <ul>
+      <li><strong>High cardinality.</strong> The key must have far more distinct values than the shard count. Sharding by <code>country_code</code> caps you at ~200 shards forever.</li>
+      <li><strong>Even frequency.</strong> If 30% of your traffic is one tenant, that tenant creates a permanent hot shard no matter which strategy you use.</li>
+    </ul>
+    <p>The best keys are also <strong>request-correlated</strong> — the key naturally appears in every query. Instagram shards by <code>user_id</code> because virtually every request is "show me user X's stuff." A payment system might shard by <code>merchant_id</code>. Never shard by an auto-increment ID and never by a low-cardinality enum.</p>
+
+    <h3>The hot-shard problem</h3>
+    <p>A hot shard is when one shard receives disproportionate traffic — a celebrity user, a viral product, a Black-Friday tenant. Sharding alone doesn't fix it because the hot key by definition maps to one shard. Real defenses: <strong>replicate hot keys</strong> (fan reads across replicas of that shard), <strong>split further</strong> (subdivide the hot user's data by another dimension — e.g. per-post shards for a celebrity), or <strong>write-buffer and coalesce</strong> (batch writes to that key). This is the follow-up interviewers <em>always</em> ask, and "consistent hashing" alone is not a full answer.</p>
+
+    <h3>Resharding without downtime</h3>
+    <p>The most feared operation. The typical pattern (used by Instagram, Discord, Slack) is <strong>double-writes</strong>: (1) launch new shards, (2) dual-write every mutation to old and new, (3) backfill historical data online, (4) shadow-read the new shards and compare, (5) cut reads over, (6) stop writing to old. This takes weeks and requires idempotent writes and a killswitch. Consistent hashing dramatically reduces the size of the move but does not eliminate the ceremony.</p>
+
+    <h3>Cross-shard queries</h3>
+    <p>Any query without the shard key becomes a <strong>scatter-gather</strong>: fan out to all shards, wait for all responses, merge. Latency = <em>slowest shard</em>, not average. Two mitigations: (a) <strong>denormalize / duplicate</strong> — maintain a global secondary index in a separate store (Elasticsearch, DynamoDB GSI) so "search all users by email" doesn't need to hit every shard; (b) <strong>embrace approximate answers</strong> — pre-aggregated counters, sketch data structures (HyperLogLog).</p>
+
+    <h3>Cross-shard transactions</h3>
+    <p>Multi-key ACID transactions across shards are essentially impossible cheaply. Real systems fall back to <strong>Saga pattern</strong> (compensating actions), <strong>2PC</strong> (slow, blocking, availability-hostile), or <strong>outbox + event sourcing</strong> (asynchronous eventual consistency). This is one of the biggest costs of sharding, and interviewers ask about it.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms that make sharding work</h2>
+
+    <h3>1) Modulo hashing</h3>
+    <p>The naive baseline: <code>shard = hash(key) % N</code>. Beautiful simplicity — O(1) lookup, no memory. But when <code>N</code> changes from 4 to 5, virtually every key remaps: ~80% of your data moves. That's the primary reason large systems don't use plain modulo.</p>
+
+    <h3>2) Consistent hashing</h3>
+    <p>Place shards on a <strong>ring</strong> of hash values 0..2³²−1. A key hashes to a point on the ring; it belongs to the next shard clockwise. Adding a shard only takes over the arc between it and the next-clockwise shard — only <code>K/N</code> keys move, not <code>K</code>. Use <strong>virtual nodes</strong> (each physical shard owns 100–200 points on the ring) to smooth out uneven arcs. Used by DynamoDB, Cassandra, Riak, ElastiCache Redis.</p>
+    <div class="viz">Ring (simplified, 3 shards, hashes 0..99)
+
+  0 ─── 33 ─── 66 ─── 99
+   \    |     |
+   [S1]  [S2]  [S3]
+        keys 34..66 → S2
+
+  add S4 at 50 → only keys 34..50 move from S2 to S4</div>
+
+    <h3>3) Rendezvous (HRW) hashing</h3>
+    <p>For each key, compute <code>hash(key, shard_i)</code> for every shard <code>i</code> and pick the shard with the highest hash. Adds only <code>1/N</code> movement on shard changes, no ring, no virtual nodes. Simpler correctness proof; used in load balancers and CDN routing.</p>
+
+    <h3>4) B-Tree indexes (per shard)</h3>
+    <p>Each shard is still a normal database — B-Trees on the primary key, secondary indexes, WAL. Sharding doesn't replace them, it multiplies them. Total index memory across shards grows sub-linearly with data because each shard's index fits in that shard's RAM.</p>
+
+    <h3>5) Bloom filters for existence checks</h3>
+    <p>Before scattering "does user@example.com exist?" to N shards, ask a Bloom filter maintained per shard (or globally). A Bloom filter says "definitely not on this shard" with zero false negatives, saving expensive fan-out.</p>
+
+    <h3>Complexity table</h3>
+    <table>
+      <thead><tr><th>Operation</th><th>Sharded lookup</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Point read by shard key</td><td>O(1) route + O(log N) index probe</td><td>The happy path — this is what you optimize for.</td></tr>
+        <tr><td>Point read without shard key</td><td>O(N) fan-out</td><td>Every shard queried; latency = slowest reply.</td></tr>
+        <tr><td>Range query on shard key (range sharding)</td><td>O(few shards)</td><td>Cheap when ranges align.</td></tr>
+        <tr><td>Range query (hash sharding)</td><td>O(N) fan-out</td><td>Hash destroys locality.</td></tr>
+        <tr><td>Add one shard (modulo hash)</td><td>O(all data moved)</td><td>Nearly full reshuffle.</td></tr>
+        <tr><td>Add one shard (consistent hash)</td><td>O(K/N) keys moved</td><td>The whole reason consistent hashing exists.</td></tr>
+        <tr><td>Cross-shard join</td><td>O(N × M) or forbidden</td><td>Usually done in app layer or denormalized upstream.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>AWS gives you two paths: <strong>use a managed sharded database</strong> (DynamoDB, Aurora Limitless, Redshift, Keyspaces) where AWS hides sharding from you, or <strong>build sharding at the application layer</strong> on top of RDS/Aurora clusters. Both are valid interview answers — you should be able to defend either.</p>
+
+    <table>
+      <thead><tr><th>Component</th><th>AWS service</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Managed sharded key-value</td><td><strong>DynamoDB</strong></td><td>Partition-key sharding is baked in. Auto-splits hot partitions, adaptive capacity redistributes throughput. You never see the shards.</td></tr>
+        <tr><td>Managed sharded SQL</td><td><strong>Aurora + app-layer sharding</strong> or <strong>Aurora Limitless</strong></td><td>Aurora Limitless does automatic sharding for PostgreSQL-compatible clusters. Otherwise, run N Aurora clusters and shard in your app.</td></tr>
+        <tr><td>Managed columnar analytics</td><td><strong>Redshift</strong></td><td>Distribution keys and sort keys are shard-and-partition primitives for OLAP.</td></tr>
+        <tr><td>Wide-column at scale</td><td><strong>Keyspaces (Cassandra)</strong></td><td>Partition-key sharding across regions; global tables for geo.</td></tr>
+        <tr><td>Shard router / proxy</td><td><strong>RDS Proxy</strong> + app-layer routing, or <strong>ProxySQL</strong> on EC2</td><td>Connection pooling and failover; actual shard resolution is done in app code.</td></tr>
+        <tr><td>Shard map / config store</td><td><strong>DynamoDB</strong> or <strong>Parameter Store</strong>, cached in <strong>ElastiCache</strong></td><td>Small, read-heavy, needs strong consistency on updates.</td></tr>
+        <tr><td>Hot-key defense</td><td><strong>DAX</strong> (DynamoDB) or <strong>ElastiCache Redis</strong> in front of RDS</td><td>Cache absorbs read spikes on celebrity keys.</td></tr>
+        <tr><td>Backups &amp; PITR per shard</td><td><strong>RDS Automated Backups</strong>, <strong>DynamoDB PITR</strong></td><td>Sharded backups scale linearly — no more 12-hour monolithic snapshots.</td></tr>
+        <tr><td>Change data capture (for resharding)</td><td><strong>DMS</strong> + <strong>Kinesis</strong> or <strong>DynamoDB Streams</strong></td><td>Enables online migration and dual-write validation.</td></tr>
+      </tbody>
+    </table>
+
+    <p>A canonical AWS deployment for a self-sharded relational stack: an ECS/EKS fleet running your API with a shard-routing library, an <strong>ElastiCache Redis</strong> that holds the shard map plus hot-key cache, N × <strong>Aurora clusters</strong> (each with a writer + 2 read replicas), a small <strong>DynamoDB</strong> table as the authoritative shard-map source, and <strong>DMS</strong> ready to spin up whenever a reshard is planned. All traffic enters through <strong>ALB → API Gateway</strong>. Observability (per-shard QPS, p99, storage) lives in <strong>CloudWatch + Managed Grafana</strong>. If you can defend this diagram in five sentences, you've passed the AWS half of the interview.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — a minimal shard router</h2>
+    <p>Below is a self-contained C# reference: a consistent-hash ring, a shard resolver that supports both modulo-hash and consistent-hash strategies, and a routing entry-point. It's intentionally small — a real one adds virtual nodes (already included), weight, replica awareness, health checks, and a shard-map store — but this is the code you should be able to sketch on a whiteboard in an interview.</p>
+
+    <pre><code><span class="kw">using</span> System;
+<span class="kw">using</span> System.Collections.Generic;
+<span class="kw">using</span> System.Linq;
+<span class="kw">using</span> System.Security.Cryptography;
+<span class="kw">using</span> System.Text;
+
+<span class="cmt">// 1) A shard descriptor — in real life this holds a connection string, replica list, region, etc.</span>
+<span class="kw">public sealed record</span> <span class="typ">Shard</span>(<span class="typ">string</span> Id, <span class="typ">string</span> ConnectionString);
+
+<span class="cmt">// 2) The abstraction — every strategy answers "which shard owns this key?"</span>
+<span class="kw">public interface</span> <span class="typ">IShardRouter</span>
+{
+    <span class="typ">Shard</span> <span class="fn">Resolve</span>(<span class="typ">string</span> shardKey);
+}
+
+<span class="cmt">// 3) Naive modulo hashing — great for interviews to explain the "why not this?" case.</span>
+<span class="kw">public sealed class</span> <span class="typ">ModuloRouter</span> : <span class="typ">IShardRouter</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">List</span>&lt;<span class="typ">Shard</span>&gt; _shards;
+    <span class="kw">public</span> <span class="fn">ModuloRouter</span>(<span class="typ">IEnumerable</span>&lt;<span class="typ">Shard</span>&gt; shards) =&gt; _shards = shards.ToList();
+
+    <span class="kw">public</span> <span class="typ">Shard</span> <span class="fn">Resolve</span>(<span class="typ">string</span> shardKey)
+    {
+        <span class="kw">var</span> h = Stable64(shardKey);
+        <span class="kw">var</span> idx = (<span class="typ">int</span>)((h &amp; <span class="typ">long</span>.MaxValue) % _shards.Count);
+        <span class="kw">return</span> _shards[idx];
+    }
+
+    <span class="cmt">// SHA-1 → first 8 bytes → long. Deterministic across processes (Object.GetHashCode is NOT).</span>
+    <span class="kw">internal static</span> <span class="typ">long</span> <span class="fn">Stable64</span>(<span class="typ">string</span> s)
+    {
+        <span class="kw">using var</span> sha = SHA1.Create();
+        <span class="kw">var</span> b = sha.ComputeHash(Encoding.UTF8.GetBytes(s));
+        <span class="kw">return</span> BitConverter.ToInt64(b, 0);
+    }
+}
+
+<span class="cmt">// 4) Consistent-hash ring with virtual nodes. Adding/removing a shard moves only ~K/N keys.</span>
+<span class="kw">public sealed class</span> <span class="typ">ConsistentHashRouter</span> : <span class="typ">IShardRouter</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">SortedDictionary</span>&lt;<span class="typ">long</span>, <span class="typ">Shard</span>&gt; _ring = <span class="kw">new</span>();
+    <span class="kw">private readonly</span> <span class="typ">int</span> _vnodes;
+
+    <span class="kw">public</span> <span class="fn">ConsistentHashRouter</span>(<span class="typ">IEnumerable</span>&lt;<span class="typ">Shard</span>&gt; shards, <span class="typ">int</span> vnodes = <span class="str">150</span>)
+    {
+        _vnodes = vnodes;
+        <span class="kw">foreach</span> (<span class="kw">var</span> s <span class="kw">in</span> shards) AddShard(s);
+    }
+
+    <span class="kw">public void</span> <span class="fn">AddShard</span>(<span class="typ">Shard</span> s)
+    {
+        <span class="kw">for</span> (<span class="typ">int</span> i = <span class="str">0</span>; i &lt; _vnodes; i++)
+        {
+            <span class="kw">var</span> point = ModuloRouter.Stable64($<span class="str">"{s.Id}#{i}"</span>);
+            _ring[point] = s;
+        }
+    }
+
+    <span class="kw">public void</span> <span class="fn">RemoveShard</span>(<span class="typ">string</span> shardId)
+    {
+        <span class="kw">var</span> victims = _ring.Where(kv =&gt; kv.Value.Id == shardId).Select(kv =&gt; kv.Key).ToList();
+        <span class="kw">foreach</span> (<span class="kw">var</span> k <span class="kw">in</span> victims) _ring.Remove(k);
+    }
+
+    <span class="kw">public</span> <span class="typ">Shard</span> <span class="fn">Resolve</span>(<span class="typ">string</span> shardKey)
+    {
+        <span class="kw">if</span> (_ring.Count == <span class="str">0</span>) <span class="kw">throw new</span> <span class="typ">InvalidOperationException</span>(<span class="str">"No shards registered"</span>);
+        <span class="kw">var</span> h = ModuloRouter.Stable64(shardKey);
+
+        <span class="cmt">// Walk clockwise: first ring key >= h; wrap around if past the end.</span>
+        <span class="kw">foreach</span> (<span class="kw">var</span> kv <span class="kw">in</span> _ring)
+            <span class="kw">if</span> (kv.Key &gt;= h) <span class="kw">return</span> kv.Value;
+        <span class="kw">return</span> _ring.First().Value;
+    }
+}
+
+<span class="cmt">// 5) Usage. In production, wrap this in a decorator that reads shard-map version from</span>
+<span class="cmt">// ElastiCache/DynamoDB so that a live reshard can update the ring without redeploying.</span>
+<span class="kw">public static class</span> <span class="typ">Demo</span>
+{
+    <span class="kw">public static void</span> <span class="fn">Main</span>()
+    {
+        <span class="kw">var</span> shards = <span class="kw">new</span>[]
+        {
+            <span class="kw">new</span> <span class="typ">Shard</span>(<span class="str">"s0"</span>, <span class="str">"..."</span>), <span class="kw">new</span> <span class="typ">Shard</span>(<span class="str">"s1"</span>, <span class="str">"..."</span>),
+            <span class="kw">new</span> <span class="typ">Shard</span>(<span class="str">"s2"</span>, <span class="str">"..."</span>), <span class="kw">new</span> <span class="typ">Shard</span>(<span class="str">"s3"</span>, <span class="str">"..."</span>),
+        };
+        <span class="typ">IShardRouter</span> router = <span class="kw">new</span> <span class="typ">ConsistentHashRouter</span>(shards);
+
+        <span class="kw">var</span> shard = router.Resolve(<span class="str">"user:u42"</span>);
+        Console.WriteLine($<span class="str">"u42 → {shard.Id}"</span>);   <span class="cmt">// consistent across processes</span>
+    }
+}
+</code></pre>
+
+    <p><strong>Language alternatives.</strong> Discord published its version of this in Elixir (Cassandra-backed sharding); Instagram's original was Python calling PostgreSQL with a hand-rolled Python <code>shard_id % N</code>. In Go, look at Vitess (YouTube's MySQL sharding layer). In Java, look at Apache ShardingSphere. All of them have the exact same shape as the code above — a hash function, a shard map, and a router.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>The costs you pay the moment you shard</h3>
+    <p><strong>You lose cheap joins</strong> — anything crossing shards has to be done in the app layer or via a denormalized secondary index. <strong>You lose global unique constraints</strong> — no single database can enforce "email must be unique across all users"; you need a separate uniqueness service or a dedicated shard for unique-index tables. <strong>You lose auto-increment IDs</strong> — you need a distributed ID generator (Snowflake, UUIDv7, KSUID). <strong>You lose easy transactions</strong> — anything spanning shards is Saga or 2PC. <strong>You lose operational simplicity</strong> — N times the pagers, N times the disk-full alerts, N times the version-upgrade coordination.</p>
+
+    <h3>The bottlenecks that persist</h3>
+    <p>Sharding does not fix these on its own: (1) the <strong>router or proxy tier</strong> can become the new bottleneck if it's synchronous and single-threaded; (2) the <strong>shard-map store</strong> is read on every request — cache it and expect thundering herds when it invalidates; (3) <strong>cross-region latency</strong> if shards live in different regions; (4) <strong>tail latency</strong> — with N shards and slow-tail request rate <em>p</em>, the probability at least one shard is slow is roughly <code>1 − (1−p)ᴺ</code>, which is why scatter-gather queries have exponentially worse p99 as N grows.</p>
+
+    <h3>Common interviewer follow-ups (and crisp answers)</h3>
+    <div class="qa"><p class="q">"What's the difference between partitioning and sharding?"</p><p class="a">Partitioning is a logical split of a table into pieces (usually inside one database, exploited by the query planner). Sharding is a physical split of those pieces across multiple independent database servers. Sharding is horizontal partitioning + operational separation.</p></div>
+    <div class="qa"><p class="q">"How do you pick a shard key?"</p><p class="a">Two properties: high cardinality (so it can support many shards) and even distribution (so no shard gets disproportionate traffic). Ideally the key is also present in nearly every query, so most reads/writes are single-shard. Instagram picks <code>user_id</code>; a marketplace might pick <code>merchant_id</code>.</p></div>
+    <div class="qa"><p class="q">"Why not just modulo hash?"</p><p class="a">Because changing shard count remaps almost every key. Consistent hashing or rendezvous hashing move only ~K/N keys when N changes, which is critical for online resharding.</p></div>
+    <div class="qa"><p class="q">"What if one shard becomes hot?"</p><p class="a">Split it (subdivide by a secondary dimension), replicate hot keys behind a cache like DAX/Redis, and add write coalescing. Sometimes the correct answer is to give the hot tenant a dedicated shard.</p></div>
+    <div class="qa"><p class="q">"How do you reshard without downtime?"</p><p class="a">Dual-write to old and new shards, backfill history in the background, shadow-read to verify, then cut reads over and stop writing to old. Requires idempotent writes and CDC (DMS or DynamoDB Streams).</p></div>
+    <div class="qa"><p class="q">"How do you handle queries that don't include the shard key?"</p><p class="a">Either denormalize into a secondary index (Elasticsearch or a DynamoDB GSI keyed by the alternate field), or scatter-gather across all shards. Fan-out is O(N), latency is set by the slowest shard.</p></div>
+    <div class="qa"><p class="q">"Cross-shard transactions — how?"</p><p class="a">Sagas with compensating actions are the pragmatic answer. 2PC is technically possible but slow and hurts availability. Outbox pattern + event sourcing is common for eventual consistency.</p></div>
+    <div class="qa"><p class="q">"When would you NOT shard?"</p><p class="a">When vertical scaling still has headroom, when the workload is read-heavy (replicas are cheaper), when the data fits in ~1 TB, when the join graph is dense, or when the cost of losing ACID and easy operations outweighs the throughput win.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "Partitioning is splitting a table logically; sharding is putting those partitions on physically separate databases. Pick a shard key with high cardinality and even distribution — often <code>user_id</code> or <code>tenant_id</code>. Use consistent hashing so adding a shard only moves 1/N keys. Design around single-shard queries: cross-shard fan-out kills p99, cross-shard transactions require sagas, and hot shards need targeted mitigation like key-splitting or caching. Reshard online with dual-writes, CDC, and shadow-reads."</p>
+    <ul>
+      <li><strong>Numbers to quote:</strong> one Postgres box handles ~10k–50k QPS and ~1 TB; keep each shard's index in RAM; typical fleets are 16/64/256/1024 shards.</li>
+      <li><strong>The four strategies:</strong> range, hash (with consistent variant), directory, geo — each with its own hot-shard failure mode.</li>
+      <li><strong>Shard key rules:</strong> high cardinality, even frequency, request-correlated. Bad keys are permanent.</li>
+      <li><strong>The three losses on day one:</strong> joins, global unique constraints, easy transactions. Plan replacements upfront.</li>
+      <li><strong>The three hardest ops:</strong> resharding, hot shards, cross-shard queries. Every senior interviewer will drill into these — have concrete tactics for each.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://youtu.be/wXvljefXyEo" target="_blank" rel="noopener">Arpit Bhayani — <em>Database Sharding and Partitioning</em> (YouTube, Asli Engineering)</a> — the base video for this page</li>
+      <li><a href="https://www.mongodb.com/resources/products/capabilities/database-sharding-explained" target="_blank" rel="noopener">MongoDB — <em>Database Sharding Explained</em></a> — canonical breakdown of ranged / hashed / entity / geo sharding</li>
+      <li><a href="https://www.digitalocean.com/community/tutorials/understanding-database-sharding" target="_blank" rel="noopener">DigitalOcean — <em>Understanding Database Sharding</em></a> — when to shard, when not to, and the three main strategies (key, range, directory)</li>
+      <li><a href="https://instagram-engineering.com/sharding-ids-at-instagram-1cf5a71e5a5c" target="_blank" rel="noopener">Instagram Engineering — <em>Sharding &amp; IDs at Instagram</em></a> — real-world PostgreSQL sharding with Snowflake-like IDs</li>
+      <li><a href="https://discord.com/blog/how-discord-stores-billions-of-messages" target="_blank" rel="noopener">Discord Engineering — <em>How Discord Stores Billions of Messages</em></a> — Cassandra sharding, hot-shard reality</li>
+      <li><a href="https://aws.amazon.com/blogs/database/introducing-amazon-aurora-postgresql-limitless-database/" target="_blank" rel="noopener">AWS — <em>Introducing Amazon Aurora Limitless Database</em></a> — managed sharding for Aurora</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

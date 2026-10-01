@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Consistency Models — Distributed Systems</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c; --scenario-bg: #fff0f4;
+    --reqs: #f4a259; --reqs-bg: #fff7ed;
+    --arch: #4361ee; --arch-bg: #eef2ff;
+    --dsa: #7048e8; --dsa-bg: #f3effe;
+    --aws: #ff9900; --aws-bg: #fff6e6;
+    --code-bg: #1e2430; --code-ink: #e7ecf3; --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08); --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Distributed Systems · Interview Prep</div>
+    <h1>Consistency Models</h1>
+    <p>From linearizability down to eventual consistency — the ladder of promises a distributed store can make about what your reads will see.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Why it matters</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Two families</a>
+    <a href="#arch">🏗️ The hierarchy</a>
+    <a href="#deep">🔍 Each model</a>
+    <a href="#dsa">🧮 Isolation levels</a>
+    <a href="#aws">☁️ AWS mapping</a>
+    <a href="#code">💻 C# demo</a>
+    <a href="#tradeoffs">⚖️ Follow-ups</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What exactly does a "read" promise?</h2>
+    <p>When you write a value to a replicated store and then read it back — maybe from a different replica — what are you guaranteed to see? The <em>latest</em> value? <em>Some</em> past value? Your <em>own</em> last write but not others'? A <strong>consistency model</strong> is the precise contract that answers this. It's a safety property that "declares what a system can do" — which orderings of reads and writes the system is allowed to expose to clients. Choosing one is choosing where you sit on the spectrum between <strong>correctness</strong> and <strong>performance/availability</strong>.</p>
+    <p>This is a top-tier interview topic because it's where the <a href="../cap-theorem/index.html">CAP</a> and PACELC trade-offs become concrete. Strong models (linearizability) give you a simple mental model — the system behaves like a single machine — but cost coordination latency and availability. Weak models (eventual consistency) are fast and always-on but force your application to tolerate stale and out-of-order reads. Naming the model you need, and why, is what separates a candidate who has "used a database" from one who can <em>design</em> one.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>You change your address at the bank — how fast does everyone know?</h2>
+    <p>Suppose you walk into the bank on Monday morning and update your home address. The bank has many branches, many tellers, and many little screens. The interesting question is — <strong>how fast does the new address show up everywhere?</strong> That is what consistency is really about. It's a promise the bank makes about how quickly your update becomes visible to the next person who looks.</p>
+    <p>At the <strong>strictest</strong> end, the bank could freeze the whole world for a second and shout your new address across every branch before anyone else does anything. Every single teller in every city would see the new address the instant you finished writing it. This is beautiful for correctness — nobody is ever confused — but it's slow, and if one branch's phone line is down, the whole bank has to wait. Your ATM balance works like this. It has to.</p>
+    <p>At the <strong>loosest</strong> end, the bank just whispers your new address to the branch you visited, and lets it slowly trickle to the other branches over the next few minutes. If your husband walks into a different branch two seconds later, the teller there might still see the old address. It'll catch up eventually — usually within a blink — but for a brief moment different tellers see different things. This is fast, always-on, and never freezes. It's how <strong>Instagram like counts</strong> or <strong>YouTube view counts</strong> work — you don't really care if the number lags for a few seconds.</p>
+    <p>In between are gentler promises. "You will always see <strong>your own</strong> latest change, even if others still see the old one" (this is why your own tweet appears instantly to you). Or "If A happened before B, everyone will see them in that order" (this is why replies never appear before the message they reply to). Choosing the right promise means asking: <strong>how much staleness would upset a user?</strong> A bank balance — zero. A like count — nobody notices.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Two families of guarantee</span>
+    <h2>Single-object models vs transactional isolation</h2>
+    <p>A crucial distinction interviewers test: "consistency" means two related-but-different things.</p>
+    <table>
+      <tr><th>Family</th><th>Governs</th><th>Examples</th></tr>
+      <tr><td><strong>Consistency models</strong> (this page's focus)</td><td>The ordering of individual reads/writes on <em>single objects</em> across replicas.</td><td>Linearizability, sequential, causal, eventual.</td></tr>
+      <tr><td><strong>Transaction isolation levels</strong></td><td>How concurrent <em>multi-operation transactions</em> interleave (a database/ACID concern).</td><td>Serializable, snapshot isolation, read committed.</td></tr>
+    </table>
+    <p>They meet at the top: <strong>strict serializability</strong> = serializability (transactions) + linearizability (real-time order) — the strongest guarantee a distributed database can offer. Isolation levels are often defined by which <em>anomalies</em> ("phenomena") they forbid — dirty reads, non-repeatable reads, phantoms, write skew — formalized as forbidden cycles in a dependency graph.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ The hierarchy</span>
+    <h2>The ladder from strongest to weakest</h2>
+    <p>Consistency models form a partial order: a stronger model forbids everything a weaker one does, plus more. Stronger = easier to reason about, more coordination, worse latency/availability. Here's the mental ladder to draw on the whiteboard:</p>
+    <div class="diagram">
+      <svg viewBox="0 0 560 420" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <defs>
+          <marker id="dn" markerWidth="10" markerHeight="10" refX="5" refY="8" orient="auto"><path d="M0,0 L10,0 L5,8 Z" fill="#7f8aa0"/></marker>
+        </defs>
+        <text x="280" y="24" fill="#2dc653" font-size="12" text-anchor="middle">▲ STRONGER · more coordination · higher latency</text>
+        <rect x="150" y="36" width="260" height="42" rx="9" fill="#132a1c" stroke="#2dc653"/>
+        <text x="280" y="62" fill="#e7ecf3" font-size="13" text-anchor="middle">Strict Serializable (txn + real-time)</text>
+        <rect x="160" y="96" width="240" height="40" rx="9" fill="#152233" stroke="#4361ee"/>
+        <text x="280" y="121" fill="#e7ecf3" font-size="13" text-anchor="middle">Linearizable (single-object)</text>
+        <rect x="170" y="154" width="220" height="40" rx="9" fill="#152233" stroke="#4361ee"/>
+        <text x="280" y="179" fill="#e7ecf3" font-size="13" text-anchor="middle">Sequential Consistency</text>
+        <rect x="180" y="212" width="200" height="40" rx="9" fill="#1e1a33" stroke="#7048e8"/>
+        <text x="280" y="237" fill="#e7ecf3" font-size="13" text-anchor="middle">Causal Consistency</text>
+        <rect x="150" y="270" width="260" height="40" rx="9" fill="#2a2410" stroke="#ffd166"/>
+        <text x="280" y="295" fill="#e7ecf3" font-size="12" text-anchor="middle">Session: RYW · Monotonic R/W · PRAM</text>
+        <rect x="180" y="328" width="200" height="40" rx="9" fill="#2a1520" stroke="#f7567c"/>
+        <text x="280" y="353" fill="#e7ecf3" font-size="13" text-anchor="middle">Eventual Consistency</text>
+        <text x="280" y="398" fill="#f7567c" font-size="12" text-anchor="middle">▼ WEAKER · less coordination · lower latency, higher availability</text>
+        <line x1="280" y1="78" x2="280" y2="94" stroke="#7f8aa0" stroke-width="2" marker-end="url(#dn)"/>
+        <line x1="280" y1="136" x2="280" y2="152" stroke="#7f8aa0" stroke-width="2" marker-end="url(#dn)"/>
+        <line x1="280" y1="194" x2="280" y2="210" stroke="#7f8aa0" stroke-width="2" marker-end="url(#dn)"/>
+        <line x1="280" y1="252" x2="280" y2="268" stroke="#7f8aa0" stroke-width="2" marker-end="url(#dn)"/>
+        <line x1="280" y1="310" x2="280" y2="326" stroke="#7f8aa0" stroke-width="2" marker-end="url(#dn)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#2dc653"></span>strongest</span>
+        <span><span class="dot" style="background:#4361ee"></span>total-order</span>
+        <span><span class="dot" style="background:#7048e8"></span>causal</span>
+        <span><span class="dot" style="background:#f7567c"></span>weakest</span>
+      </div>
+    </div>
+    <p>The most important boundary is <strong>causal consistency</strong>: it's the strongest model that can still be achieved while remaining <em>available during a partition</em> (the CAP-available frontier). Everything above it (sequential, linearizable) requires giving up availability under partition.</p>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Each model, with a one-line litmus test</h2>
+    <h3>Linearizability (a.k.a. strong / atomic / external consistency)</h3>
+    <p>Every operation appears to take effect <strong>instantaneously at some point between its call and its return</strong>, and this order respects real time: if write W finishes before read R begins (wall-clock), R must see W or something newer. The system behaves as if there's a single copy of the data. This is CAP's "C". <em>Litmus:</em> once anyone sees the new value, everyone does, immediately. Cost: a coordination round-trip (consensus/quorum) per op. Used by etcd, ZooKeeper, Spanner.</p>
+    <h3>Sequential consistency</h3>
+    <p>There exists <strong>one global order</strong> of all operations that respects each process's own program order — but it need <em>not</em> match real time. So two clients agree on <em>an</em> order, but a read may return a stale value as long as everyone sees the same "story." Weaker than linearizable (drops the real-time constraint), stronger than causal. Rare as a database offering; more a theoretical rung and a memory-model concept.</p>
+    <h3>Causal consistency</h3>
+    <p>Operations that are <strong>causally related</strong> (this write happened-before that one, à la Lamport) are seen in the same order by everyone; <em>concurrent</em> (unrelated) operations may be seen in different orders on different replicas. This preserves intuitive cause-and-effect — you never see a reply before the message it answers — without global coordination. It's the sweet spot for available systems (e.g., COPS, MongoDB causal sessions). <em>Litmus:</em> "if I saw your answer, I must also see the question."</p>
+    <h3>Session guarantees (client-centric)</h3>
+    <ul>
+      <li><strong>Read-Your-Writes:</strong> you always see your own prior writes (e.g., you post a comment and it's there on refresh). Prevents the "did my save work?" confusion.</li>
+      <li><strong>Monotonic Reads:</strong> once you've read a value, later reads never return an <em>older</em> one — no going back in time.</li>
+      <li><strong>Monotonic Writes:</strong> your writes are applied in the order you issued them.</li>
+      <li><strong>Writes-Follow-Reads:</strong> a write after a read is ordered after the write that read observed.</li>
+    </ul>
+    <p>These are cheap, per-client promises usually implemented with sticky sessions or version tokens, and they dramatically improve UX on top of an otherwise eventually-consistent store.</p>
+    <h3>Eventual consistency</h3>
+    <p>The only promise: if writes stop, all replicas <strong>eventually converge</strong> to the same value. No ordering guarantee in the meantime — reads can be stale, out of order, or flap between values. Cheapest and most available (AP). Used by DNS, Cassandra/DynamoDB (default), S3 cross-region. Convergence needs a conflict-resolution rule: last-write-wins, vector clocks, or CRDTs.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 Transaction isolation levels</span>
+    <h2>The isolation ladder (the ACID cousin)</h2>
+    <p>Isolation levels are the transactional counterpart, ranked by which anomalies they permit:</p>
+    <table>
+      <tr><th>Level</th><th>Prevents</th><th>Still allows</th></tr>
+      <tr><td>Read Uncommitted</td><td>—</td><td>Dirty reads (reading uncommitted data)</td></tr>
+      <tr><td>Read Committed</td><td>Dirty reads</td><td>Non-repeatable reads, phantoms</td></tr>
+      <tr><td>Repeatable Read</td><td>+ Non-repeatable reads</td><td>Phantoms (in classic def.)</td></tr>
+      <tr><td>Snapshot Isolation</td><td>Reads from a consistent snapshot; no dirty/non-repeatable reads</td><td><strong>Write skew</strong> (its signature anomaly)</td></tr>
+      <tr><td>Serializable</td><td>All anomalies — equivalent to some serial order</td><td>—</td></tr>
+      <tr><td>Strict Serializable</td><td>Serializable + real-time order (linearizable txns)</td><td>— (strongest)</td></tr>
+    </table>
+    <h3>Complexity / cost intuition</h3>
+    <table>
+      <tr><th>Model</th><th>Coordination per op</th><th>Availability under partition</th></tr>
+      <tr><td>Linearizable / Strict serializable</td><td>Consensus or quorum round-trip</td><td>No (CP)</td></tr>
+      <tr><td>Causal</td><td>Dependency metadata, no global sync</td><td>Yes (AP-compatible)</td></tr>
+      <tr><td>Session guarantees</td><td>Sticky session / version token</td><td>Yes</td></tr>
+      <tr><td>Eventual</td><td>Async background replication</td><td>Yes (AP)</td></tr>
+    </table>
+    <p>Snapshot isolation's famous trap is <strong>write skew</strong>: two transactions each read an overlapping set, make disjoint updates that are individually fine, and commit — jointly violating an invariant (e.g., both on-call doctors sign off simultaneously because each saw the other still on duty). Serializable forbids it; SI does not.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS mapping</span>
+    <h2>Consistency knobs across AWS</h2>
+    <table>
+      <tr><th>Service</th><th>Model offered</th><th>Notes</th></tr>
+      <tr><td>DynamoDB</td><td>Eventual (default) or Strongly-consistent reads</td><td>Strong reads cost 2× RCU, single-region only; global tables are eventual + LWW.</td></tr>
+      <tr><td>Amazon S3</td><td>Strong read-after-write (since Dec 2020)</td><td>New object PUTs and overwrites are immediately readable; historically eventual.</td></tr>
+      <tr><td>Aurora / RDS</td><td>Strong on writer; replica reads are eventually consistent (replica lag)</td><td>Read-your-writes only if you read the writer or use session pinning.</td></tr>
+      <tr><td>ElastiCache Redis</td><td>Strong on primary; async replicas eventual</td><td>Reading replicas trades freshness for scale.</td></tr>
+      <tr><td>DynamoDB Transactions</td><td>Serializable (ACID across items, one region)</td><td><code>TransactWriteItems</code>/<code>TransactGetItems</code>.</td></tr>
+    </table>
+    <p>Design lesson: pick the weakest model that still satisfies the user experience. Use strong reads for "read your own profile edit," eventual reads for "show me the global feed," and session/sticky routing to cheaply get read-your-writes on top of eventual stores.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# — read-your-writes over an eventual store</h2>
+    <p>A common real pattern: the backing store is eventually consistent, but you must guarantee a user sees their own write. You attach a monotonic version token to the session and refuse to serve a replica read that's behind it — upgrading to the primary if needed.</p>
+    <pre><span class="cmt">// Read-your-writes on top of an eventually-consistent replica set,</span>
+<span class="cmt">// using a per-session "last write version" token.</span>
+<span class="kw">public sealed class</span> <span class="typ">SessionConsistentStore</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IReplica</span> _primary;
+    <span class="kw">private readonly</span> <span class="typ">IReadOnlyList</span>&lt;<span class="typ">IReplica</span>&gt; _replicas;
+
+    <span class="kw">public</span> <span class="typ">WriteToken</span> <span class="fn">Write</span>(<span class="kw">string</span> key, <span class="kw">string</span> value)
+    {
+        <span class="kw">long</span> version = _primary.Put(key, value);   <span class="cmt">// monotonically increasing</span>
+        <span class="kw">return new</span> <span class="typ">WriteToken</span>(key, version);        <span class="cmt">// hand back to the session</span>
+    }
+
+    <span class="kw">public string</span> <span class="fn">Read</span>(<span class="kw">string</span> key, <span class="typ">WriteToken</span>? session)
+    {
+        <span class="cmt">// If the caller has seen version V, only trust a replica that's caught up.</span>
+        <span class="kw">if</span> (session is { } tok &amp;&amp; tok.Key == key)
+        {
+            <span class="kw">var</span> fresh = _replicas.FirstOrDefault(r =&gt; r.VersionOf(key) &gt;= tok.Version);
+            <span class="cmt">// Fall back to the primary if no replica has caught up yet.</span>
+            <span class="kw">return</span> (fresh ?? _primary).Get(key);   <span class="cmt">// guarantees read-your-writes</span>
+        }
+        <span class="cmt">// No session constraint -&gt; cheapest eventual read from any replica.</span>
+        <span class="kw">return</span> _replicas[<span class="str">0</span>].Get(key);
+    }
+}
+<span class="cmt">// This is monotonic-reads + read-your-writes WITHOUT paying for global
+// linearizability — the pragmatic middle of the ladder most apps actually want.</span></pre>
+    <p>Real systems express these knobs declaratively: Cassandra's <code>ConsistencyLevel</code>, MongoDB's <code>readConcern</code>/<code>writeConcern</code> and causal-consistent sessions, and DynamoDB's <code>ConsistentRead</code> flag are all this idea productized.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks & likely follow-ups</h2>
+    <div class="qa"><p class="q">"Difference between linearizability and serializability?"</p><p class="a">Linearizability is a single-object, real-time ordering guarantee (recency). Serializability is a multi-object transaction guarantee (some serial equivalent), with no real-time requirement. Combine both and you get strict serializability — the strongest.</p></div>
+    <div class="qa"><p class="q">"What's the strongest model you can have while staying available under a partition?"</p><p class="a">Causal consistency (and the session guarantees below it). Anything stronger — sequential, linearizable — requires coordination that a partitioned minority can't do, so it must sacrifice availability.</p></div>
+    <div class="qa"><p class="q">"Give me a concrete eventual-consistency bug."</p><p class="a">You update your profile photo, the write lands on replica A, then your next request hits replica B which hasn't replicated yet and shows the old photo — violating read-your-writes. Fix with sticky sessions or a version token, as in the code above.</p></div>
+    <div class="qa"><p class="q">"What is write skew?"</p><p class="a">The signature anomaly snapshot isolation allows: two transactions read an overlapping snapshot, update disjoint rows, and both commit, together breaking an invariant neither would break alone. Only serializable prevents it.</p></div>
+    <div class="qa"><p class="q">"How do eventually-consistent stores resolve conflicts?"</p><p class="a">Last-write-wins (timestamp — simple but can lose data), vector clocks (detect concurrency, surface conflicts to the app), or CRDTs (data types that merge deterministically regardless of order).</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "A consistency model is the contract for what a read can return. The ladder runs from linearizable — every read sees the latest write in real-time order, like a single machine, but needs coordination — down through sequential, causal, session guarantees, to eventual, which only promises replicas converge someday. Causal is the strongest model you can keep while staying available under a partition. For transactions the parallel ladder is read-committed → snapshot isolation → serializable → strict serializable. I pick the weakest model that still meets the UX: strong for money and your-own-edits, eventual for global feeds."</div>
+    <ul>
+      <li><strong>Ladder:</strong> Strict-serializable → Linearizable → Sequential → Causal → Session (RYW/monotonic) → Eventual.</li>
+      <li><strong>Linearizable</strong> = recency + real-time, single object = CAP's "C". <strong>Serializable</strong> = transaction ordering.</li>
+      <li><strong>Causal</strong> = the available-under-partition frontier; preserves cause→effect without global sync.</li>
+      <li><strong>Session guarantees</strong> (read-your-writes, monotonic reads) are cheap wins on eventual stores.</li>
+      <li><strong>Snapshot isolation ≠ serializable</strong> — it allows <strong>write skew</strong>.</li>
+      <li><strong>Eventual</strong> converges via LWW / vector clocks / CRDTs.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://jepsen.io/consistency">Jepsen — Consistency Models (map &amp; definitions)</a></li>
+      <li><a href="https://www.microsoft.com/en-us/research/publication/consistency-tradeoffs-in-modern-distributed-database-system-design/">Abadi — "Consistency Tradeoffs in Modern Distributed Database System Design" (PACELC)</a></li>
+      <li><a href="https://www.allthingsdistributed.com/2008/12/eventually_consistent.html">Werner Vogels — "Eventually Consistent"</a></li>
+      <li><a href="https://en.wikipedia.org/wiki/Isolation_(database_systems)">Isolation levels &amp; anomalies — Wikipedia</a></li>
+      <li>Herlihy &amp; Wing (1990) — "Linearizability: A Correctness Condition for Concurrent Objects."</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Distributed File System — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg [data-anim] {
+    transition: transform .8s cubic-bezier(.4,0,.2,1),
+                opacity .45s ease, fill .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.15); }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Distributed File System</h1>
+    <p>Storing exabytes across thousands of failing machines — how GFS, HDFS, Colossus &amp; Ceph split metadata from data to hit high throughput and durability.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>A <strong>distributed file system (DFS)</strong> presents a single logical namespace of files and directories that is physically spread across thousands of commodity machines. To the application it looks like one giant disk; underneath, every file is chopped into large blocks, replicated or erasure-coded across many servers, and served in parallel. This is the storage substrate that big-data and cloud platforms are built on.</p>
+    <p>The canonical family: <strong>Google File System (GFS, 2003)</strong> — the paper that started it all, built to store the web crawl and index for Search. <strong>HDFS</strong> — the open-source clone at the heart of Hadoop, powering analytics at nearly every large enterprise. <strong>Colossus</strong> — Google's GFS successor (2010) that removed the single-master bottleneck and now underpins Search, YouTube, Drive, Gmail, and all of Google Cloud (Cloud Storage, BigQuery, Filestore). <strong>Ceph</strong> — the open-source unified store (object + block + file) used by OpenStack clouds and on-prem fleets. And the cloud managed services: <strong>Amazon S3</strong> (object), <strong>EFS</strong> / <strong>FSx</strong> (file), and <strong>Azure Data Lake Storage</strong>.</p>
+    <p>Companies build these because a single machine — no matter how big — cannot hold petabytes, cannot serve millions of concurrent readers, and <em>will</em> fail. The DFS turns a fleet of cheap, unreliable disks into one reliable, high-throughput, effectively-infinite volume. As the Colossus team puts it: "at Google scale, hardware is failing virtually all the time — not because it's unreliable, but because there's a lot of it." The DFS's whole job is to make that failure invisible.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>A movie studio's giant film archive spread across three warehouses</h2>
+    <p>Old movies were kept on long spools of film in metal cans. If a studio made hundreds of films every year, one warehouse couldn't hold them all — and a single fire could wipe out a century of cinema in one afternoon. So the big studios came up with a smart plan. First, they'd take each long film and <strong>cut it into shorter reels</strong> that fit into standard-sized cans. Then, for every single can, they'd make <strong>three identical copies and store them in three different warehouses</strong> across the country. Finally, they kept a <strong>master index</strong> at the head office — a big book that says "Reel 4 of <em>Casablanca</em> is in Warehouse A shelf 12, Warehouse B shelf 5, and Warehouse D shelf 88."</p>
+    <p>Now imagine you want to watch a movie. The studio doesn't hand you the whole thing from one warehouse — that would be slow. Instead, the head office tells five delivery trucks to <strong>pick up different reels from different warehouses at the same time</strong>, and you get the whole film almost instantly because everyone was pulling in parallel. If Warehouse B burns down tomorrow, no problem — the head office sees the gap, and quietly asks a fourth warehouse to make new copies from A and D. You never even notice.</p>
+    <p>That's exactly the trick behind the storage powering <strong>Dropbox</strong>, <strong>Google Drive</strong>, <strong>YouTube</strong>, and <strong>Netflix</strong>. Your holiday photo isn't sitting on one hard drive somewhere; it's chopped into small pieces, copied to three different buildings, and any two of them can still give you back the photo perfectly. So even though the hard drives break every single day — thousands of them — you never lose a single picture of your dog.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Create / open / read / write / delete</strong> files within a hierarchical namespace (directories).</li>
+      <li>Store <strong>very large files</strong> (GB → TB) and stream them efficiently.</li>
+      <li><strong>Append</strong> (and in GFS, atomic concurrent <em>record append</em>) — the dominant write pattern for logs and datasets.</li>
+      <li>Return the <strong>locations</strong> of a file's data so clients can read directly from the machines that hold it.</li>
+    </ul>
+
+    <h3>Non-functional requirements (the ones that shape the design)</h3>
+    <ul>
+      <li><strong>Durability</strong> — survive disk, machine, and rack failures with essentially zero data loss (target ~11 nines for S3-class systems).</li>
+      <li><strong>High throughput over low latency</strong> — optimized for large sequential scans, "even at the cost of latency" (GFS). Batch/analytics, not interactive random I/O.</li>
+      <li><strong>Availability</strong> — no single point of failure in the data path; fast automatic recovery.</li>
+      <li><strong>Horizontal scalability</strong> — add machines to add capacity <em>and</em> bandwidth linearly.</li>
+      <li><strong>Consistency</strong> — a defined, well-understood model (not necessarily strict POSIX).</li>
+    </ul>
+
+    <h3>Capacity estimation (a Colossus-scale cluster)</h3>
+    <table>
+      <tr><th>Quantity</th><th>Estimate</th><th>Reasoning</th></tr>
+      <tr><td>Cluster capacity</td><td>~1 exabyte (10¹⁸ B)</td><td>A single Colossus cluster scales to exabytes over tens of thousands of machines.</td></tr>
+      <tr><td>Machines</td><td>10,000–100,000 nodes</td><td>Commodity servers, ~12–24 disks each.</td></tr>
+      <tr><td>Block / chunk size</td><td>64 MB (GFS) · 128 MB (HDFS)</td><td>Large blocks amortize seek cost and shrink metadata (see below).</td></tr>
+      <tr><td>Metadata per block</td><td>~150 bytes</td><td>HDFS NameNode rule of thumb — so 1 EB / 128 MB ≈ 8 billion blocks ⇒ ~1.2 TB of metadata. This is exactly why a single in-memory master eventually breaks.</td></tr>
+      <tr><td>Replication factor</td><td>3× (hot) or EC (10,4) ≈ 1.4× (cold)</td><td>3 copies tolerate 2 failures; Reed-Solomon (10,4) tolerates 4 failures at 1.4× overhead.</td></tr>
+      <tr><td>Raw : usable ratio</td><td>3:1 with replication</td><td>1 EB usable ⇒ 3 EB of raw disk. EC cuts this to ~1.4 EB.</td></tr>
+      <tr><td>Per-chunkserver read</td><td>~80–100 MB/s</td><td>GFS benchmark ≈ one disk's throughput; aggregate scales with node count.</td></tr>
+      <tr><td>Aggregate read throughput</td><td>10s of GB/s → TB/s</td><td>GFS hit 583 MB/s across 342 nodes; since the master is off the data path, read bandwidth scales with the number of chunkservers.</td></tr>
+    </table>
+    <p><strong>The number to volunteer:</strong> "Metadata is tiny per block but the <em>block count</em> is what limits a central master — roughly 150 bytes × billions of blocks. That's the pressure that pushed GFS's single master to Colossus's distributed, BigTable-backed metadata."</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The single most important idea in the whole design: <strong>separate the control plane (metadata) from the data plane (bytes)</strong>. A client first asks the <em>metadata service</em> "which machines hold the blocks of this file?" — a small, cheap lookup. It then streams the actual data <strong>directly</strong> to and from the <em>storage nodes</em>, never routing bulk bytes through the metadata server. This keeps the metadata node off the hot path, so read/write bandwidth scales with the number of storage nodes rather than being throttled by one coordinator.</p>
+    <p>In GFS/HDFS terms: the <strong>Master / NameNode</strong> owns the namespace and the block→location map; the <strong>Chunkservers / DataNodes</strong> store the blocks and talk to clients directly. Storage nodes send periodic <strong>heartbeats</strong> (every 3s in HDFS) carrying block reports; if the master misses heartbeats for ~2 minutes it declares the node dead and re-replicates its blocks elsewhere. Writes are chained through a <strong>replication pipeline</strong> so a block flows node→node→node and is only acknowledged once all replicas have it.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 860 470" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <defs>
+          <marker id="ctrl" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#4cc9f0"/>
+          </marker>
+          <marker id="data" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#2dc653"/>
+          </marker>
+          <marker id="repl" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#f4a259"/>
+          </marker>
+        </defs>
+
+        <!-- Client -->
+        <rect x="30" y="200" width="120" height="60" rx="12" fill="#4361ee"/>
+        <text x="90" y="226" fill="#fff" font-size="15" font-weight="700" text-anchor="middle">Client</text>
+        <text x="90" y="245" fill="#dfe6ff" font-size="11" text-anchor="middle">(library)</text>
+
+        <!-- Metadata service -->
+        <rect x="330" y="30" width="220" height="90" rx="12" fill="#7048e8"/>
+        <text x="440" y="58" fill="#fff" font-size="15" font-weight="700" text-anchor="middle">Metadata Service</text>
+        <text x="440" y="78" fill="#e3d9ff" font-size="11.5" text-anchor="middle">Master / NameNode / Curators</text>
+        <text x="440" y="96" fill="#e3d9ff" font-size="11.5" text-anchor="middle">namespace + block→location map</text>
+        <text x="440" y="112" fill="#c9b8ff" font-size="10.5" text-anchor="middle">edit log + checkpoint (fsimage)</text>
+
+        <!-- Metadata store (Colossus) -->
+        <rect x="600" y="45" width="220" height="60" rx="12" fill="#22304d" stroke="#7048e8" stroke-dasharray="4 3"/>
+        <text x="710" y="70" fill="#c6d0e0" font-size="12.5" font-weight="700" text-anchor="middle">Metadata store (Colossus)</text>
+        <text x="710" y="90" fill="#8fa0bd" font-size="11" text-anchor="middle">BigTable — scales metadata 100×</text>
+
+        <!-- Storage nodes -->
+        <g>
+          <rect x="310" y="300" width="150" height="120" rx="12" fill="#0f3d2e" stroke="#2dc653"/>
+          <text x="385" y="324" fill="#a8f0c6" font-size="13" font-weight="700" text-anchor="middle">Storage node A</text>
+          <rect x="330" y="338" width="110" height="20" rx="4" fill="#2dc653" opacity=".8"/>
+          <text x="385" y="352" fill="#04140b" font-size="10.5" text-anchor="middle">chunk 1a</text>
+          <rect x="330" y="366" width="110" height="20" rx="4" fill="#2dc653" opacity=".55"/>
+          <text x="385" y="380" fill="#04140b" font-size="10.5" text-anchor="middle">chunk 2a</text>
+          <text x="385" y="406" fill="#7fd7a3" font-size="10" text-anchor="middle">primary (holds lease)</text>
+        </g>
+        <g>
+          <rect x="500" y="300" width="150" height="120" rx="12" fill="#0f3d2e" stroke="#2dc653"/>
+          <text x="575" y="324" fill="#a8f0c6" font-size="13" font-weight="700" text-anchor="middle">Storage node B</text>
+          <rect x="520" y="338" width="110" height="20" rx="4" fill="#2dc653" opacity=".8"/>
+          <text x="575" y="352" fill="#04140b" font-size="10.5" text-anchor="middle">chunk 1b</text>
+        </g>
+        <g>
+          <rect x="690" y="300" width="150" height="120" rx="12" fill="#0f3d2e" stroke="#2dc653"/>
+          <text x="765" y="324" fill="#a8f0c6" font-size="13" font-weight="700" text-anchor="middle">Storage node C</text>
+          <rect x="710" y="338" width="110" height="20" rx="4" fill="#2dc653" opacity=".8"/>
+          <text x="765" y="352" fill="#04140b" font-size="10.5" text-anchor="middle">chunk 1c</text>
+          <text x="765" y="406" fill="#7fd7a3" font-size="10" text-anchor="middle">(rack 2)</text>
+        </g>
+
+        <!-- Control-plane arrows -->
+        <path d="M150 210 Q 240 90 328 80" fill="none" stroke="#4cc9f0" stroke-width="2.4" marker-end="url(#ctrl)"/>
+        <text x="205" y="120" fill="#4cc9f0" font-size="11" font-weight="600">1. where are the blocks?</text>
+        <path d="M328 100 Q 240 150 150 225" fill="none" stroke="#4cc9f0" stroke-width="2.4" marker-end="url(#ctrl)" stroke-dasharray="5 4"/>
+        <text x="150" y="168" fill="#4cc9f0" font-size="11" font-weight="600">2. node list + lease</text>
+        <path d="M552 82 L598 78" fill="none" stroke="#7048e8" stroke-width="2.2" marker-end="url(#ctrl)"/>
+
+        <!-- Heartbeats -->
+        <path d="M400 300 Q 430 210 440 122" fill="none" stroke="#8fa0bd" stroke-width="1.6" stroke-dasharray="3 4" marker-end="url(#ctrl)"/>
+        <text x="300" y="200" fill="#8fa0bd" font-size="10.5">heartbeat +</text>
+        <text x="300" y="214" fill="#8fa0bd" font-size="10.5">block report</text>
+
+        <!-- Data-plane arrows -->
+        <path d="M150 240 Q 240 320 308 350" fill="none" stroke="#2dc653" stroke-width="2.8" marker-end="url(#data)"/>
+        <text x="150" y="300" fill="#2dc653" font-size="11" font-weight="700">3. read/write bytes direct</text>
+
+        <!-- Replication pipeline -->
+        <path d="M460 360 L500 360" fill="none" stroke="#f4a259" stroke-width="2.6" marker-end="url(#repl)"/>
+        <path d="M650 360 L688 360" fill="none" stroke="#f4a259" stroke-width="2.6" marker-end="url(#repl)"/>
+        <text x="470" y="440" fill="#f4a259" font-size="10.5" font-weight="600">4. replication pipeline A→B→C</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#4cc9f0"></span>Control plane (metadata)</span>
+        <span><span class="dot" style="background:#2dc653"></span>Data plane (bytes, direct)</span>
+        <span><span class="dot" style="background:#f4a259"></span>Replication pipeline</span>
+        <span><span class="dot" style="background:#8fa0bd"></span>Heartbeat / block report</span>
+      </div>
+    </div>
+
+    <h3>The read path, step by step</h3>
+    <ol class="steps">
+      <li>Client asks the metadata service for the block handles and replica locations of <code>/data/logs.txt</code> at a given offset.</li>
+      <li>Metadata service returns the block IDs and the set of storage nodes holding each replica (sorted by network proximity).</li>
+      <li>Client connects to the <em>nearest</em> replica and streams bytes directly — the metadata node is now out of the loop.</li>
+      <li>Client caches the block→location map briefly so subsequent reads skip the metadata round-trip.</li>
+    </ol>
+
+    <h3>The write (append) path</h3>
+    <ol class="steps">
+      <li>Client asks the metadata service to allocate a new block; it picks replica nodes (rack-aware) and grants one replica a <strong>lease</strong> making it the <em>primary</em>.</li>
+      <li>Client pushes the data to all replicas in a <strong>pipeline</strong> (A→B→C), decoupled from control flow to use full network bandwidth.</li>
+      <li>Client sends the write request to the primary; the primary assigns a serial order and forwards it to secondaries.</li>
+      <li>Once <em>all</em> replicas acknowledge, the primary acks the client. Any failure ⇒ client retries; the write is atomic only when all replicas succeed.</li>
+    </ol>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch the control-plane / data-plane split in action</h2>
+    <p>The single most important idea in distributed file systems is this: a tiny lookup on the control plane, then bulk bytes flow <em>directly</em> between client and storage nodes — so read/write throughput scales with the number of storage nodes, not the metadata server. This animation shows exactly that: the metadata service returns block locations (blue hop), then the client streams straight to a chunkserver (green data flow), and finally the replication pipeline copies a new write A→B→C across racks.</p>
+
+    <div class="anim-frame" id="dfs-anim">
+      <svg viewBox="0 0 780 380" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <!-- Client -->
+        <rect x="20" y="160" width="90" height="52" rx="10" fill="#4361ee"/>
+        <text x="65" y="184" fill="#fff" font-size="12" font-weight="700" text-anchor="middle">Client</text>
+        <text x="65" y="200" fill="#dfe6ff" font-size="10" text-anchor="middle">library</text>
+
+        <!-- Metadata service (small — off the data path) -->
+        <g>
+          <text x="380" y="50" fill="#e3d9ff" font-size="11" font-weight="700" text-anchor="middle">Metadata Service (control plane)</text>
+          <rect id="meta" data-anim x="290" y="60" width="180" height="52" rx="10" fill="#7048e8"/>
+          <text x="380" y="82" fill="#fff" font-size="11" text-anchor="middle">Master / Curators</text>
+          <text x="380" y="98" fill="#e3d9ff" font-size="10" text-anchor="middle">block → location map</text>
+        </g>
+
+        <!-- Three storage nodes (rack-aware) -->
+        <text x="280" y="188" fill="#8fa0bd" font-size="10" font-weight="700" text-anchor="middle">Rack 1</text>
+        <text x="605" y="188" fill="#8fa0bd" font-size="10" font-weight="700" text-anchor="middle">Rack 2</text>
+
+        <g>
+          <rect id="nodeA" data-anim x="220" y="200" width="130" height="120" rx="10" fill="#0f3d2e" stroke="#2dc653"/>
+          <text x="285" y="220" fill="#a8f0c6" font-size="11" font-weight="700" text-anchor="middle">Storage A</text>
+          <text x="285" y="236" fill="#7fd7a3" font-size="9.5" text-anchor="middle">(primary lease)</text>
+          <rect id="chunkA" data-anim x="240" y="248" width="90" height="20" rx="4" fill="#2dc653" opacity=".22"/>
+          <text x="285" y="262" fill="#04140b" font-size="9.5" text-anchor="middle" font-weight="700">chunk 42</text>
+          <rect x="240" y="275" width="90" height="20" rx="4" fill="#2dc653" opacity=".55"/>
+          <text x="285" y="289" fill="#04140b" font-size="9.5" text-anchor="middle" font-weight="700">chunk 41</text>
+        </g>
+        <g>
+          <rect id="nodeB" data-anim x="380" y="200" width="130" height="120" rx="10" fill="#0f3d2e" stroke="#2dc653"/>
+          <text x="445" y="220" fill="#a8f0c6" font-size="11" font-weight="700" text-anchor="middle">Storage B</text>
+          <text x="445" y="236" fill="#7fd7a3" font-size="9.5" text-anchor="middle">(secondary)</text>
+          <rect id="chunkB" data-anim x="400" y="248" width="90" height="20" rx="4" fill="#2dc653" opacity=".22"/>
+          <text x="445" y="262" fill="#04140b" font-size="9.5" text-anchor="middle" font-weight="700">chunk 42</text>
+        </g>
+        <g>
+          <rect id="nodeC" data-anim x="540" y="200" width="130" height="120" rx="10" fill="#0f3d2e" stroke="#2dc653"/>
+          <text x="605" y="220" fill="#a8f0c6" font-size="11" font-weight="700" text-anchor="middle">Storage C</text>
+          <text x="605" y="236" fill="#7fd7a3" font-size="9.5" text-anchor="middle">(off-rack replica)</text>
+          <rect id="chunkC" data-anim x="560" y="248" width="90" height="20" rx="4" fill="#2dc653" opacity=".22"/>
+          <text x="605" y="262" fill="#04140b" font-size="9.5" text-anchor="middle" font-weight="700">chunk 42</text>
+        </g>
+
+        <!-- Rack boundary -->
+        <line x1="530" y1="180" x2="530" y2="330" stroke="#3a4a6b" stroke-dasharray="4 3"/>
+
+        <!-- Traveling control-plane request (small blue) -->
+        <g id="ctrl" data-anim class="a-hidden" transform="translate(0,0)">
+          <circle cx="115" cy="186" r="8" fill="#4cc9f0"/>
+          <text x="115" y="190" fill="#04202a" font-size="8" font-weight="700" text-anchor="middle">M</text>
+        </g>
+
+        <!-- Data-plane chunk (big amber) -->
+        <g id="data" data-anim class="a-hidden" transform="translate(0,0)">
+          <rect x="105" y="176" width="30" height="20" rx="4" fill="#f4a259"/>
+          <text x="120" y="190" fill="#3a2400" font-size="9" font-weight="700" text-anchor="middle">chunk</text>
+        </g>
+
+        <!-- Phase label -->
+        <rect x="290" y="130" width="180" height="24" rx="6" fill="#0f1a30" stroke="#4cc9f0"/>
+        <text id="dfsPhase" x="380" y="147" fill="#4cc9f0" font-size="11" font-weight="700" text-anchor="middle">Ready</text>
+
+        <!-- Result -->
+        <g id="result" data-anim class="a-hidden">
+          <rect x="20" y="230" width="90" height="30" rx="6" fill="#2dc653"/>
+          <text id="resultText" x="65" y="250" fill="#04140b" font-size="10" font-weight="700" text-anchor="middle">bytes ✓</text>
+        </g>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to walk through the read path and the write pipeline.</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('dfs-anim');
+        if (!root) return;
+        const $ = (s) => root.querySelector(s);
+        const label = root.querySelector('.anim-step-label');
+        const cap   = root.querySelector('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const steps = [
+          // READ PATH
+          { c: 'READ: Client asks the metadata service "which chunkservers hold chunk 42 of /data/logs?"',
+            a: () => {
+              $('#dfsPhase').textContent = 'READ path';
+              $('#ctrl').classList.remove('a-hidden');
+              $('#ctrl').setAttribute('transform', 'translate(200,-90)');
+              $('#meta').classList.add('a-glow');
+            }},
+          { c: 'Metadata returns a small list: block IDs + replica locations (nearest first). It is NOT in the data path.',
+            a: () => {
+              $('#meta').classList.remove('a-glow');
+              $('#ctrl').setAttribute('transform', 'translate(0,0)');
+              $('#ctrl').classList.add('a-hidden');
+            }},
+          { c: 'Client opens a direct connection to the nearest replica (Storage A) and streams bytes — bypassing the metadata service entirely.',
+            a: () => {
+              $('#data').classList.remove('a-hidden');
+              $('#data').setAttribute('transform', 'translate(160,50)');
+              $('#nodeA').classList.add('a-glow');
+              $('#chunkA').setAttribute('opacity', '.9');
+            }},
+          { c: 'Bytes arrive at the client. Because reads bypass the master, aggregate throughput scales with the chunkserver fleet.',
+            a: () => {
+              $('#nodeA').classList.remove('a-glow');
+              $('#data').setAttribute('transform', 'translate(0,0)');
+              $('#data').classList.add('a-hidden');
+              $('#resultText').textContent = 'READ ✓';
+              $('#result').classList.remove('a-hidden');
+            }},
+          // WRITE PATH
+          { c: 'WRITE: Client asks the master to allocate a new chunk. Master picks 3 rack-aware replicas and grants A the lease.',
+            a: () => {
+              $('#result').classList.add('a-hidden');
+              $('#dfsPhase').textContent = 'WRITE pipeline';
+              $('#ctrl').classList.remove('a-hidden');
+              $('#ctrl').setAttribute('transform', 'translate(200,-90)');
+              $('#meta').classList.add('a-glow');
+              // reset chunks to empty for write phase
+              $('#chunkA').setAttribute('opacity', '.22');
+              $('#chunkB').setAttribute('opacity', '.22');
+              $('#chunkC').setAttribute('opacity', '.22');
+            }},
+          { c: 'Client pushes bytes to Storage A (the primary). A stores them locally.',
+            a: () => {
+              $('#meta').classList.remove('a-glow');
+              $('#ctrl').setAttribute('transform', 'translate(0,0)');
+              $('#ctrl').classList.add('a-hidden');
+              $('#data').classList.remove('a-hidden');
+              $('#data').setAttribute('transform', 'translate(160,50)');
+              $('#nodeA').classList.add('a-glow');
+              $('#chunkA').setAttribute('opacity', '.9');
+            }},
+          { c: 'A forwards to Storage B in the same rack (fast, cheap bandwidth) — the replication pipeline continues.',
+            a: () => {
+              $('#nodeA').classList.remove('a-glow');
+              $('#data').setAttribute('transform', 'translate(320,50)');
+              $('#nodeB').classList.add('a-glow');
+              $('#chunkB').setAttribute('opacity', '.9');
+            }},
+          { c: 'B forwards to Storage C across racks — the off-rack replica survives a whole-rack failure.',
+            a: () => {
+              $('#nodeB').classList.remove('a-glow');
+              $('#data').setAttribute('transform', 'translate(480,50)');
+              $('#nodeC').classList.add('a-glow');
+              $('#chunkC').setAttribute('opacity', '.9');
+            }},
+          { c: 'All 3 replicas hold the chunk — primary acks the client. Durable even if a whole rack (or AZ) goes down.',
+            a: () => {
+              $('#nodeC').classList.remove('a-glow');
+              $('#data').setAttribute('transform', 'translate(0,0)');
+              $('#data').classList.add('a-hidden');
+              $('#resultText').textContent = 'WRITE ✓ (RF=3)';
+              $('#result').classList.remove('a-hidden');
+            }}
+        ];
+
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          ['#ctrl','#data','#result'].forEach(id => {
+            $(id).classList.add('a-hidden');
+            $(id).setAttribute('transform', 'translate(0,0)');
+          });
+          $('#chunkA').setAttribute('opacity', '.22');
+          $('#chunkB').setAttribute('opacity', '.22');
+          $('#chunkC').setAttribute('opacity', '.22');
+          ['#meta','#nodeA','#nodeB','#nodeC'].forEach(id => $(id).classList.remove('a-glow'));
+          $('#dfsPhase').textContent = 'Ready';
+          $('#resultText').textContent = 'bytes ✓';
+          label.textContent = 'Ready';
+          cap.textContent = 'Press ▶ Play to walk through the read path and the write pipeline.';
+          btnPlay.textContent = '▶ Play';
+        }
+        function goto(i) {
+          if (i < 0 || i >= steps.length) return;
+          reset();
+          for (let k = 0; k <= i; k++) steps[k].a();
+          idx = i;
+          label.textContent = `Step ${i + 1}/${steps.length}`;
+          cap.textContent = steps[i].c;
+        }
+        let idx = -1, playing = false, timer = null;
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < steps.length) {
+              idx++;
+              steps[idx].a();
+              label.textContent = `Step ${idx + 1}/${steps.length}`;
+              cap.textContent = steps[idx].c;
+            }
+            if (idx < steps.length - 1) timer = setTimeout(tick, 2200);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 300);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>Why blocks are huge (64–128 MB)</h3>
+    <p>A giant block size is a deliberate, load-bearing decision. First, it <strong>slashes metadata volume</strong>: at ~150 bytes of metadata per block, using 128 MB blocks instead of 4 KB OS pages reduces the number of metadata entries by ~30,000×, letting a single master's RAM hold the map for petabytes. Second, it <strong>amortizes disk seeks</strong> — for a workload of large sequential scans, one seek then a long streaming read is near-optimal disk behavior. Third, it lets a client hold a persistent TCP connection to a chunkserver and do many operations against the same block. The cost: small files waste space and create hot blocks — DFSs are explicitly <em>not</em> built for millions of tiny files.</p>
+
+    <h3>The metadata bottleneck and how Colossus fixed it</h3>
+    <p>GFS used a <strong>single master</strong> holding all metadata in memory, with an operation log + periodic checkpoints for durability. This is beautifully simple and keeps metadata operations fast and strongly consistent — but it caps the cluster at whatever one machine's RAM and CPU can serve, and it's a recovery bottleneck. Google hit this wall (notably storing Search metadata). <strong>Colossus</strong> replaced the single master with a horizontally scalable metadata service: <strong>Curators</strong> handle control operations and store the file-system metadata in <strong>BigTable</strong> (itself built on Colossus — a neat bootstrap). This "allowed Colossus to scale up by over 100× over the largest GFS clusters." HDFS took a different route to the same problem: <strong>HDFS Federation</strong> (multiple independent NameNodes, each owning a slice of the namespace) plus <strong>NameNode HA</strong> (an active/standby pair sharing an edit log via a quorum journal, with automatic failover).</p>
+
+    <h3>Replication, rack-awareness, and re-replication</h3>
+    <p>The default is <strong>3 replicas</strong>. Placement is <strong>rack-aware</strong>: HDFS puts two replicas on one rack and a third on a different rack. This balances two forces — keeping two copies close is cheap for the write pipeline's bandwidth, while the off-rack copy survives a whole-rack failure (a failed top-of-rack switch or PDU). When a node dies (missed heartbeats), the master notices its blocks are under-replicated and schedules <strong>re-replication</strong> from surviving copies to restore the factor of 3 — this background healing is what delivers durability despite constant hardware failure.</p>
+
+    <h3>Erasure coding for cold data</h3>
+    <p>3× replication costs 200% overhead. For colder data, systems switch to <strong>Reed-Solomon erasure coding</strong>: split data into <em>k</em> blocks, compute <em>m</em> parity blocks, and store all <em>k+m</em>. A common choice is <strong>RS(10,4)</strong> (used in Facebook's HDFS): 10 data + 4 parity survives any 4 simultaneous failures at only <strong>1.4× overhead</strong> — versus needing 5× replication for the same fault tolerance. The trade-off is <strong>reconstruction cost</strong>: rebuilding one lost block requires reading <em>k</em> other blocks and doing math, which burns CPU and cross-node network. That's why EC is used for cold/archival data while hot data stays replicated for cheap reads and fast recovery.</p>
+
+    <h3>Ceph &amp; CRUSH — placement with no lookup table at all</h3>
+    <p>Ceph takes a radically different tack on the metadata bottleneck for <em>data placement</em>: it stores no central block→location map at all. Instead, the <strong>CRUSH</strong> algorithm (Controlled, scalable, decentralized placement) <em>computes</em> which OSDs (storage daemons) hold an object from the object's ID and a cluster map. Any client can calculate the location independently — zero lookups, no directory to become a chokepoint. Ceph's <strong>Monitors</strong> maintain the authoritative cluster map; its <strong>MDS</strong> serves only POSIX filesystem <em>names/inodes</em> for CephFS (not data placement); and everything sits on <strong>RADOS</strong>, the underlying object store that also exposes S3-compatible object and RBD block interfaces.</p>
+
+    <h3>Consistency model</h3>
+    <p>These systems deliberately relax POSIX. GFS guarantees that a successful record append is written <em>at least once</em> atomically, but concurrent writes to overlapping regions can leave "consistent but undefined" data — the client is expected to tolerate duplicates and use checksums/record boundaries. HDFS is simpler: <strong>write-once, read-many</strong> with append; a file has a single writer and readers see data only after a block is fully written/closed. The lesson for interviews: <em>the file-system semantics are co-designed with the workload</em> — append-mostly, large-scan analytics — rather than trying to be a general POSIX disk.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>A DFS is a surprisingly rich bag of data structures. The <strong>namespace</strong> is a tree (or a flat hash map of full-path → inode, as GFS actually uses to avoid per-directory locking). The <strong>block map</strong> is a hash table from block-ID → replica set. Durability of metadata comes from a <strong>write-ahead log</strong> (edit log) plus periodic <strong>checkpoints</strong> (fsimage) — the same pattern databases use. Data integrity relies on <strong>checksums</strong> (CRC32C) stored per block sub-chunk so silent disk corruption ("bit rot") is caught on read. And the heart of durability math is <strong>Reed-Solomon coding</strong> over a Galois field.</p>
+    <table>
+      <tr><th>Structure / Algorithm</th><th>Where it's used</th><th>Complexity</th><th>Why it's chosen</th></tr>
+      <tr><td>Hash map (path → inode, block → locations)</td><td>Master/NameNode metadata</td><td>O(1) lookup</td><td>Constant-time namespace &amp; location lookups; GFS uses flat path map to avoid directory locks.</td></tr>
+      <tr><td>Write-ahead log + checkpoint</td><td>Metadata durability (edit log, fsimage)</td><td>O(1) append; O(n) replay on recovery</td><td>Survive master crash without losing recent ops; checkpoint bounds replay time.</td></tr>
+      <tr><td>Consistent hashing / CRUSH</td><td>Ceph data placement</td><td>O(1) compute, no lookup</td><td>Clients compute location; adding nodes moves minimal data; no central map.</td></tr>
+      <tr><td>Reed-Solomon erasure code</td><td>Cold-data durability</td><td>Encode O(k·m); decode O(k²) per stripe</td><td>Tolerate <em>m</em> failures at (k+m)/k overhead — far cheaper than replication.</td></tr>
+      <tr><td>CRC32C checksums</td><td>Per-block integrity</td><td>O(block size)</td><td>Detect silent corruption on every read; trigger repair from a good replica.</td></tr>
+      <tr><td>Heartbeat + failure detector</td><td>Master ↔ storage nodes</td><td>O(nodes) per interval</td><td>Timeout-based liveness; drives re-replication and load balancing.</td></tr>
+      <tr><td>Lease / primary election</td><td>Write ordering per block</td><td>O(1)</td><td>Serializes concurrent mutations to a block without a global lock.</td></tr>
+      <tr><td>Merkle-tree / scrubbing</td><td>Background integrity (Ceph, S3)</td><td>O(n) scan</td><td>Continuously verify replicas match; detect &amp; heal divergence.</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>On AWS you rarely build a DFS from scratch — you consume one of three managed families depending on the access pattern. The concepts map cleanly onto the components above.</p>
+    <table>
+      <tr><th>DFS component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Object store (S3-style, HTTP GET/PUT)</td><td><strong>Amazon S3</strong></td><td>The canonical exabyte object store — 11 nines durability via replication across ≥3 AZs, flat key namespace, erasure-coded internally. Use for data lakes, backups, static content.</td></tr>
+      <tr><td>POSIX shared file system (NFS)</td><td><strong>Amazon EFS</strong></td><td>Elastic, multi-AZ NFS mounted by many EC2/Lambda clients at once — the "shared network drive" use case.</td></tr>
+      <tr><td>High-performance / specialized FS</td><td><strong>Amazon FSx</strong> (Lustre, NetApp ONTAP, Windows FS)</td><td>FSx for Lustre gives HPC-grade throughput (100s GB/s) backed by S3 — the closest managed analog to a parallel DFS like GFS/HDFS.</td></tr>
+      <tr><td>Hadoop / HDFS workloads</td><td><strong>Amazon EMR</strong> (+ EMRFS on S3)</td><td>Runs actual HDFS on the cluster's local disks, or EMRFS to treat S3 as the HDFS-compatible file system (decoupling storage from compute).</td></tr>
+      <tr><td>Metadata / catalog</td><td><strong>DynamoDB</strong> / <strong>AWS Glue Catalog</strong></td><td>Scalable key-value metadata — the role BigTable plays for Colossus.</td></tr>
+      <tr><td>Block storage (single-attach)</td><td><strong>Amazon EBS</strong></td><td>Network-attached block volumes — the RBD/D-server analog for a single instance.</td></tr>
+      <tr><td>Membership / coordination</td><td><strong>Internal (S3 control plane)</strong> · self-managed <strong>ZooKeeper</strong> on EMR</td><td>Leader election, config, and liveness — the heartbeat/lease machinery.</td></tr>
+    </table>
+    <p><strong>Deployment story to tell:</strong> "For analytics I'd decouple storage from compute — land raw data in <strong>S3</strong> (durable, cheap, erasure-coded), catalog it in <strong>Glue</strong>, and run <strong>EMR</strong>/Spark or Athena against it via EMRFS. If a job needs a POSIX shared mount I'd use <strong>EFS</strong>; for HPC-scale throughput, <strong>FSx for Lustre</strong> linked to the same S3 bucket. This mirrors the Colossus philosophy: a single durable storage pool underneath, many compute engines on top, control plane separate from data plane."</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>The two ideas most worth coding for an interview are (1) the <strong>metadata service</strong> that maps a file to its blocks and their replica locations, and (2) the <strong>durability math</strong> of Reed-Solomon-style erasure coding. Here is a compact, idiomatic sketch of a NameNode-style metadata service plus the rack-aware placement and a simple XOR parity (RAID-4 style, the intuition behind Reed-Solomon).</p>
+    <pre><span class="cmt">// ---- Metadata service: the control plane (NameNode / Master / Curator) ----</span>
+<span class="kw">public sealed record</span> <span class="typ">BlockId</span>(<span class="typ">long</span> Value);
+
+<span class="kw">public sealed class</span> <span class="typ">BlockInfo</span>
+{
+    <span class="kw">public</span> <span class="typ">BlockId</span> Id { <span class="kw">get</span>; <span class="kw">init</span>; }
+    <span class="cmt">// replica locations, ordered by network proximity to the writer</span>
+    <span class="kw">public</span> <span class="typ">IReadOnlyList</span>&lt;<span class="typ">string</span>&gt; Replicas { <span class="kw">get</span>; <span class="kw">init</span>; } = <span class="typ">Array</span>.Empty&lt;<span class="typ">string</span>&gt;();
+}
+
+<span class="kw">public sealed class</span> <span class="typ">MetadataService</span>
+{
+    <span class="kw">private const long</span> BlockSizeBytes = 128L * 1024 * 1024;   <span class="cmt">// 128 MB (HDFS default)</span>
+    <span class="kw">private const int</span>  ReplicationFactor = 3;
+
+    <span class="cmt">// path -> ordered list of blocks that make up the file</span>
+    <span class="kw">private readonly</span> <span class="typ">Dictionary</span>&lt;<span class="typ">string</span>, <span class="typ">List</span>&lt;<span class="typ">BlockId</span>&gt;&gt; _fileToBlocks = <span class="kw">new</span>();
+    <span class="cmt">// blockId -> where its replicas live</span>
+    <span class="kw">private readonly</span> <span class="typ">Dictionary</span>&lt;<span class="typ">BlockId</span>, <span class="typ">BlockInfo</span>&gt; _blocks = <span class="kw">new</span>();
+    <span class="kw">private readonly object</span> _lock = <span class="kw">new</span>();
+    <span class="kw">private long</span> _nextBlockId = 1;
+
+    <span class="kw">private readonly</span> <span class="typ">IPlacementPolicy</span> _placement;
+    <span class="kw">public</span> <span class="fn">MetadataService</span>(<span class="typ">IPlacementPolicy</span> placement) =&gt; _placement = placement;
+
+    <span class="cmt">// WRITE control-op: allocate a new block and pick rack-aware replicas.</span>
+    <span class="kw">public</span> <span class="typ">BlockInfo</span> <span class="fn">AllocateBlock</span>(<span class="typ">string</span> path)
+    {
+        <span class="kw">lock</span> (_lock)
+        {
+            <span class="kw">var</span> id = <span class="kw">new</span> <span class="typ">BlockId</span>(_nextBlockId++);
+            <span class="kw">var</span> replicas = _placement.<span class="fn">ChooseReplicas</span>(ReplicationFactor);  <span class="cmt">// e.g. 2 same-rack + 1 off-rack</span>
+            <span class="kw">var</span> info = <span class="kw">new</span> <span class="typ">BlockInfo</span> { Id = id, Replicas = replicas };
+            _blocks[id] = info;
+            (_fileToBlocks.<span class="fn">TryGetValue</span>(path, <span class="kw">out var</span> list)
+                ? list : _fileToBlocks[path] = <span class="kw">new</span>()).<span class="fn">Add</span>(id);
+            <span class="kw">return</span> info;   <span class="cmt">// client now streams bytes DIRECTLY to these nodes</span>
+        }
+    }
+
+    <span class="cmt">// READ control-op: return block layout so the client reads direct from storage nodes.</span>
+    <span class="kw">public</span> <span class="typ">IReadOnlyList</span>&lt;<span class="typ">BlockInfo</span>&gt; <span class="fn">GetBlockLocations</span>(<span class="typ">string</span> path)
+    {
+        <span class="kw">lock</span> (_lock)
+        {
+            <span class="kw">if</span> (!_fileToBlocks.<span class="fn">TryGetValue</span>(path, <span class="kw">out var</span> ids))
+                <span class="kw">throw new</span> <span class="typ">FileNotFoundException</span>(path);
+            <span class="kw">return</span> ids.<span class="fn">Select</span>(id =&gt; _blocks[id]).<span class="fn">ToList</span>();
+        }
+    }
+
+    <span class="cmt">// Heartbeat handler: a dead node's blocks become under-replicated -&gt; schedule repair.</span>
+    <span class="kw">public</span> <span class="typ">IEnumerable</span>&lt;<span class="typ">BlockId</span>&gt; <span class="fn">OnNodeDead</span>(<span class="typ">string</span> node)
+    {
+        <span class="kw">lock</span> (_lock)
+            <span class="kw">return</span> _blocks.Values
+                .<span class="fn">Where</span>(b =&gt; b.Replicas.<span class="fn">Contains</span>(node))
+                .<span class="fn">Select</span>(b =&gt; b.Id)
+                .<span class="fn">ToList</span>();   <span class="cmt">// caller re-replicates each from a surviving copy</span>
+    }
+}
+
+<span class="cmt">// ---- Durability math: XOR parity (RAID-4) — the intuition behind Reed-Solomon ----</span>
+<span class="cmt">// Store k data blocks + 1 parity block = tolerate ANY 1 lost block for 1/k overhead.</span>
+<span class="kw">public static class</span> <span class="typ">XorParity</span>
+{
+    <span class="kw">public static</span> <span class="typ">byte</span>[] <span class="fn">ComputeParity</span>(<span class="typ">IReadOnlyList</span>&lt;<span class="typ">byte</span>[]&gt; dataBlocks)
+    {
+        <span class="kw">int</span> len = dataBlocks[0].Length;
+        <span class="kw">var</span> parity = <span class="kw">new</span> <span class="typ">byte</span>[len];
+        <span class="kw">foreach</span> (<span class="kw">var</span> block <span class="kw">in</span> dataBlocks)
+            <span class="kw">for</span> (<span class="kw">int</span> i = 0; i &lt; len; i++)
+                parity[i] ^= block[i];        <span class="cmt">// XOR fold across all data blocks</span>
+        <span class="kw">return</span> parity;
+    }
+
+    <span class="cmt">// Reconstruct the ONE missing block by XOR-ing every surviving block (incl. parity).</span>
+    <span class="kw">public static</span> <span class="typ">byte</span>[] <span class="fn">Reconstruct</span>(<span class="typ">IReadOnlyList</span>&lt;<span class="typ">byte</span>[]&gt; survivingBlocks)
+    {
+        <span class="kw">int</span> len = survivingBlocks[0].Length;
+        <span class="kw">var</span> rebuilt = <span class="kw">new</span> <span class="typ">byte</span>[len];
+        <span class="kw">foreach</span> (<span class="kw">var</span> block <span class="kw">in</span> survivingBlocks)
+            <span class="kw">for</span> (<span class="kw">int</span> i = 0; i &lt; len; i++)
+                rebuilt[i] ^= block[i];        <span class="cmt">// XOR is its own inverse</span>
+        <span class="kw">return</span> rebuilt;
+    }
+}</pre>
+    <p>XOR parity tolerates only a single failure; real systems use <strong>Reed-Solomon</strong> (e.g. RS(10,4)) over a Galois field to survive <em>m</em> simultaneous losses. In production you'd reach for a battle-tested library rather than hand-rolling the field arithmetic — <strong>Jerasure</strong> or <strong>ISA-L</strong> (C/C++), or in .NET wrap ISA-L via P/Invoke; Backblaze also open-sourced a clean <strong>Java Reed-Solomon</strong> implementation worth reading. The C# above is deliberately the <em>intuition</em>, not the production coder.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <p><strong>The metadata server is the classic bottleneck.</strong> A single master (GFS/HDFS) is simple and strongly consistent but caps namespace size at one machine's RAM and is a recovery risk. Fixes: HDFS Federation + HA (active/standby with quorum journal), or Colossus's fully distributed metadata in BigTable. Interviewers love to push here — be ready to explain <em>why</em> the single master survived so long (it's off the data path, so it only handles lightweight control ops) and <em>what</em> finally broke it (block-count growth).</p>
+    <p><strong>Small-file problem.</strong> Huge blocks + per-block metadata means millions of tiny files explode metadata and waste space. Mitigations: pack small files into container formats (HAR, SequenceFile, Parquet), or use an object store with a flat namespace.</p>
+    <p><strong>Durability vs cost vs recovery speed.</strong> 3× replication = fast reads &amp; simple recovery but 200% overhead; erasure coding = ~40% overhead but expensive, network-heavy reconstruction. The standard answer: replicate hot data, erasure-code cold data, and place replicas rack-aware so no single failure domain loses everything.</p>
+    <p><strong>Consistency vs performance.</strong> Strict POSIX (fsync semantics, random overwrite, byte-range locking) is expensive at scale, so DFSs relax to write-once/append-mostly with at-least-once record append. Know the CAP framing: metadata operations are usually CP (consistent, may pause during failover); the data path favors availability and throughput.</p>
+
+    <div class="qa">
+      <p class="q">Q: Why is the block size so large (64–128 MB) instead of a normal 4 KB page?</p>
+      <p class="a">To shrink metadata (fewer block entries fit the whole map in the master's RAM) and to amortize disk seeks for large sequential scans. The cost is wasted space and hot blocks for small files — which is why a DFS isn't for millions of tiny files.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: How do you avoid the single master being a single point of failure?</p>
+      <p class="a">Persist metadata with a write-ahead edit log + periodic checkpoint; run active/standby with automatic failover (HDFS HA over a quorum journal); or eliminate the single master entirely — shard metadata across many servers backed by a scalable KV store (Colossus/BigTable) or compute placement algorithmically with no central map (Ceph/CRUSH).</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: How is data integrity guaranteed against silent disk corruption?</p>
+      <p class="a">Per-block CRC32C checksums verified on every read; background scrubbing continuously re-verifies replicas. A checksum mismatch triggers repair from a healthy replica or erasure-coded reconstruction.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: Why keep the metadata service off the data path?</p>
+      <p class="a">So aggregate read/write bandwidth scales with the number of storage nodes rather than being throttled by one coordinator. The client does one cheap lookup, then streams bytes directly to storage nodes — GFS scaled reads to 583 MB/s across 342 nodes precisely because the master isn't in the byte stream.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "A distributed file system stores one logical namespace across thousands of failing machines. The key move is separating the <em>control plane</em> — a metadata service that maps files to large 64–128 MB blocks and their replica locations — from the <em>data plane</em>, where clients stream bytes directly to storage nodes. Blocks are replicated 3× (rack-aware) or erasure-coded ~1.4× for cold data; heartbeats detect failures and trigger background re-replication. GFS pioneered it with a single master; HDFS cloned it; Colossus removed the master bottleneck by sharding metadata into BigTable; Ceph computes placement with CRUSH and needs no central map at all."</div>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Block size: <strong>64 MB (GFS)</strong> / <strong>128 MB (HDFS)</strong>; metadata ≈ <strong>150 B/block</strong>.</li>
+      <li>Replication: <strong>3×</strong> (tolerate 2 failures) vs <strong>RS(10,4)</strong> = 1.4× overhead, tolerate 4 failures.</li>
+      <li>Per-node read ≈ <strong>80–100 MB/s</strong>; GFS scaled to <strong>583 MB/s over 342 nodes</strong>.</li>
+      <li>Colossus: <strong>100× metadata scaling</strong> over GFS; single cluster ≈ <strong>exabytes</strong>, tens of thousands of machines.</li>
+      <li>Heartbeat every <strong>3s</strong>; dead after <strong>~2 min</strong> of silence (HDFS).</li>
+      <li>S3 durability target: <strong>11 nines</strong> across ≥3 AZs.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li><strong>Control plane / data plane split</strong> — the reason it scales; metadata off the hot path.</li>
+      <li><strong>Large blocks</strong> — shrink metadata + amortize seeks; explain the small-file trade-off.</li>
+      <li><strong>Failure is the norm</strong> — heartbeats, re-replication, checksums, background scrubbing.</li>
+      <li><strong>Replication vs erasure coding</strong> — hot vs cold data; overhead vs reconstruction cost.</li>
+      <li><strong>Evolution</strong> — single master (GFS/HDFS) → sharded metadata (Colossus) / CRUSH (Ceph); know why each step happened.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://cloud.google.com/blog/products/storage-data-transfer/a-peek-behind-colossus-googles-file-system">A peek behind Colossus, Google's file system</a> — Google Cloud Blog (2021): distributed metadata, Curators, D servers, BigTable, control/data-plane split.</li>
+      <li><a href="https://en.wikipedia.org/wiki/Google_File_System">Google File System</a> — Wikipedia: master/chunkserver roles, 64 MB chunks, leases, benchmark numbers, design assumptions.</li>
+      <li><a href="https://en.wikipedia.org/wiki/Apache_Hadoop">Apache Hadoop (HDFS)</a> — Wikipedia: NameNode/DataNode, replication factor 3, rack awareness, heartbeats, throughput-oriented design.</li>
+      <li><a href="https://en.wikipedia.org/wiki/Ceph_(software)">Ceph</a> — Wikipedia: RADOS, CRUSH, OSDs/monitors/MDS, object/block/file interfaces, replication vs erasure coding.</li>
+      <li><a href="https://en.wikipedia.org/wiki/Erasure_code">Erasure code</a> — Wikipedia: Reed-Solomon (k, m), RS(10,4) example, storage overhead vs replication, reconstruction cost.</li>
+      <li>Ghemawat, Gobioff &amp; Leung, <em>The Google File System</em> (SOSP 2003) — the original paper.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

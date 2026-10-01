@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Design Uber — Ride-Sharing System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --laymen: #ffb84d;
+    --laymen-bg: #fff8e8;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #000000 0%, #1b2230 50%, #4361ee 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); color: #4a3200; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Design Uber (Ride-Sharing)</h1>
+    <p>Millions of moving drivers, millions of waiting riders, and a match in under a second — the classic real-time, geospatial, event-driven system design.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>You're building the guts of a <strong>ride-sharing platform</strong>: a rider opens the app, sees the nearest cars moving on the map in real time, taps <em>Request</em>, and within a second a driver is offered the trip. Behind that one tap is a <strong>continuous firehose of GPS pings</strong> from millions of moving vehicles, a <strong>geospatial index</strong> that answers "who is within 2 km of this lat/lng right now?" thousands of times per second, and a <strong>matching engine</strong> that reserves exactly one driver per rider even when three riders reach for the same car in the same 200 ms window.</p>
+    <p>This is the canonical <strong>real-time marketplace</strong> problem, solved in production by <strong>Uber, Lyft, Ola, Didi, Grab, Bolt, Careem</strong>, and — with variations — by <strong>DoorDash, Uber Eats, Instacart, Amazon Flex</strong>. It shows up in interviews because it forces you to reason about <strong>write-heavy geo-indexing</strong>, <strong>consistent hashing over stateful services</strong>, <strong>persistent bidirectional connections</strong>, <strong>event streaming (Kafka)</strong>, and <strong>partial-failure recovery</strong> — all inside a single, tangible product everyone has used.</p>
+    <p>Real-world grounding: Uber's own dispatch stack introduced this pattern (<em>Supply</em> / <em>Demand</em> / <em>DISCO</em>), built on <a href="https://github.com/uber/ringpop-node">Ringpop</a> (consistent hashing + SWIM gossip), <a href="https://s2geometry.io/">Google S2</a> for the live dispatch grid, and <a href="https://h3geo.org/">H3</a> (Uber's own hexagonal grid) for supply-and-demand analytics that drive <strong>surge pricing</strong>.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms (for a beginner)</span>
+    <h2>Explain it like I have never opened a code editor</h2>
+    <p><strong>You're standing on a corner, tired, and you want a car to come pick you up.</strong> You open an app, it shows you tiny cars moving around on a map, you tap a button, and a minute later a car pulls up. Simple to feel — enormously tricky to build. Let's walk through it like a story.</p>
+    <p>Every driver's phone is like a <strong>tiny lighthouse</strong>, blinking its exact position out to a big control room <em>every four seconds</em>. Multiply that by <strong>millions of drivers</strong> around the world and you get a river of blinks pouring in — millions per second, day and night.</p>
+    <p>Now the trick: when you tap <em>Request</em>, the app has to find the drivers <em>near you</em>, not sift through every driver on Earth. So the world is chopped up into a huge grid of small tiles — think of the city like a giant honeycomb where each hexagon is about half a kilometer wide. Every driver "lives" in one tile at any moment. When you ask for a ride, the system just looks in your tile and a few neighboring tiles. That turns "search five million drivers" into "look inside a dozen tiles" — the difference between checking every house in a city and just checking your street.</p>
+    <p>Once a few candidates are found, another service asks: <em>Which one gets to me fastest by road?</em> (Not "shortest as the crow flies" — real streets, one-ways, traffic.) It picks the winner and offers the ride. The tricky part here is that <strong>only one driver can get your ride</strong> — even if two riders tap at the same instant for the same car, the system has to say "yes" to exactly one and "sorry, try again" to the other. Think of a single bakery ticket: whoever grabs it first, gets the loaf.</p>
+    <p>And the last bit — <strong>surge pricing</strong>. At 8pm on New Year's Eve in a downtown block, riders vastly outnumber drivers. The system watches, per hexagon, how many people are asking versus how many cars are free, and if the ratio is bad it nudges the price up. Higher price pulls more drivers into the area, and prices settle back down. It's not greed; it's a <strong>thermostat</strong> for supply and demand, tuned every few seconds per tile.</p>
+    <p>Products that work this way: <strong>Uber, Lyft, Ola, DoorDash, Instacart</strong>. Same shape, different cargo — sometimes it's you, sometimes it's a burrito.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+    <h3>Functional</h3>
+    <ul>
+      <li>Drivers broadcast their location continuously; the system tracks who is <em>available</em>, <em>on-trip</em>, or <em>offline</em>.</li>
+      <li>Riders can request a ride from a lat/lng; the system returns the best-matched nearby driver within <strong>~1 second</strong>.</li>
+      <li>A driver can be matched to <strong>at most one active rider</strong> — no double-booking.</li>
+      <li>Both apps maintain a live picture: rider sees the ETA and car moving; driver sees turn-by-turn.</li>
+      <li>Surge pricing is computed per geographic cell in near real time.</li>
+      <li>Payments, ratings, notifications, and trip history are stored durably.</li>
+    </ul>
+    <h3>Non-functional</h3>
+    <ul>
+      <li><strong>Latency:</strong> match &lt; 1 s p99; location update ingest &lt; 100 ms p99.</li>
+      <li><strong>Availability:</strong> five 9s on the match path — a downed matching engine strands entire cities.</li>
+      <li><strong>Consistency:</strong> per-driver assignment must be <em>strongly consistent</em> (linearizable CAS). The geo index itself can be <em>eventually consistent</em> — a driver's location being 4 s stale is fine.</li>
+      <li><strong>Scale:</strong> tens of millions of DAUs; millions of active drivers globally.</li>
+    </ul>
+    <h3>Capacity estimation (single hyper-scale market)</h3>
+    <table>
+      <tr><th>Metric</th><th>Value</th><th>How we got there</th></tr>
+      <tr><td>Active drivers globally</td><td>~5,000,000</td><td>Public disclosures</td></tr>
+      <tr><td>Location ping interval</td><td>every 4 s</td><td>Uber's published cadence</td></tr>
+      <tr><td>Location writes/sec</td><td><strong>~1.25 M/s</strong></td><td>5 M ÷ 4 s</td></tr>
+      <tr><td>Peak location writes/sec</td><td>~2 M/s</td><td>Rush-hour headroom</td></tr>
+      <tr><td>Ride requests/sec</td><td>~30–50 K/s</td><td>~15 M rides/day globally, peaked</td></tr>
+      <tr><td>Read : write ratio</td><td>Reads dominate</td><td>Every open app streams nearby cars</td></tr>
+      <tr><td>Per-driver record</td><td>~100 B in RAM</td><td>id + lat/lng + cell + status + ts</td></tr>
+      <tr><td>Live geo-index size</td><td>~500 MB total</td><td>5 M × 100 B — fits in memory across a shard fleet</td></tr>
+      <tr><td>Persisted GPS trail/day</td><td>~10 TB raw / ~2 TB after compaction</td><td>1.25 M/s × 86400 s × ~90 B</td></tr>
+      <tr><td>Kafka retention (locations)</td><td>1–3 days</td><td>Analytics + replay after DC failover</td></tr>
+    </table>
+    <p>Two headline numbers to volunteer in the interview: <strong>~1–2 million location writes per second</strong> and <strong>~500 MB of hot data</strong>. The first justifies Kafka + in-memory sharding; the second is why you don't need to store the live index in a database at all — you can rebuild it in one ping cycle.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>Think of the platform as <strong>three planes riding on top of a Kafka firehose</strong>. The <em>ingest plane</em> (green) takes the driver-location tsunami and routes each ping to the shard that owns that geographic cell. The <em>match plane</em> (blue) takes a rider request, queries the live geo index for nearby drivers, ranks them by road-network ETA, and atomically reserves the winner. The <em>marketplace plane</em> (amber) consumes the same location stream to run surge pricing and demand prediction, feeding the price back to the rider at request time.</p>
+    <p>Two protocol choices matter. Drivers push locations over a <strong>persistent WebSocket / bidirectional gRPC channel</strong> — much cheaper than an HTTPS handshake per ping, and it lets the server push back a match offer instantly. Riders open the same kind of channel while watching cars. Everything else (payments, history) is boring stateless HTTP.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 940 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Uber high-level architecture diagram">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/>
+          </marker>
+          <marker id="ar-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/>
+          </marker>
+          <marker id="ar-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/>
+          </marker>
+          <marker id="ar-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7aa2f7"/>
+          </marker>
+        </defs>
+
+        <!-- Clients -->
+        <g font-family="SF Mono, Consolas, monospace" font-size="12">
+          <rect x="20" y="40"  width="130" height="52" rx="10" fill="#1b2940" stroke="#4361ee"/>
+          <text x="85" y="63"  text-anchor="middle" fill="#c6d0e0" font-weight="700">Driver App</text>
+          <text x="85" y="80"  text-anchor="middle" fill="#7f8aa0">GPS every 4s</text>
+
+          <rect x="20" y="360" width="130" height="52" rx="10" fill="#1b2940" stroke="#f7567c"/>
+          <text x="85" y="383" text-anchor="middle" fill="#c6d0e0" font-weight="700">Rider App</text>
+          <text x="85" y="400" text-anchor="middle" fill="#7f8aa0">Request ride</text>
+
+          <!-- API gateway -->
+          <rect x="200" y="200" width="140" height="52" rx="10" fill="#1b2940" stroke="#7048e8"/>
+          <text x="270" y="223" text-anchor="middle" fill="#c6d0e0" font-weight="700">API Gateway</text>
+          <text x="270" y="240" text-anchor="middle" fill="#7f8aa0">WebSocket / gRPC</text>
+
+          <!-- Kafka -->
+          <rect x="390" y="200" width="140" height="52" rx="10" fill="#1b2940" stroke="#f4a259"/>
+          <text x="460" y="223" text-anchor="middle" fill="#c6d0e0" font-weight="700">Kafka (Firehose)</text>
+          <text x="460" y="240" text-anchor="middle" fill="#7f8aa0">location.updates</text>
+
+          <!-- Location service / geo index (shard) -->
+          <rect x="580" y="40" width="170" height="60" rx="10" fill="#1b2940" stroke="#2dc653"/>
+          <text x="665" y="63" text-anchor="middle" fill="#c6d0e0" font-weight="700">Location Service</text>
+          <text x="665" y="80" text-anchor="middle" fill="#7f8aa0">Ringpop • S2/H3 shards</text>
+          <text x="665" y="95" text-anchor="middle" fill="#7f8aa0">in-mem geo index</text>
+
+          <!-- Matching -->
+          <rect x="580" y="130" width="170" height="60" rx="10" fill="#1b2940" stroke="#4361ee"/>
+          <text x="665" y="153" text-anchor="middle" fill="#c6d0e0" font-weight="700">Matching (DISCO)</text>
+          <text x="665" y="170" text-anchor="middle" fill="#7f8aa0">nearby → ETA → CAS</text>
+          <text x="665" y="185" text-anchor="middle" fill="#7f8aa0">reserve driver</text>
+
+          <!-- ETA / routing -->
+          <rect x="580" y="220" width="170" height="52" rx="10" fill="#1b2940" stroke="#7aa2f7"/>
+          <text x="665" y="243" text-anchor="middle" fill="#c6d0e0" font-weight="700">ETA / Routing</text>
+          <text x="665" y="260" text-anchor="middle" fill="#7f8aa0">OSRM + Dijkstra</text>
+
+          <!-- Surge -->
+          <rect x="580" y="300" width="170" height="52" rx="10" fill="#1b2940" stroke="#f4a259"/>
+          <text x="665" y="323" text-anchor="middle" fill="#c6d0e0" font-weight="700">Surge Pricing</text>
+          <text x="665" y="340" text-anchor="middle" fill="#7f8aa0">H3 cell • supply/demand</text>
+
+          <!-- Trip service -->
+          <rect x="580" y="380" width="170" height="52" rx="10" fill="#1b2940" stroke="#f7567c"/>
+          <text x="665" y="403" text-anchor="middle" fill="#c6d0e0" font-weight="700">Trip Service</text>
+          <text x="665" y="420" text-anchor="middle" fill="#7f8aa0">state machine</text>
+
+          <!-- Data stores -->
+          <rect x="800" y="40" width="120" height="52" rx="10" fill="#1b2940" stroke="#00b4d8"/>
+          <text x="860" y="63" text-anchor="middle" fill="#c6d0e0" font-weight="700">Cassandra</text>
+          <text x="860" y="80" text-anchor="middle" fill="#7f8aa0">trip / user</text>
+
+          <rect x="800" y="130" width="120" height="52" rx="10" fill="#1b2940" stroke="#00b4d8"/>
+          <text x="860" y="153" text-anchor="middle" fill="#c6d0e0" font-weight="700">Redis</text>
+          <text x="860" y="170" text-anchor="middle" fill="#7f8aa0">hot state</text>
+
+          <rect x="800" y="300" width="120" height="52" rx="10" fill="#1b2940" stroke="#00b4d8"/>
+          <text x="860" y="323" text-anchor="middle" fill="#c6d0e0" font-weight="700">Flink / Spark</text>
+          <text x="860" y="340" text-anchor="middle" fill="#7f8aa0">analytics</text>
+
+          <rect x="800" y="380" width="120" height="52" rx="10" fill="#1b2940" stroke="#00b4d8"/>
+          <text x="860" y="403" text-anchor="middle" fill="#c6d0e0" font-weight="700">S3 / HDFS</text>
+          <text x="860" y="420" text-anchor="middle" fill="#7f8aa0">GPS trails</text>
+        </g>
+
+        <!-- Arrows -->
+        <!-- Driver -> gateway -->
+        <path d="M150,66 C 180,66 180,220 200,225" fill="none" stroke="#2dc653" stroke-width="2" marker-end="url(#ar-green)"/>
+        <!-- Rider -> gateway -->
+        <path d="M150,384 C 180,384 180,240 200,245" fill="none" stroke="#f7567c" stroke-width="2" marker-end="url(#ar)"/>
+        <!-- Gateway -> Kafka -->
+        <path d="M340,226 L390,226" fill="none" stroke="#2dc653" stroke-width="2" marker-end="url(#ar-green)"/>
+        <!-- Kafka -> Location -->
+        <path d="M530,215 C 560,215 560,80 580,80" fill="none" stroke="#2dc653" stroke-width="2" marker-end="url(#ar-green)"/>
+        <!-- Kafka -> Surge -->
+        <path d="M530,240 C 560,240 560,320 580,320" fill="none" stroke="#f4a259" stroke-width="2" marker-end="url(#ar-amber)"/>
+        <!-- Gateway -> Matching -->
+        <path d="M340,240 C 380,260 480,170 580,160" fill="none" stroke="#4361ee" stroke-width="2" marker-end="url(#ar-blue)"/>
+        <!-- Matching -> Location -->
+        <path d="M665,130 L665,102" fill="none" stroke="#4361ee" stroke-width="2" marker-end="url(#ar-blue)"/>
+        <!-- Matching -> ETA -->
+        <path d="M665,192 L665,218" fill="none" stroke="#4361ee" stroke-width="2" marker-end="url(#ar-blue)"/>
+        <!-- Matching -> Trip -->
+        <path d="M720,190 C 780,240 780,340 720,380" fill="none" stroke="#4361ee" stroke-width="2" marker-end="url(#ar-blue)"/>
+        <!-- Matching -> Surge (read price) -->
+        <path d="M665,300 L665,272" fill="none" stroke="#f4a259" stroke-width="2" marker-end="url(#ar-amber)"/>
+        <!-- Trip -> Cassandra -->
+        <path d="M750,395 L800,90" fill="none" stroke="#00b4d8" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+        <!-- Trip -> Redis -->
+        <path d="M750,395 L800,150" fill="none" stroke="#00b4d8" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+        <!-- Surge -> Flink -->
+        <path d="M750,320 L800,320" fill="none" stroke="#f4a259" stroke-width="2" marker-end="url(#ar-amber)"/>
+        <!-- Kafka -> S3 -->
+        <path d="M530,245 C 640,360 720,405 800,405" fill="none" stroke="#00b4d8" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#2dc653"></span> Ingest plane (location firehose)</span>
+      <span><span class="dot" style="background:#4361ee"></span> Match plane (rider → driver)</span>
+      <span><span class="dot" style="background:#f4a259"></span> Marketplace plane (surge / analytics)</span>
+      <span><span class="dot" style="background:#00b4d8"></span> Durable storage</span>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a rider get matched — step by step</h2>
+    <p>The animation walks through one full request. A rider taps <em>Request</em> at the pink pin. The matching service converts the lat/lng into an H3 cell, expands to a <strong>k-ring of neighbors</strong> to catch drivers on the cell boundary, ranks the candidates by road-network ETA, and atomically reserves the winner via CAS. Watch the drivers highlight, the ring expand, one driver turn amber (reserved), and the surge tile flare briefly as demand ticks up.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 780 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Uber matching animation">
+        <defs>
+          <pattern id="grid-hex" width="60" height="52" patternUnits="userSpaceOnUse">
+            <polygon points="30,0 60,15 60,45 30,60 0,45 0,15" fill="none" stroke="#1e2b4a" stroke-width="1"/>
+          </pattern>
+        </defs>
+        <!-- Hex grid background -->
+        <rect x="20" y="20" width="740" height="360" rx="14" fill="#0a1024" stroke="#1e2b4a"/>
+        <rect x="20" y="20" width="740" height="360" fill="url(#grid-hex)"/>
+
+        <!-- The rider's center hex (glow target) -->
+        <g id="hex-center" data-anim="1" fill="#1b2940" stroke="#4361ee" stroke-width="2">
+          <polygon points="360,140 420,175 420,245 360,280 300,245 300,175"/>
+        </g>
+        <!-- k-ring neighbors (6 surrounding hexes) - initially hidden, revealed step 3 -->
+        <g id="k-ring" data-anim="1" class="a-hidden" fill="none" stroke="#00b4d8" stroke-width="2" opacity="0.85">
+          <polygon points="360,20 420,55 420,125 360,160 300,125 300,55"/>
+          <polygon points="480,90 540,125 540,195 480,230 420,195 420,125"/>
+          <polygon points="480,230 540,265 540,335 480,370 420,335 420,265"/>
+          <polygon points="360,300 420,335 420,405 360,440 300,405 300,335"/>
+          <polygon points="240,230 300,265 300,335 240,370 180,335 180,265"/>
+          <polygon points="240,90 300,125 300,195 240,230 180,195 180,125"/>
+        </g>
+
+        <!-- Rider pin -->
+        <g id="rider" data-anim="1" transform="translate(360,210)">
+          <circle r="8" fill="#f7567c" stroke="#fff" stroke-width="2"/>
+          <text y="-14" text-anchor="middle" fill="#f7567c" font-family="SF Mono, Consolas, monospace" font-size="11" font-weight="700">Rider</text>
+        </g>
+
+        <!-- Drivers scattered on grid, some near, some far -->
+        <g font-family="SF Mono, Consolas, monospace" font-size="10" fill="#c6d0e0">
+          <g id="d1" data-anim="1" transform="translate(340,190)">
+            <rect x="-9" y="-9" width="18" height="18" rx="3" fill="#2dc653"/>
+            <text y="3" text-anchor="middle" fill="#0a1024" font-weight="700">🚗</text>
+          </g>
+          <g id="d2" data-anim="1" transform="translate(460,150)">
+            <rect x="-9" y="-9" width="18" height="18" rx="3" fill="#2dc653"/>
+            <text y="3" text-anchor="middle" fill="#0a1024" font-weight="700">🚗</text>
+          </g>
+          <g id="d3" data-anim="1" transform="translate(280,260)">
+            <rect x="-9" y="-9" width="18" height="18" rx="3" fill="#2dc653"/>
+            <text y="3" text-anchor="middle" fill="#0a1024" font-weight="700">🚗</text>
+          </g>
+          <g id="d4" data-anim="1" transform="translate(500,290)">
+            <rect x="-9" y="-9" width="18" height="18" rx="3" fill="#2dc653"/>
+            <text y="3" text-anchor="middle" fill="#0a1024" font-weight="700">🚗</text>
+          </g>
+          <g id="d5" data-anim="1" transform="translate(210,120)">
+            <rect x="-9" y="-9" width="18" height="18" rx="3" fill="#2dc653"/>
+            <text y="3" text-anchor="middle" fill="#0a1024" font-weight="700">🚗</text>
+          </g>
+          <!-- far away drivers -->
+          <g id="d6" data-anim="1" transform="translate(100,60)">
+            <rect x="-9" y="-9" width="18" height="18" rx="3" fill="#2dc653" opacity="0.6"/>
+            <text y="3" text-anchor="middle" fill="#0a1024" font-weight="700">🚗</text>
+          </g>
+          <g id="d7" data-anim="1" transform="translate(700,340)">
+            <rect x="-9" y="-9" width="18" height="18" rx="3" fill="#2dc653" opacity="0.6"/>
+            <text y="3" text-anchor="middle" fill="#0a1024" font-weight="700">🚗</text>
+          </g>
+        </g>
+
+        <!-- ETA labels (hidden initially) -->
+        <g id="eta-labels" data-anim="1" class="a-hidden" font-family="SF Mono, Consolas, monospace" font-size="10" fill="#7fa2ff" font-weight="700">
+          <text x="340" y="175" text-anchor="middle">3.2 min</text>
+          <text x="460" y="135" text-anchor="middle">4.1 min</text>
+          <text x="280" y="245" text-anchor="middle">3.8 min</text>
+          <text x="500" y="275" text-anchor="middle">5.6 min</text>
+          <text x="210" y="105" text-anchor="middle">6.9 min</text>
+        </g>
+
+        <!-- Surge indicator (top right) -->
+        <g id="surge-tile" data-anim="1" class="a-hidden" transform="translate(660,60)">
+          <rect x="-40" y="-18" width="80" height="36" rx="8" fill="#3a1a1a" stroke="#f7567c"/>
+          <text y="-2" text-anchor="middle" fill="#f7567c" font-family="SF Mono, Consolas, monospace" font-size="10" font-weight="700">SURGE</text>
+          <text y="12" text-anchor="middle" fill="#f7567c" font-family="SF Mono, Consolas, monospace" font-size="11" font-weight="700">1.6×</text>
+        </g>
+
+        <!-- Reserved offer badge (hidden initially) -->
+        <g id="reserved-badge" data-anim="1" class="a-hidden" transform="translate(340,168)">
+          <rect x="-32" y="-14" width="64" height="20" rx="6" fill="#f4a259"/>
+          <text y="1" text-anchor="middle" fill="#1b2230" font-family="SF Mono, Consolas, monospace" font-size="10" font-weight="800">RESERVED</text>
+        </g>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to see a rider request flow through the geo index, matching, and reservation.</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'Press ▶ Play to see a rider request flow through the geo index, matching, and reservation.',
+          interval: 1900,
+          reset: (r) => {
+            ['#hex-center','#k-ring','#rider','#d1','#d2','#d3','#d4','#d5','#d6','#d7','#eta-labels','#surge-tile','#reserved-badge']
+              .forEach(sel => {
+                const el = r.querySelector(sel);
+                if (!el) return;
+                el.classList.remove('a-glow','a-dim');
+              });
+            r.querySelector('#k-ring').classList.add('a-hidden');
+            r.querySelector('#eta-labels').classList.add('a-hidden');
+            r.querySelector('#surge-tile').classList.add('a-hidden');
+            r.querySelector('#reserved-badge').classList.add('a-hidden');
+          },
+          steps: [
+            {
+              caption: 'Rider taps “Request”. Lat/lng → H3 cell lookup: the rider falls in the center hex.',
+              apply: (r, $) => {
+                $('#rider').classList.add('a-glow');
+                $('#hex-center').classList.add('a-glow');
+              }
+            },
+            {
+              caption: 'Look inside just the rider’s cell: one candidate driver already in-cell (D1) is highlighted.',
+              apply: (r, $) => {
+                $('#d1').classList.add('a-glow');
+                ['#d2','#d3','#d4','#d5','#d6','#d7'].forEach(s => $(s).classList.add('a-dim'));
+              }
+            },
+            {
+              caption: 'One cell isn’t enough — a driver just outside the boundary could still be closest. Expand to a k-ring of neighbors.',
+              apply: (r, $) => {
+                $('#k-ring').classList.remove('a-hidden');
+                $('#k-ring').classList.add('a-glow');
+              }
+            },
+            {
+              caption: 'Candidates found inside the k-ring: D1, D2, D3, D4, D5. Far-away drivers D6 & D7 are pruned — no cross-city search.',
+              apply: (r, $) => {
+                ['#d2','#d3','#d4','#d5'].forEach(s => { $(s).classList.remove('a-dim'); $(s).classList.add('a-glow'); });
+                ['#d6','#d7'].forEach(s => { $(s).classList.add('a-dim'); });
+              }
+            },
+            {
+              caption: 'Rank candidates by road-network ETA (Dijkstra on the routing graph) — not straight-line distance.',
+              apply: (r, $) => {
+                $('#eta-labels').classList.remove('a-hidden');
+              }
+            },
+            {
+              caption: 'Surge tile ticks up: demand momentarily exceeds supply in this H3 cell → 1.6× multiplier shown to the rider.',
+              apply: (r, $) => {
+                $('#surge-tile').classList.remove('a-hidden');
+                $('#surge-tile').classList.add('a-glow');
+              }
+            },
+            {
+              caption: 'Reserve the winner via atomic CAS: `UPDATE drivers SET status="reserved" WHERE id=D1 AND status="available"`. D1 wins.',
+              apply: (r, $) => {
+                $('#reserved-badge').classList.remove('a-hidden');
+                $('#d1').classList.add('a-glow');
+                ['#d2','#d3','#d4','#d5'].forEach(s => $(s).classList.remove('a-glow'));
+              }
+            },
+            {
+              caption: 'Offer pushed to D1 over the persistent WebSocket. Rider and driver both see the match — within ~500 ms.',
+              apply: (r, $) => {
+                $('#reserved-badge').classList.add('a-glow');
+                $('#rider').classList.add('a-glow');
+              }
+            }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. Ingesting a million pings per second</h3>
+    <p>Every driver's phone opens a <strong>persistent WebSocket</strong> (or bidirectional gRPC stream) to the API gateway when it goes online. Roughly every four seconds the app pushes a compact protobuf frame containing <code>driver_id</code>, <code>lat</code>, <code>lng</code>, <code>bearing</code>, <code>speed</code>, and a monotonic <code>seq</code>. Using a persistent channel rather than fresh HTTPS per ping is a <strong>huge win</strong>: no TLS handshake per update, half-duplex is free, and the same socket carries offer pushes back to the driver.</p>
+    <p>The gateway does not write to a database. It <strong>publishes to Kafka</strong> on a topic like <code>location.driver.updates</code>, partitioned by <code>driver_id</code> — that keeps a single driver's updates ordered on one partition. From here two consumers fan out: the <strong>Location Service</strong> updates the live geo index, and downstream analytics consumers feed surge, ETA training, fraud detection, and long-term storage.</p>
+
+    <h3>2. The live geospatial index (Location Service)</h3>
+    <p>The Location Service is a <strong>stateful, sharded, in-memory</strong> fleet. Each node owns a set of geographic cells; the world is chopped by <strong>Google S2</strong> (Uber's dispatch grid at level 12, ~3–6 km²) or <strong>H3 hexagons</strong> at a comparable resolution. The <code>cell_id</code> is the sharding key, and shards are placed on a <strong>consistent hash ring</strong> managed by <strong>Ringpop</strong> with the SWIM gossip protocol for membership.</p>
+    <p>Within a shard, two co-located maps live in memory: <code>cell → List&lt;Driver&gt;</code> and <code>driver_id → Location</code>. Updates within the same cell are O(1) — just mutate the driver's lat/lng. A <strong>cell crossing</strong> costs three coordinated writes: remove from the old cell's list, add to the new cell's list, update the driver → cell pointer. If the destination cell lives on a different shard, the update is rerouted via the ring.</p>
+    <p><strong>Nothing is written to disk on the hot path.</strong> The index is a throwaway: if a shard dies, the next four seconds of driver pings will fully repopulate it. Location durability lives in Kafka's retained log; the shard is just a fast projection.</p>
+
+    <h3>3. Finding nearby drivers (the query side)</h3>
+    <p>To find drivers near a rider, the Matching service converts the rider's lat/lng to a cell ID and asks: give me all drivers in this cell <strong>and its k-ring neighbors</strong>. In H3 that's <code>kRing(cell, 1)</code> — the center hex plus the six surrounding hexes. Why the ring? Because a driver 20 m from the rider could easily be sitting on the other side of a cell boundary; a single-cell lookup would miss them. Cell size is chosen so that <em>k=1 covers the intended match radius</em> (typically 1–2 km).</p>
+    <p>The candidate set (dozens, not millions) is then filtered — must be <code>available</code>, must have the right vehicle class, must not be on-trip — and passed to the ETA/routing service to compute a road-network arrival time using <strong>OSRM</strong> (Dijkstra with contraction hierarchies precomputed nightly). The winner is the driver with the smallest ETA.</p>
+
+    <h3>4. The atomic reservation (the interesting part)</h3>
+    <p>Now the subtle bit: at any instant, three riders may all be reaching for the same driver. The system must reserve the driver for exactly one rider — this is the one place we <strong>need linearizability</strong>. Uber's DISCO does a <strong>compare-and-swap</strong> on the driver's status field:</p>
+    <pre><code>UPDATE drivers
+SET status='reserved', reserved_by='rider-42', reserved_at=now()
+WHERE driver_id='D7' AND status='available';</code></pre>
+    <p>Whichever transaction executes first sees <em>1 row affected</em> and wins. The others see zero and iterate to the next candidate. This is coordinated per <em>driver_id</em>, so total contention is tiny — a hot key would need multiple riders reaching for one specific car. The rest of the system remains eventually consistent.</p>
+
+    <h3>5. Surge pricing (the marketplace loop)</h3>
+    <p>A stream job (Flink or Spark Streaming) consumes the location firehose plus a parallel <code>ride.requests</code> topic, bucketing both by <strong>H3 cell at ~1 km resolution</strong> over a rolling <strong>1–5 minute window</strong>. For each cell it computes a simple ratio: <em>open requests ÷ available drivers</em>. When that ratio crosses thresholds, a <code>surge_multiplier</code> for that cell is written to a low-latency store (Redis) keyed by H3 cell.</p>
+    <p>When a rider requests a ride, the matching service reads the surge multiplier for the rider's cell and applies it to the fare estimate. The higher price signals both directions: <em>riders</em> may defer, and <em>drivers</em> in nearby cells are notified — many will migrate toward the surge tile, closing the gap in minutes. The whole loop is <strong>fully event-driven</strong>: no user asked for a price update; the stream job is always running.</p>
+
+    <h3>6. Hot cells &amp; the boundary problem</h3>
+    <p>Downtown at 5pm can hold thousands of drivers in one cell — an obvious hotspot. Two mitigations: <strong>(a)</strong> adaptive resolution — use finer cells in dense zones so no cell is overloaded; and <strong>(b)</strong> sub-shard splitting — split a hot cell into <code>C#0..C#3</code> keyed by <code>hash(driver_id)</code>, so writes distribute and reads fan out four ways in parallel. Uber's engineering blog notes that hard-coded cell size (level 12) is a known limitation of their earlier S2-based design.</p>
+
+    <h3>7. Failure &amp; datacenter failover</h3>
+    <p>Because the live index is throwaway, a shard crash is nearly free — the ring rebalances, in-flight requests retry, drivers repopulate the new owner in a single ping cycle. For full <strong>datacenter failover</strong>, Uber uses a clever trick: DISCO periodically sends the driver's phone an <strong>encrypted state digest</strong> of any in-progress trip. If the primary DC dies and the secondary DC has no trip state, the driver's next ping <em>uploads the digest back</em>, reconstructing state without cross-DC replication of hot trip data.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Almost every classic geospatial data structure appears somewhere in a ride-sharing stack. Interviewers love to see you name them and pick one with reasons.</p>
+    <table>
+      <tr><th>Component</th><th>Structure / Algorithm</th><th>Why chosen</th><th>Complexity</th></tr>
+      <tr>
+        <td>Live geo index (dispatch)</td>
+        <td><strong>Hierarchical grid cells</strong> — S2 (int64 cell IDs) or H3 (hex cells)</td>
+        <td>Cell ID is a natural shard key; fixed-cost lookup; ring queries via bit ops. Uber uses S2 in dispatch, H3 in analytics.</td>
+        <td>Insert / lookup: <em>O(1)</em>; k-ring: <em>O(k²)</em> cells</td>
+      </tr>
+      <tr>
+        <td>Analytics / surge</td>
+        <td><strong>H3 hexagons</strong>, 16 resolutions, 122 base cells</td>
+        <td>Uniform neighbor distance (unlike squares, which have 2). Perfect for supply/demand smoothing.</td>
+        <td>Same as above</td>
+      </tr>
+      <tr>
+        <td>Alternative index</td>
+        <td><strong>Geohash</strong> (base-32 string encoding)</td>
+        <td>Simple, portable, prefix-friendly for range scans. Downside: rectangular cells vary in size by latitude, and 8 vs 6 neighbors.</td>
+        <td>Insert / lookup: <em>O(1)</em>; adjacency: <em>O(8)</em></td>
+      </tr>
+      <tr>
+        <td>Alternative index</td>
+        <td><strong>Quadtree</strong> — dynamic recursive subdivision</td>
+        <td>Great when driver density is very uneven (splits hot regions automatically). Trickier to shard across machines than fixed grids.</td>
+        <td>Insert / lookup: <em>O(log n)</em>; range query: <em>O(√n + k)</em> for balanced trees</td>
+      </tr>
+      <tr>
+        <td>Consistent hashing (Ringpop)</td>
+        <td><strong>Hash ring</strong> with virtual nodes + <strong>SWIM gossip</strong></td>
+        <td>Minimizes reshuffle when a shard joins/leaves; gossip converges in <em>O(log N)</em>.</td>
+        <td>Lookup: <em>O(log N)</em> with sorted-set impl</td>
+      </tr>
+      <tr>
+        <td>Road-network ETA</td>
+        <td><strong>Dijkstra</strong> / <strong>A*</strong> / <strong>Contraction Hierarchies</strong> (OSRM)</td>
+        <td>Real streets have turn costs, one-ways, traffic — cannot use haversine. Contraction hierarchies precompute shortcuts to answer queries in ms.</td>
+        <td>Query: <em>O(k · log n)</em> with contraction hierarchies</td>
+      </tr>
+      <tr>
+        <td>Matching contention</td>
+        <td><strong>CAS / linearizable UPDATE</strong> on <code>driver_id</code></td>
+        <td>Single-key linearizability — cheap, correct, no distributed locks.</td>
+        <td>Amortized <em>O(1)</em></td>
+      </tr>
+      <tr>
+        <td>Surge windowing</td>
+        <td><strong>Tumbling / sliding windows</strong> over Kafka stream</td>
+        <td>Compute supply/demand ratios per H3 cell per minute; standard Flink pattern.</td>
+        <td><em>O(events / window)</em></td>
+      </tr>
+      <tr>
+        <td>Trip state</td>
+        <td><strong>Finite state machine</strong> (requested → matched → en_route → started → completed)</td>
+        <td>Clarity, invariants, idempotent transitions.</td>
+        <td><em>O(1)</em> per transition</td>
+      </tr>
+    </table>
+
+    <h3>Why H3 (hexagons) and not squares?</h3>
+    <p>Hexagons have a <strong>single neighbor distance</strong>: every one of a hex's six neighbors sits the same distance from its center. Squares have two neighbor distances (edge-shared vs. diagonally-shared), and triangles have three. This matters when you're computing gradients — like "how does surge fall off from the hot cell to its neighbors?" — because a uniform metric means fewer coefficients and much simpler math. H3 also uses <strong>16 resolutions</strong> where each level's cells are ~1/7 the area of their parent, and cell IDs pack into a <strong>64-bit int</strong> for cheap hashing and set membership.</p>
+
+    <h3>Why not just a B-tree on (lat, lng)?</h3>
+    <p>Because a 2-D range query <code>lat BETWEEN a AND b AND lng BETWEEN c AND d</code> on a B-tree is a bad fit — the B-tree is 1-D. You either scan a wide range or maintain two indexes and intersect. Grid cells collapse 2-D locality into a 1-D key, and that key doubles as a shard partition.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>If we were rebuilding this on AWS today, here's how each box maps. Uber's own stack pre-dates most managed services and is largely home-grown (Ringpop, Schemaless, in-house Kafka), but AWS has direct equivalents.</p>
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Persistent driver / rider connections</td><td><strong>AWS API Gateway (WebSocket)</strong> or <strong>ALB + ECS/EKS gRPC</strong></td><td>Managed WS terminates millions of connections; gRPC on ALB when you need bidi streaming and protobuf.</td></tr>
+      <tr><td>Location firehose</td><td><strong>Amazon MSK (managed Kafka)</strong> or <strong>Kinesis Data Streams</strong></td><td>MSK gives Kafka semantics with partition-by-<code>driver_id</code>. Kinesis is simpler if you're all-in on AWS.</td></tr>
+      <tr><td>Location / matching services</td><td><strong>ECS Fargate</strong> or <strong>EKS</strong></td><td>Stateful shards need a container platform with per-pod DNS; combine with an ALB per shard set or service discovery via Cloud Map.</td></tr>
+      <tr><td>Consistent-hash sharding</td><td><strong>Roll your own (Ringpop-style)</strong> on top of ECS</td><td>No managed equivalent — this is the hard part. DynamoDB partitioning doesn't help because the state lives in RAM.</td></tr>
+      <tr><td>Hot state (surge multipliers, session)</td><td><strong>ElastiCache for Redis</strong> (cluster mode)</td><td>Sub-ms reads for surge lookups on the request path.</td></tr>
+      <tr><td>Trip / user / payment records</td><td><strong>DynamoDB</strong> + <strong>Aurora</strong></td><td>DynamoDB for high-cardinality writes (trips, ratings); Aurora for financial ledgers.</td></tr>
+      <tr><td>Analytics stream processing</td><td><strong>Kinesis Data Analytics (Flink)</strong> or <strong>MSK + self-managed Flink on EKS</strong></td><td>Windowed aggregations by H3 cell for surge.</td></tr>
+      <tr><td>Raw GPS trail archive</td><td><strong>S3</strong> (Kinesis Firehose → Parquet)</td><td>Cheap, queryable via Athena; source for ML training.</td></tr>
+      <tr><td>Push notifications</td><td><strong>SNS</strong> / <strong>SQS</strong> / <strong>APNS &amp; FCM</strong></td><td>Fan out driver offers, receipts, marketing.</td></tr>
+      <tr><td>Maps &amp; routing</td><td><strong>Amazon Location Service</strong> or self-hosted <strong>OSRM on EC2</strong></td><td>Location Service gives geocoding + routing; large fleets typically self-host OSRM for cost.</td></tr>
+      <tr><td>CDN &amp; edge auth</td><td><strong>CloudFront</strong> + <strong>Cognito</strong></td><td>Static app bundles, driver auth flows.</td></tr>
+      <tr><td>Multi-region failover</td><td><strong>Route 53 + Global Accelerator</strong></td><td>Health-check-driven cutover.</td></tr>
+    </table>
+    <p>Deployment picture: two regions active–active, drivers pin to their nearest via Route 53 latency-based routing. Location Service pods run in each region, backed by an in-region MSK cluster. Trip state writes go to a regional DynamoDB with global tables replicating summary records. Surge lives in ElastiCache regionally — surge is inherently local, so no cross-region replication is needed. The nightly graph build for routing runs on EMR and publishes CH-compressed graphs to S3 for OSRM pods to load.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>The core of the system is the geospatial shard plus the atomic reservation. Below is an interview-ready reference: an in-memory geo index keyed by cell, a k-ring nearby-driver query, and a CAS-style reservation. In production you'd back the geo maps with <code>ConcurrentDictionary</code> and per-cell locks; the reservation would be a single-partition Cassandra or DynamoDB conditional update.</p>
+    <pre><code><span class="cmt">// GeoIndexShard.cs — one shard owns a set of H3 cells and keeps drivers in memory.</span>
+<span class="cmt">// The real system uses the H3 library; here we abstract cell resolution behind ICellIndex.</span>
+
+<span class="kw">using</span> System.Collections.Concurrent;
+
+<span class="kw">public record</span> <span class="typ">DriverLocation</span>(
+    <span class="typ">string</span> DriverId,
+    <span class="typ">double</span> Lat,
+    <span class="typ">double</span> Lng,
+    <span class="typ">ulong</span> CellId,
+    <span class="typ">DriverStatus</span> Status,
+    <span class="typ">long</span> Ts);
+
+<span class="kw">public enum</span> <span class="typ">DriverStatus</span> { Available, Reserved, OnTrip, Offline }
+
+<span class="kw">public interface</span> <span class="typ">ICellIndex</span> {
+    <span class="typ">ulong</span> LatLngToCell(<span class="typ">double</span> lat, <span class="typ">double</span> lng);
+    <span class="typ">ulong</span>[] KRing(<span class="typ">ulong</span> cell, <span class="typ">int</span> k);
+    <span class="typ">double</span> Haversine(<span class="typ">double</span> lat1, <span class="typ">double</span> lng1, <span class="typ">double</span> lat2, <span class="typ">double</span> lng2);
+}
+
+<span class="kw">public class</span> <span class="typ">GeoIndexShard</span> {
+    <span class="cmt">// cell → set of drivers currently in that cell</span>
+    <span class="kw">private readonly</span> ConcurrentDictionary&lt;<span class="typ">ulong</span>, ConcurrentDictionary&lt;<span class="typ">string</span>, <span class="typ">byte</span>&gt;&gt; _byCell = <span class="kw">new</span>();
+    <span class="cmt">// driver_id → latest location (for O(1) updates + CAS on status)</span>
+    <span class="kw">private readonly</span> ConcurrentDictionary&lt;<span class="typ">string</span>, <span class="typ">DriverLocation</span>&gt; _byDriver = <span class="kw">new</span>();
+    <span class="kw">private readonly</span> <span class="typ">ICellIndex</span> _idx;
+
+    <span class="kw">public</span> GeoIndexShard(<span class="typ">ICellIndex</span> idx) =&gt; _idx = idx;
+
+    <span class="cmt">// Called for every incoming GPS ping (Kafka consumer).</span>
+    <span class="kw">public void</span> <span class="fn">UpsertLocation</span>(<span class="typ">string</span> driverId, <span class="typ">double</span> lat, <span class="typ">double</span> lng, <span class="typ">long</span> ts) {
+        <span class="typ">var</span> newCell = _idx.LatLngToCell(lat, lng);
+        _byDriver.AddOrUpdate(driverId,
+            _ =&gt; { <span class="typ">var</span> loc = <span class="kw">new</span> DriverLocation(driverId, lat, lng, newCell, DriverStatus.Available, ts);
+                    _byCell.GetOrAdd(newCell, _ =&gt; <span class="kw">new</span>()).TryAdd(driverId, 0);
+                    <span class="kw">return</span> loc; },
+            (_, prev) =&gt; {
+                <span class="kw">if</span> (ts &lt; prev.Ts) <span class="kw">return</span> prev;               <span class="cmt">// out-of-order ping, drop</span>
+                <span class="kw">if</span> (prev.CellId != newCell) {
+                    <span class="cmt">// cell crossing: remove from old, add to new</span>
+                    <span class="kw">if</span> (_byCell.TryGetValue(prev.CellId, <span class="kw">out</span> <span class="typ">var</span> oldSet))
+                        oldSet.TryRemove(driverId, <span class="kw">out</span> _);
+                    _byCell.GetOrAdd(newCell, _ =&gt; <span class="kw">new</span>()).TryAdd(driverId, 0);
+                }
+                <span class="kw">return</span> prev <span class="kw">with</span> { Lat = lat, Lng = lng, CellId = newCell, Ts = ts };
+            });
+    }
+
+    <span class="cmt">// Rider request → nearby available drivers ranked by rough distance.</span>
+    <span class="cmt">// The ETA service then re-ranks these with road-network routing.</span>
+    <span class="kw">public</span> IEnumerable&lt;<span class="typ">DriverLocation</span>&gt; <span class="fn">Nearby</span>(<span class="typ">double</span> lat, <span class="typ">double</span> lng, <span class="typ">int</span> topN = 10) {
+        <span class="typ">var</span> center = _idx.LatLngToCell(lat, lng);
+        <span class="typ">var</span> cells  = _idx.KRing(center, <span class="typ">1</span>);           <span class="cmt">// center + 6 neighbors</span>
+
+        <span class="typ">var</span> candidates = <span class="kw">new</span> List&lt;<span class="typ">DriverLocation</span>&gt;();
+        <span class="kw">foreach</span> (<span class="typ">var</span> c <span class="kw">in</span> cells) {
+            <span class="kw">if</span> (!_byCell.TryGetValue(c, <span class="kw">out</span> <span class="typ">var</span> set)) <span class="kw">continue</span>;
+            <span class="kw">foreach</span> (<span class="typ">var</span> did <span class="kw">in</span> set.Keys) {
+                <span class="kw">if</span> (_byDriver.TryGetValue(did, <span class="kw">out</span> <span class="typ">var</span> d) &amp;&amp; d.Status == DriverStatus.Available)
+                    candidates.Add(d);
+            }
+        }
+        <span class="kw">return</span> candidates
+            .OrderBy(d =&gt; _idx.Haversine(lat, lng, d.Lat, d.Lng))
+            .Take(topN);
+    }
+
+    <span class="cmt">// Atomic reservation: whichever thread flips Available → Reserved wins.</span>
+    <span class="cmt">// Losers see false and try the next candidate.</span>
+    <span class="kw">public bool</span> <span class="fn">TryReserve</span>(<span class="typ">string</span> driverId, <span class="typ">string</span> tripId) {
+        <span class="kw">while</span> (_byDriver.TryGetValue(driverId, <span class="kw">out</span> <span class="typ">var</span> cur)) {
+            <span class="kw">if</span> (cur.Status != DriverStatus.Available) <span class="kw">return</span> <span class="kw">false</span>;
+            <span class="typ">var</span> next = cur <span class="kw">with</span> { Status = DriverStatus.Reserved };
+            <span class="kw">if</span> (_byDriver.TryUpdate(driverId, next, cur)) <span class="kw">return</span> <span class="kw">true</span>;
+            <span class="cmt">// lost the race — reload and retry, unless someone else already took it</span>
+        }
+        <span class="kw">return</span> <span class="kw">false</span>;
+    }
+}
+</code></pre>
+    <p>A few things to call out in an interview about this code:</p>
+    <ul>
+      <li><strong>Out-of-order pings are dropped</strong> via <code>ts</code> comparison. Kafka partitions by <code>driver_id</code> already give per-driver ordering, but retries and DC failover can rewind — the timestamp check protects us.</li>
+      <li><strong>Cell crossings are the only moderately expensive path</strong> — same-cell updates are just a field mutation.</li>
+      <li><strong><code>TryReserve</code> is CAS in a loop</strong>, mirroring what Cassandra's LWT or DynamoDB's <code>ConditionExpression</code> would give you across nodes. In production this call goes to the durable store, not the in-memory shard.</li>
+      <li><strong>ICellIndex is abstracted</strong> so you can plug in H3, S2, or geohash. Uber's own OSS <a href="https://h3geo.org/">H3</a> has a .NET binding; S2 does too.</li>
+    </ul>
+    <p>Alternative languages/tools: Uber's own dispatch was Node.js (fits async I/O well); many peers now use Go for the geo shards (better GC for sustained high-throughput). C# / .NET is a perfectly reasonable choice on modern kestrel + ASP.NET Core.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Bottlenecks and mitigations</h3>
+    <p><strong>Hot cells.</strong> Downtown is a spatial hot key: one cell with 20K drivers dominates a shard. Mitigate with (a) adaptive resolution — finer cells in dense zones; (b) sub-shard splitting — hash <code>driver_id</code> into <code>cell#0..#3</code> and scatter-gather queries; (c) shed the oldest queued pings first when a shard's inbox backs up.</p>
+    <p><strong>Ingest write amplification.</strong> Every driver writes every 4 s regardless of whether they moved. Compress: skip pings if displacement &lt; ε and heading unchanged. Batch pings client-side into a single 4-second frame with sub-second sub-samples. Some fleets drop from 4 s → 2 s only when a trip is active.</p>
+    <p><strong>Cross-cell coordination.</strong> A driver near the boundary flips cells often. Add hysteresis: don't reassign until the driver is &gt; ε deep into the new cell.</p>
+    <p><strong>ETA is the slowest step.</strong> Road-network Dijkstra on a big graph is the highest-latency piece per match. Contraction hierarchies + memoized ETAs per (origin cell, destination cell) at coarse resolution take it from 100 ms to a few ms.</p>
+
+    <h3>Consistency choices</h3>
+    <p><strong>Geo index: eventual.</strong> A stale location by 4 seconds means we might offer a driver who is 30 m off — the driver either accepts or the system re-matches. Cheap error.</p>
+    <p><strong>Driver status: linearizable per key.</strong> Double-booking is a product bug we cannot ship. CAS on a single key gives strong consistency <em>where we need it</em> without a global transaction.</p>
+    <p><strong>Trip state: sequential per trip.</strong> Trip transitions (requested → matched → started → ended) are single-key state machines, easy to keep consistent.</p>
+
+    <h3>Failure modes</h3>
+    <p><strong>Shard death:</strong> Ringpop rebalances; the fresh owner rebuilds its slice of the index from the next ping cycle. Match requests in flight retry idempotently.</p>
+    <p><strong>Kafka outage:</strong> The gateway falls back to a smaller regional store or short-lived in-memory buffer; on recovery, the backlog drains. Surge freezes at its last value.</p>
+    <p><strong>Network partition (rider ↔ driver):</strong> WebSocket reconnects with an exponential backoff carrying the trip ID; the server treats the trip as authoritative until a timeout.</p>
+    <p><strong>DC failover:</strong> The encrypted state-digest trick puts a lightweight backup of trip state on the driver's phone — the ultimate distributed backup medium.</p>
+
+    <h3>Likely interviewer follow-ups</h3>
+    <div class="qa"><p class="q">How would you handle a stalled/crashed driver phone?</p>
+    <p class="a">Timestamp each ping. If a driver's last ping is older than N intervals (say 20 s), mark <code>Offline</code>, remove from the cell's candidate set, and stop offering. When a fresh ping arrives, re-add.</p></div>
+    <div class="qa"><p class="q">Why not just put every driver in Redis with GEOADD?</p>
+    <p class="a">Redis geo commands work for small fleets but are single-node bottlenecks at Uber scale — GEOSEARCH on millions of points is slow and Redis doesn't shard by geo naturally. In-memory sharded services with a consistent hash ring scale linearly; Redis geo is fine for a startup, not for a global fleet.</p></div>
+    <div class="qa"><p class="q">Quadtree vs. geohash vs. H3 vs. S2 — how do you pick?</p>
+    <p class="a">Fixed grids (H3, S2, geohash) shard trivially by cell ID and give O(1) lookups; use them when driver density is roughly uniform or when you can adapt resolution. Quadtrees adapt to skew automatically — great for extreme non-uniformity — but are harder to shard and rebalance. Uber picked S2 for dispatch (fixed level 12 cells) and H3 for analytics (hexagons for uniform gradients / surge).</p></div>
+    <div class="qa"><p class="q">How does surge feed back into behavior?</p>
+    <p class="a">The multiplier is displayed to the rider (deterrent) and pushed to nearby drivers via notification ("busy area — 1.8×"). Over ~2–5 minutes drivers migrate in, the ratio normalizes, and surge decays. It's a slow control loop over Kafka events, not a synchronous negotiation.</p></div>
+    <div class="qa"><p class="q">Why not a single global geo database?</p>
+    <p class="a">Because at 1–2 M writes/sec no single-master database keeps up cheaply, and geo locality lets us shard perfectly by cell — same-city queries hit the same shard, cross-region traffic is naturally zero. Splitting is free.</p></div>
+    <div class="qa"><p class="q">How do you keep matches fair across drivers?</p>
+    <p class="a">DISCO can factor idle time and recent trip volume when ranking within a candidate set — not purely nearest-ETA. There's also a per-driver rate limiter on how many offers they can decline before de-prioritization.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "Uber is a real-time marketplace. Drivers stream GPS pings every 4 s over persistent WebSockets into a Kafka firehose — about 1–2 million writes per second at scale. The pings feed an in-memory geospatial index sharded by H3 or S2 cell IDs on a consistent hash ring. When a rider requests a ride, the matching service does a k-ring lookup in the rider's cell, ranks candidates by road-network ETA via OSRM, and reserves the winner with a linearizable CAS on driver status. A parallel stream job aggregates supply and demand per H3 cell every minute for surge pricing. The whole hot path is throwaway state — nothing is persisted on the location-update path — so shards die cheaply and drivers repopulate them in one ping cycle."</p>
+    <ul>
+      <li><strong>The five numbers to volunteer:</strong> 5M active drivers · GPS every 4 s · ~1.25 M writes/s · ~500 MB in-memory index · sub-second match latency.</li>
+      <li><strong>The five talking points that win:</strong> (1) H3 hexagons over squares for uniform neighbor distance; (2) k-ring to handle boundary drivers; (3) OSRM/CH for road-network ETA (not haversine); (4) atomic CAS on <code>driver_id</code> for reservation; (5) throwaway in-memory shards backed by Kafka.</li>
+      <li><strong>Where consistency lives:</strong> eventual for locations, linearizable per-key for status — say this out loud.</li>
+      <li><strong>Surge is a control loop:</strong> supply/demand ratio per cell → multiplier → decays as drivers migrate. Not a bidding auction.</li>
+      <li><strong>Datacenter failover trick:</strong> encrypted state digest on the driver's phone reconstructs trip state — impress the interviewer with this one.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://www.uber.com/en-IN/blog/h3/">Uber Engineering — H3: Hexagonal Hierarchical Spatial Index</a></li>
+      <li><a href="https://highscalability.com/how-uber-scales-their-real-time-market-platform/">High Scalability — How Uber Scales Their Real-Time Market Platform</a></li>
+      <li><a href="https://systemdesignschool.io/problems/uber/solution">System Design School — Design Uber / Nearby Drivers</a></li>
+      <li><a href="https://www.geeksforgeeks.org/system-design/system-design-of-uber-app-uber-system-architecture/">GeeksforGeeks — System Design of Uber App</a></li>
+      <li><a href="https://h3geo.org/">H3 project docs — h3geo.org</a></li>
+      <li><a href="https://s2geometry.io/">Google S2 Geometry — s2geometry.io</a></li>
+      <li><a href="https://github.com/uber/ringpop-node">Uber Ringpop (consistent hashing + SWIM gossip)</a></li>
+      <li><a href="http://project-osrm.org/">OSRM — Open Source Routing Machine (contraction hierarchies)</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

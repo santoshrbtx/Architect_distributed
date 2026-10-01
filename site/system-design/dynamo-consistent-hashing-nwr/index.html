@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dynamo — Consistent Hashing &amp; NWR (Whitepaper §4–5)</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --laymen: #f9a03f;
+    --laymen-bg: #fff6e8;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --jargon: #138a36;
+    --jargon-bg: #eafaf0;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px;
+    box-shadow: var(--shadow); margin-bottom: 24px;
+  }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line);
+            border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow);
+            display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem;
+              padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+                 padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  section.jargon   { border-left: 6px solid var(--jargon);   background: var(--jargon-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase;
+           letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen   .badge { background: var(--laymen); }
+  .reqs     .badge { background: var(--reqs); }
+  .arch     .badge { background: var(--arch); }
+  .dsa      .badge { background: var(--dsa); }
+  .aws      .badge { background: var(--aws); }
+  .jargon   .badge { background: var(--jargon); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+                       font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px;
+        overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+             overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff;
+           border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .92rem; }
+  .sources a { color: var(--arch); }
+  .jbuster dl { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 14px 0 0; }
+  .jbuster dt { font-weight: 800; color: var(--ink); }
+  .jbuster dd { margin: 4px 0 0; padding: 6px 0 10px; border-bottom: 1px dashed var(--line); color: var(--ink); }
+  .jbuster dd .plain { display: block; color: #234; }
+  .jbuster dd .india { display: block; color: #0a7a2e; margin-top: 4px; font-style: italic; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep · Dynamo Paper §4–5</div>
+    <h1>Dynamo: Consistent Hashing &amp; the NWR Quorum</h1>
+    <p>How Amazon's 2007 Dynamo paper turns commodity boxes into an always-writeable, always-on key–value store — the ring, the preference list, sloppy quorums, hinted handoff, vector clocks — with an interview-ready walkthrough of sections 4 and 5.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Ring &amp; NWR</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C#</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#jargon">🇮🇳 Jargon buster</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What Dynamo is, and why it matters in an interview</h2>
+    <p><strong>Dynamo</strong> is Amazon's 2007 highly-available, key–value store that powers services like the shopping cart, session state, and the best-seller list. It is the ancestor of <strong>Amazon DynamoDB</strong>, <strong>Cassandra</strong>, <strong>Riak</strong>, and <strong>Voldemort</strong>, and its ideas — consistent hashing, tunable NWR quorums, vector clocks, hinted handoff, Merkle-tree anti-entropy, gossip membership — are the standard vocabulary of any modern eventually-consistent store.</p>
+    <p>The paper is a favourite interview springboard because it stitches six distinct techniques together to solve one very hard product problem: <em>"the customer must never see a failed Add-to-Cart, even when disks are failing, network routes are flapping, or a whole datacenter goes dark."</em> To hit that bar Dynamo deliberately drops strong consistency and lets the application clean up divergent versions later. Sections 4 and 5 of the paper describe exactly how — and this page walks through them with the level of detail you need to whiteboard confidently.</p>
+    <p>Real products built on this playbook: <strong>Amazon shopping cart</strong>, <strong>Netflix</strong> (originally on Cassandra), <strong>Instagram</strong> feed backfill (Cassandra), <strong>Discord</strong> messages (Cassandra → ScyllaDB), <strong>Uber</strong> geo-index, <strong>Twitter/X</strong> timeline delivery. Any time you hear "eventually consistent NoSQL", the ring and the NWR knobs behind the scenes are Dynamo's grandchildren.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms — a plain-English tour</span>
+    <h2>Imagine a very busy general store with many counters</h2>
+    <p>Picture a huge <strong>kirana store chain</strong> that sells lakhs of items across many outlets in one city. Every customer expects to always be able to add an item to their cart, even if one outlet is closed for repairs, even if there's a small area power cut. The store makes a promise: <strong>"we will never say no to your cart addition."</strong> If two family members add different items at the same moment from different phones, the shop will keep <em>both</em> versions and let the family sort it out at checkout — better than losing an item.</p>
+    <p>Now, where does each customer's cart <em>live</em>? A single shop counter would collapse under lakhs of shoppers. So the chain does something clever: it draws a giant <strong>circular clock face</strong> and places every counter (server) at some hour on that circle. When you arrive with your cart, they take your <strong>phone number</strong>, punch it through a formula that also lands on the clock, and whichever counter is next in clockwise order becomes <strong>your primary counter</strong>. The next two counters after that are your <strong>backups</strong> — every cart is written to <em>three</em> counters, so if one shuts down, the other two keep serving.</p>
+    <p>Two more tricks make it robust: (1) <strong>writes are approved fast</strong> — as soon as 2 of the 3 counters have written your change, the shop says "done!" and you walk away. The 3rd catches up in the background. (2) If one of your 3 counters is temporarily closed, the shop <em>doesn't refuse</em>. It writes to a spare counter with a Post-it note: <em>"this belongs to counter A, hand it over when A opens."</em> When A comes back, the Post-it is delivered. This is the whole secret behind Amazon's <strong>"Add to Cart never fails"</strong> guarantee. No jargon, just: <em>circular seating chart + 3 copies + accept when 2 agree + Post-it for the missing one</em>.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What Dynamo has to promise</h2>
+    <h3>Functional</h3>
+    <ul>
+      <li>Simple <code>get(key)</code> and <code>put(key, context, value)</code> — no joins, no queries, primary-key only.</li>
+      <li>Objects are opaque blobs, usually <strong>&lt; 1 MB</strong>.</li>
+      <li>Nodes may join and leave without manual re-partitioning — <em>incremental scalability</em>.</li>
+    </ul>
+    <h3>Non-functional (the interviewer's favourite numbers)</h3>
+    <table>
+      <thead><tr><th>Metric</th><th>Target from the paper</th></tr></thead>
+      <tbody>
+        <tr><td>Latency SLA</td><td>99.9% of get/put &lt; <strong>300 ms</strong> — measured at p99.9, <em>not</em> average</td></tr>
+        <tr><td>Availability</td><td>"Always writeable" — the shopping-cart service saw <strong>99.9995%</strong> success over 2 years</td></tr>
+        <tr><td>Typical N,R,W</td><td><strong>(3, 2, 2)</strong> — three replicas, quorum of two for read and write</td></tr>
+        <tr><td>Scale unit</td><td>Up to <strong>a few hundred nodes</strong> per Dynamo instance (each service runs its own)</td></tr>
+        <tr><td>Divergent versions observed</td><td><strong>99.94%</strong> of shopping-cart requests saw exactly 1 version; only 0.06% saw ≥2</td></tr>
+        <tr><td>Hashing</td><td><strong>MD5</strong> of the key → 128-bit position on the ring</td></tr>
+      </tbody>
+    </table>
+    <p>These are the numbers to <em>volunteer</em> in an interview: 300 ms p99.9, N=3 R=2 W=2, MD5 128-bit, hundreds of nodes per instance, 99.9995% success.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ Ring architecture &amp; the NWR quorum</span>
+    <h2>The ring, the preference list, and the quorum in one picture</h2>
+    <p>Every key <em>k</em> is hashed with MD5 to a 128-bit number. That number is a position on a <strong>logical ring</strong> whose full range is <code>[0, 2<sup>128</sup>)</code>. Nodes are also placed on the ring — many times each, as <strong>virtual nodes</strong> — so load is spread evenly and heterogeneous hardware can carry more virtual nodes. To find the owner of <em>k</em>, walk <strong>clockwise</strong> from <em>k</em>'s hash until you hit the first node. That node is the <strong>coordinator</strong>; the next <em>N&nbsp;−&nbsp;1</em> distinct physical nodes on the ring are the replicas. Together these <em>N</em> nodes are the <strong>preference list</strong>.</p>
+
+    <div class="diagram" aria-label="Consistent hashing ring diagram">
+      <svg viewBox="0 0 640 380" width="100%" role="img" aria-labelledby="ringTitle">
+        <title id="ringTitle">Consistent hashing ring: key K lands between A and B, replicated to B, C, D (N=3)</title>
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7aa2f7"/>
+          </marker>
+        </defs>
+        <!-- ring -->
+        <circle cx="320" cy="200" r="150" fill="none" stroke="#3a4c7a" stroke-width="2" stroke-dasharray="4 4"/>
+        <text x="320" y="30" text-anchor="middle" fill="#c6d0e0" font-size="13" font-family="Inter, sans-serif">MD5 hash space — a 128-bit ring, walk clockwise</text>
+
+        <!-- 7 nodes A..G around the ring (angles: G=210, F=170, E=130, D=90, C=50, B=10, A=330 for a nice CW layout) -->
+        <!-- Node A at ~330deg -->
+        <g>
+          <circle cx="450" cy="105" r="22" fill="#4361ee" stroke="#eef2ff" stroke-width="3"/>
+          <text x="450" y="110" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">A</text>
+        </g>
+        <!-- Key K just past A, clockwise -->
+        <g>
+          <circle cx="470" cy="180" r="10" fill="#f7567c" stroke="#fff" stroke-width="2"/>
+          <text x="490" y="184" fill="#f7567c" font-weight="700" font-size="13">K = MD5(key)</text>
+        </g>
+        <!-- Node B at ~10deg (next clockwise after K) -->
+        <g>
+          <circle cx="450" cy="280" r="26" fill="#2dc653" stroke="#eafaf0" stroke-width="3"/>
+          <text x="450" y="286" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">B</text>
+          <text x="450" y="322" text-anchor="middle" fill="#c6d0e0" font-size="11">coordinator</text>
+        </g>
+        <!-- Node C at ~50deg -->
+        <g>
+          <circle cx="360" cy="345" r="22" fill="#7048e8" stroke="#f3effe" stroke-width="3"/>
+          <text x="360" y="351" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">C</text>
+          <text x="360" y="378" text-anchor="middle" fill="#c6d0e0" font-size="11">replica</text>
+        </g>
+        <!-- Node D at ~90deg -->
+        <g>
+          <circle cx="240" cy="330" r="22" fill="#7048e8" stroke="#f3effe" stroke-width="3"/>
+          <text x="240" y="336" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">D</text>
+          <text x="240" y="363" text-anchor="middle" fill="#c6d0e0" font-size="11">replica</text>
+        </g>
+        <!-- Node E -->
+        <g>
+          <circle cx="160" cy="255" r="22" fill="#00b4d8" stroke="#eef9fc" stroke-width="3"/>
+          <text x="160" y="261" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">E</text>
+        </g>
+        <!-- Node F -->
+        <g>
+          <circle cx="150" cy="150" r="22" fill="#00b4d8" stroke="#eef9fc" stroke-width="3"/>
+          <text x="150" y="156" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">F</text>
+        </g>
+        <!-- Node G -->
+        <g>
+          <circle cx="240" cy="70" r="22" fill="#00b4d8" stroke="#eef9fc" stroke-width="3"/>
+          <text x="240" y="76" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">G</text>
+        </g>
+
+        <!-- CW arrow K -> B -->
+        <path d="M 475 190 Q 490 240 460 258" fill="none" stroke="#f7567c" stroke-width="2.5" marker-end="url(#arr)"/>
+        <!-- Replication arrows B -> C, B -> D -->
+        <path d="M 430 300 Q 400 340 375 335" fill="none" stroke="#2dc653" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+        <path d="M 425 305 Q 340 360 260 335" fill="none" stroke="#2dc653" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+
+        <!-- caption box -->
+        <g transform="translate(20 20)">
+          <rect x="0" y="0" width="230" height="86" rx="10" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.15)"/>
+          <text x="12" y="22" fill="#c6d0e0" font-size="12" font-family="Inter, sans-serif">1. hash(key) lands at K</text>
+          <text x="12" y="42" fill="#c6d0e0" font-size="12" font-family="Inter, sans-serif">2. walk clockwise → B is coordinator</text>
+          <text x="12" y="62" fill="#c6d0e0" font-size="12" font-family="Inter, sans-serif">3. replicate to next N-1 = 2 nodes: C, D</text>
+          <text x="12" y="80" fill="#c6d0e0" font-size="12" font-family="Inter, sans-serif">preference list = [B, C, D] (N=3)</text>
+        </g>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#2dc653"></span>coordinator (B)</span>
+        <span><span class="dot" style="background:#7048e8"></span>replicas (C, D)</span>
+        <span><span class="dot" style="background:#f7567c"></span>hashed key position</span>
+        <span><span class="dot" style="background:#00b4d8"></span>other nodes</span>
+      </div>
+    </div>
+
+    <h3>The NWR quorum — 3 knobs the client gets to tune</h3>
+    <p>Once you know <em>where</em> the N replicas live, Dynamo lets the application choose <em>how many</em> to wait for. Two knobs: <strong>W</strong> = how many replicas must acknowledge a write before it counts as success, <strong>R</strong> = how many must respond to a read. The paper's rule of thumb is <strong>R&nbsp;+&nbsp;W&nbsp;&gt;&nbsp;N</strong>, which makes read/write sets overlap so a read will see the latest write.</p>
+
+    <div class="diagram" aria-label="NWR quorum diagram">
+      <svg viewBox="0 0 640 340" width="100%" role="img" aria-labelledby="nwrTitle">
+        <title id="nwrTitle">NWR quorum with N=3, W=2, R=2 — write and read overlap on at least one node</title>
+        <!-- Client -->
+        <g>
+          <rect x="20" y="140" width="100" height="56" rx="10" fill="#f7567c"/>
+          <text x="70" y="167" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Client</text>
+          <text x="70" y="185" text-anchor="middle" fill="#fff" font-size="11">put/get</text>
+        </g>
+        <!-- Coordinator -->
+        <g>
+          <rect x="170" y="140" width="120" height="56" rx="10" fill="#4361ee"/>
+          <text x="230" y="167" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Coordinator</text>
+          <text x="230" y="185" text-anchor="middle" fill="#fff" font-size="11">(node in top-N)</text>
+        </g>
+        <!-- 3 replicas R1 R2 R3 -->
+        <g>
+          <rect x="380" y="30"  width="110" height="56" rx="10" fill="#2dc653"/>
+          <text x="435" y="58"  text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Replica 1</text>
+          <text x="435" y="75"  text-anchor="middle" fill="#fff" font-size="11">local write</text>
+        </g>
+        <g>
+          <rect x="380" y="140" width="110" height="56" rx="10" fill="#2dc653"/>
+          <text x="435" y="168" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Replica 2</text>
+          <text x="435" y="185" text-anchor="middle" fill="#fff" font-size="11">local write</text>
+        </g>
+        <g>
+          <rect x="380" y="250" width="110" height="56" rx="10" fill="#7048e8" opacity="0.55"/>
+          <text x="435" y="278" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Replica 3</text>
+          <text x="435" y="295" text-anchor="middle" fill="#fff" font-size="11">async (catch up)</text>
+        </g>
+        <!-- arrows -->
+        <defs>
+          <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/>
+          </marker>
+        </defs>
+        <path d="M120 168 L 170 168" stroke="#c6d0e0" stroke-width="2" marker-end="url(#arr2)"/>
+        <path d="M290 155 Q 340 100 380 60"  stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#arr2)"/>
+        <path d="M290 168 L 380 168"          stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#arr2)"/>
+        <path d="M290 180 Q 340 235 380 275" stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#arr2)" stroke-dasharray="5 4"/>
+        <!-- W acks back -->
+        <path d="M380 45 Q 320 130 290 155" stroke="#f9a03f" stroke-width="2" fill="none" marker-end="url(#arr2)"/>
+        <path d="M380 155 Q 330 155 290 168" stroke="#f9a03f" stroke-width="2" fill="none" marker-end="url(#arr2)"/>
+
+        <!-- W caption -->
+        <g transform="translate(500 40)">
+          <rect x="0" y="0" width="130" height="90" rx="10" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.15)"/>
+          <text x="10" y="22" fill="#f9a03f" font-size="12" font-weight="700">W = 2</text>
+          <text x="10" y="42" fill="#c6d0e0" font-size="11">wait for 2 of 3</text>
+          <text x="10" y="58" fill="#c6d0e0" font-size="11">acks, then ✓</text>
+          <text x="10" y="80" fill="#c6d0e0" font-size="11">3rd catches up</text>
+        </g>
+        <!-- R caption -->
+        <g transform="translate(500 250)">
+          <rect x="0" y="0" width="130" height="70" rx="10" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.15)"/>
+          <text x="10" y="22" fill="#2dc653" font-size="12" font-weight="700">R + W &gt; N</text>
+          <text x="10" y="42" fill="#c6d0e0" font-size="11">2 + 2 &gt; 3 → sets</text>
+          <text x="10" y="58" fill="#c6d0e0" font-size="11">must overlap on ≥1</text>
+        </g>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#2dc653"></span>W=2 write path (fan-out)</span>
+        <span><span class="dot" style="background:#f9a03f"></span>ack path (2 needed)</span>
+        <span><span class="dot" style="background:#7048e8"></span>lagging replica — repaired later</span>
+      </div>
+    </div>
+
+    <table>
+      <thead><tr><th>Config</th><th>N</th><th>R</th><th>W</th><th>Behaviour</th></tr></thead>
+      <tbody>
+        <tr><td>Common (shopping cart, session)</td><td>3</td><td>2</td><td>2</td><td>Balanced read/write, R+W&gt;N ⇒ quorum</td></tr>
+        <tr><td>Always-writeable (durability optional)</td><td>3</td><td>-</td><td>1</td><td>Never rejects a write; possible stale reads</td></tr>
+        <tr><td>Read-heavy cache</td><td>3</td><td>1</td><td>3</td><td>Fastest reads, all replicas must ack writes</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>4.2 — Consistent hashing with virtual nodes</h3>
+    <p>The raw ring has two problems: nodes placed randomly give <strong>uneven ranges</strong> (some nodes get huge arcs, others tiny slivers), and a beefier server can't take extra load. Dynamo fixes both by giving each physical node <strong>many tokens</strong> (positions on the ring). A powerful box gets more tokens; a small box gets fewer. When a node dies, its many small ranges get re-absorbed by many different neighbours, so no single neighbour gets crushed. When a new node joins, it steals slivers from many neighbours in parallel.</p>
+
+    <h3>4.3 — Replication &amp; the preference list</h3>
+    <p>Each key is replicated to <em>N</em> nodes. Because virtual nodes can put two tokens of the same physical box next to each other, the preference list is built by <strong>skipping</strong> until <em>N distinct physical nodes</em> are collected. And the list is longer than N — extra "spares" are pre-computed to cover failures (this is what makes hinted handoff cheap). For datacenter failure resilience, the list is chosen so successive replicas live in <em>different DCs</em>.</p>
+
+    <h3>4.4 — Vector clocks &amp; conflict resolution</h3>
+    <p>Because writes can succeed with only W acknowledgements, two replicas can end up with divergent versions after a partition heals. Dynamo attaches a <strong>vector clock</strong> <code>[(Sx, 1), (Sy, 2), …]</code> — a list of <em>(node, counter)</em> pairs — to every version. If clock A dominates clock B on every entry, A is a descendant and B can be dropped (<em>syntactic reconciliation</em>). If neither dominates, both are returned to the client and the <em>application</em> merges them (<em>semantic reconciliation</em> — for a shopping cart, "union of items"). Clocks are truncated at ~10 entries to keep them bounded.</p>
+
+    <h3>4.5 — get() and put() execution</h3>
+    <p>A <code>put(k, ctx, val)</code> lands on any node; the receiver forwards it to the coordinator (first live node in <em>k</em>'s preference list). The coordinator bumps the vector clock, writes locally, and fans out to the other N&minus;1 top-preference nodes. As soon as W&minus;1 of them ack (plus its own local write = W total), the put succeeds. A <code>get(k)</code> similarly reads from N and waits for R responses; any divergent versions are returned to the caller with their contexts merged so the next put reconciles.</p>
+
+    <h3>4.6 — Sloppy quorum &amp; hinted handoff</h3>
+    <p>A "strict" quorum would block the write if a top-N node is down. Dynamo instead does a <strong>sloppy quorum</strong>: if node A is unreachable, the write goes to the next healthy node D <em>with a metadata "hint"</em> naming A. D stores it in a side database; when A recovers, D transfers the hinted replicas back and deletes its copy. Result: writes never fail on transient failures, and durability is quickly restored.</p>
+
+    <h3>4.7 — Anti-entropy with Merkle trees</h3>
+    <p>Hints only survive if D itself stays alive. For permanent drift, Dynamo runs <strong>Merkle-tree anti-entropy</strong>: each node maintains a Merkle tree per <em>key range</em>. Two replicas compare root hashes; if equal, done. If not, they descend only the disagreeing branches, minimising bytes transferred and disk reads. Any leaves where the hashes differ pinpoint the exact keys that need syncing.</p>
+
+    <h3>4.8 — Membership via gossip + seeds</h3>
+    <p>Adds/removes are <strong>explicit</strong> (an operator command) — Dynamo doesn't auto-remove a flapping node. The change is written to persistent store, then <strong>gossiped</strong>: every second each node picks a random peer and reconciles membership histories. A handful of well-known <strong>seed</strong> nodes anchor discovery so the ring can't logically split. Failure detection is purely local — "did B not answer my last few RPCs?" — no global agreement needed.</p>
+
+    <h3>5 — Implementation notes worth quoting</h3>
+    <p>Each node has three components (all in Java): <em>request coordination</em>, <em>membership &amp; failure detection</em>, and a <em>pluggable local persistence engine</em> (BDB Transactional, BDB Java Edition, MySQL, or an in-memory buffer with a persistent backing store). Coordination runs on a <strong>SEDA-style</strong> pipeline: each client request spawns a state machine — send N requests, wait for R (or W) responses, retry on timeout, reconcile divergent versions, respond, and then <strong>read-repair</strong> lagging replicas asynchronously. A neat trick from §5: the coordinator for a write is chosen to be the fastest replica from the <em>preceding read</em>, which both improves p99.9 and enables "read your writes".</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures and algorithms in Dynamo</h2>
+    <table>
+      <thead><tr><th>Where used</th><th>Structure / algorithm</th><th>Why chosen</th><th>Complexity</th></tr></thead>
+      <tbody>
+        <tr><td>Key → node lookup</td><td>Consistent hashing ring (sorted array or TreeMap of tokens)</td><td>Node churn touches only O(K/N) keys, not the whole space</td><td>O(log V) per lookup, V = # virtual nodes</td></tr>
+        <tr><td>Key hashing</td><td>MD5 (128-bit)</td><td>Fast, uniform, deterministic — collision-resistance not needed</td><td>O(|key|) hash, O(1) lookup on ring</td></tr>
+        <tr><td>Version causality</td><td>Vector clocks — array of (node, counter) pairs</td><td>Distinguishes concurrent vs causal updates without a global lock</td><td>O(k) compare, k ≤ ~10 truncated</td></tr>
+        <tr><td>Anti-entropy</td><td>Merkle tree per key range</td><td>Compare root first; descend only diverging subtrees</td><td>O(log n) bytes over the wire for one diff key</td></tr>
+        <tr><td>Membership</td><td>Gossip protocol (epidemic, push-pull)</td><td>Decentralised, eventually consistent, O(1) msgs/node/tick</td><td>Convergence O(log N) rounds</td></tr>
+        <tr><td>Hinted handoff store</td><td>Local key-value + scan loop</td><td>Cheap sidecar; scanned periodically to catch recoveries</td><td>O(hints held) drain per recovery</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>If you had to rebuild Dynamo on AWS today</h2>
+    <table>
+      <thead><tr><th>Dynamo concept</th><th>AWS service</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>The finished product</td><td><strong>Amazon DynamoDB</strong></td><td>Managed descendant of the paper — same consistent-hashing partitioning, tunable consistency (eventual vs strongly-consistent reads), global tables for cross-region.</td></tr>
+        <tr><td>Front door</td><td><strong>API Gateway</strong> + <strong>ALB</strong></td><td>TLS, throttling, routing to coordinator nodes</td></tr>
+        <tr><td>Coordinator processes</td><td><strong>ECS/EKS</strong> or <strong>Lambda</strong></td><td>Stateless SEDA-style workers running the state machine</td></tr>
+        <tr><td>Storage replicas</td><td><strong>EC2 + EBS io2</strong> with BDB/RocksDB, or use DynamoDB directly</td><td>Durable local persistence with predictable IOPS</td></tr>
+        <tr><td>Cross-DC replication</td><td>Multi-AZ + <strong>Global Tables</strong></td><td>Preference list spans AZs; global tables handle multi-region eventual consistency</td></tr>
+        <tr><td>Membership &amp; discovery</td><td><strong>Route 53 + Cloud Map</strong> (seed) + custom gossip</td><td>Seeds via DNS, gossip handles the rest</td></tr>
+        <tr><td>Anti-entropy jobs</td><td><strong>EventBridge</strong> scheduling + Lambda</td><td>Kick off Merkle-diff runs during quiet hours</td></tr>
+        <tr><td>Observability (p99.9!)</td><td><strong>CloudWatch</strong> + <strong>X-Ray</strong></td><td>Paper insists on 99.9th percentile — need percentile-aware metrics</td></tr>
+      </tbody>
+    </table>
+    <p>In practice, <em>most</em> teams just use <strong>DynamoDB</strong> — Amazon shipped the paper's design as a managed service in 2012. The interview question <em>"how would you build DynamoDB"</em> is essentially asking you to re-derive this table.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# — a minimal NWR-quorum write coordinator</h2>
+    <p>This is a whiteboard-grade sketch of what a Dynamo coordinator's put path does: fan out to the top-N healthy nodes, count W acks (including the local write), succeed or fail on a timeout. Ring lookup and vector-clock merge are elided but hinted at.</p>
+<pre><span class="cmt">// Minimal Dynamo-style put coordinator. Focus: NWR fan-out.</span>
+<span class="kw">public sealed class</span> <span class="typ">DynamoCoordinator</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">HashRing</span> _ring;         <span class="cmt">// nodes + virtual-node tokens</span>
+    <span class="kw">private readonly int</span> _n, _r, _w;             <span class="cmt">// e.g. (3, 2, 2)</span>
+    <span class="kw">private readonly</span> <span class="typ">TimeSpan</span> _timeout = <span class="typ">TimeSpan</span>.FromMilliseconds(<span class="str">300</span>);
+
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">PutResult</span>&gt; <span class="fn">PutAsync</span>(<span class="kw">string</span> key, <span class="kw">byte</span>[] value, <span class="typ">VectorClock</span> ctx)
+    {
+        <span class="cmt">// 1. Build the preference list — first N distinct physical nodes walking clockwise.</span>
+        <span class="kw">var</span> pref = _ring.PreferenceList(key, _n + <span class="str">2</span>);  <span class="cmt">// +2 spares for sloppy quorum</span>
+        <span class="kw">var</span> healthy = pref.Where(n =&gt; n.IsHealthy).Take(_n).ToList();
+
+        <span class="cmt">// 2. Coordinator = first healthy in preference list (this node forwards otherwise).</span>
+        <span class="kw">var</span> newClock = ctx.<span class="fn">Bump</span>(_ring.SelfId);
+        <span class="kw">var</span> version  = <span class="kw">new</span> <span class="typ">VersionedValue</span>(value, newClock);
+
+        <span class="cmt">// 3. Fan out to N healthy replicas. Local write counts as 1 ack.</span>
+        <span class="kw">var</span> acks = <span class="kw">new</span> <span class="typ">SemaphoreSlim</span>(<span class="str">0</span>, _n);
+        _ = <span class="typ">Task</span>.<span class="fn">Run</span>(() =&gt; _ring.LocalStore.<span class="fn">Write</span>(key, version).<span class="fn">ContinueWith</span>(_ =&gt; acks.<span class="fn">Release</span>()));
+
+        <span class="kw">foreach</span> (<span class="kw">var</span> node <span class="kw">in</span> healthy.<span class="fn">Where</span>(n =&gt; n.Id != _ring.SelfId))
+            _ = node.<span class="fn">WriteAsync</span>(key, version).<span class="fn">ContinueWith</span>(t =&gt;
+            {
+                <span class="kw">if</span> (t.IsCompletedSuccessfully) acks.<span class="fn">Release</span>();
+            });
+
+        <span class="cmt">// 4. Wait for W acks OR timeout.</span>
+        <span class="kw">using var</span> cts = <span class="kw">new</span> <span class="typ">CancellationTokenSource</span>(_timeout);
+        <span class="kw">for</span> (<span class="kw">int</span> i = <span class="str">0</span>; i &lt; _w; i++)
+            <span class="kw">if</span> (!<span class="kw">await</span> acks.<span class="fn">WaitAsync</span>(_timeout, cts.Token))
+                <span class="kw">return</span> <span class="typ">PutResult</span>.<span class="fn">Failed</span>(<span class="str">"quorum not reached in 300ms"</span>);
+
+        <span class="cmt">// 5. If any target node was unreachable, send a hinted-handoff to a spare.</span>
+        <span class="kw">foreach</span> (<span class="kw">var</span> down <span class="kw">in</span> pref.<span class="fn">Take</span>(_n).<span class="fn">Where</span>(n =&gt; !n.IsHealthy))
+            _ring.<span class="fn">HintedHandoff</span>(target: pref.<span class="fn">Skip</span>(_n).<span class="fn">First</span>(x =&gt; x.IsHealthy),
+                                intendedRecipient: down, key, version);
+
+        <span class="kw">return</span> <span class="typ">PutResult</span>.<span class="fn">Ok</span>(newClock);
+    }
+}
+</pre>
+    <p>Alternative implementations you might mention: <strong>Cassandra</strong> (Java, same NWR knobs via <code>consistency=QUORUM</code>), <strong>ScyllaDB</strong> (C++ port for lower latency), <strong>Riak</strong> (Erlang), and <strong>Voldemort</strong> (LinkedIn, Java). Consistent hashing itself powers <strong>Amazon ElastiCache</strong>, <strong>memcached</strong> clients, <strong>Envoy</strong>'s ring-hash LB, and <strong>Vitess</strong> shard routing.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely interviewer follow-ups</h2>
+
+    <div class="qa"><p class="q">Why not use Paxos/Raft for strong consistency?</p>
+      <p class="a">A consensus round costs a round-trip to a majority for <em>every write</em> and cannot progress during partitions. The shopping cart cannot afford to reject an "Add to Cart" during a partition. Dynamo trades linearizability for availability, then pushes conflict resolution into the application. This is the CAP-theorem choice made explicit.</p></div>
+
+    <div class="qa"><p class="q">Why MD5 and not SHA-256?</p>
+      <p class="a">Dynamo needs uniform distribution and speed, not cryptographic strength — the ring is inside a trusted datacenter, and there is no adversary crafting hash collisions. MD5 is faster and 128 bits is more than enough entropy for the token space.</p></div>
+
+    <div class="qa"><p class="q">What if two nodes coordinate concurrent writes on the same key?</p>
+      <p class="a">Both writes succeed with different vector clocks — say <code>[(Sx,2),(Sy,1)]</code> and <code>[(Sx,2),(Sz,1)]</code>. Neither dominates. The next reader gets both versions in the response context and must reconcile (for a cart, union the items; for a session, "last write wins" by timestamp). The paper reports 99.94% of shopping-cart requests still saw exactly one version.</p></div>
+
+    <div class="qa"><p class="q">What are the real bottlenecks?</p>
+      <p class="a">(1) Gossip: full membership tables grow with N, limiting the design to a few hundred nodes per instance. (2) Merkle-tree recomputation on membership churn — Strategy 3 (Q/S tokens with fixed partitions) fixed this in §6. (3) Foreground vs background contention — anti-entropy has to yield to live get/puts via admission control.</p></div>
+
+    <div class="qa"><p class="q">Sloppy quorum vs strict quorum — does R+W&gt;N still guarantee "read latest"?</p>
+      <p class="a">Not in a partition. Under a sloppy quorum, the "W" nodes that ack the write may not be in the top-N preference list at all — they might be spares holding hints. A subsequent read of R nodes could miss those hints and return a stale value. The guarantee is best-effort; strict overlap holds only when the top-N are all up.</p></div>
+
+    <div class="qa"><p class="q">How does datacenter failure work?</p>
+      <p class="a">The preference list is <em>constructed</em> so successive replicas fall in different DCs. Losing one DC still leaves 2 of 3 replicas alive, and a (3,2,2) quorum still passes.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "Dynamo is Amazon's always-writeable key–value store. Keys are placed on a consistent-hashing ring using MD5, each key is replicated to N=3 nodes forming a preference list, and writes succeed once W=2 replicas ack — R+W&gt;N gives read-write overlap. When a replica is down, writes flow to a spare with a hint (sloppy quorum + hinted handoff), and Merkle-tree anti-entropy repairs permanent drift. Conflicts are surfaced to the client via vector clocks and resolved semantically (e.g. cart union). It's the ancestor of DynamoDB and Cassandra."</p>
+    <ul>
+      <li><strong>Numbers to quote:</strong> N=3, R=W=2, p99.9 &lt; 300 ms, MD5 128-bit, 99.9995% availability, ~ hundreds of nodes/instance.</li>
+      <li><strong>Six techniques (Table 1):</strong> consistent hashing → replication → vector clocks → sloppy quorum + hinted handoff → Merkle-tree anti-entropy → gossip membership.</li>
+      <li><strong>Preference list</strong>: skip virtual nodes belonging to the same physical box; span multiple DCs.</li>
+      <li><strong>Write coordinator picked as fastest replica from previous read</strong> — improves p99.9 and enables read-your-writes.</li>
+      <li><strong>Application, not the DB, resolves conflicts</strong> — shopping cart merges divergent versions.</li>
+    </ul>
+  </section>
+
+  <section id="jargon" class="card jargon jbuster">
+    <span class="badge">🇮🇳 Jargon buster — Indian-context plain English</span>
+    <h2>The words on this page, decoded</h2>
+    <p>Every technical term the page uses, in one line of plain English plus one everyday Indian picture. Ideal for a quick re-read before you say them out loud.</p>
+    <dl>
+      <dt>Consistent hashing</dt>
+      <dd><span class="plain">A way to map keys to servers using a circular hash space so that adding/removing a server only reshuffles a tiny slice of keys, not everything.</span>
+          <span class="india">Like PIN-code-based delivery zones: adding a new delivery boy only reshuffles one colony, not the whole city.</span></dd>
+
+      <dt>Virtual node (vnode / token)</dt>
+      <dd><span class="plain">One physical server pretends to be many small servers scattered on the ring so load is spread evenly and stronger boxes carry more.</span>
+          <span class="india">Same person manning multiple counters at an Aadhaar enrolment camp — the strong staff handle 3 counters, the trainee handles 1.</span></dd>
+
+      <dt>Preference list</dt>
+      <dd><span class="plain">The ordered list of N nodes responsible for a key — first is coordinator, next N-1 are replicas, plus a couple of spares for failures.</span>
+          <span class="india">Your primary emergency contact plus 2 backups plus 2 extras on your bank form — if the first can't be reached, they try the next in line.</span></dd>
+
+      <dt>Coordinator</dt>
+      <dd><span class="plain">The node that orchestrates one put/get: assigns the version, fans out to the replicas, waits for the quorum, replies.</span>
+          <span class="india">The ward secretary who takes your application, sends copies to two offices, and hands you the receipt once both stamp it.</span></dd>
+
+      <dt>Quorum (NWR)</dt>
+      <dd><span class="plain">A rule that a write or read counts as successful only after a minimum number of replicas participate — R+W&gt;N ensures the two sets overlap.</span>
+          <span class="india">A society decision needing at least 2 of 3 committee members' signatures — as long as any two agree, it stands.</span></dd>
+
+      <dt>Sloppy quorum</dt>
+      <dd><span class="plain">Instead of requiring the exact top-N nodes, Dynamo accepts writes on any N healthy nodes, so writes never fail during transient outages.</span>
+          <span class="india">If your usual bank branch is closed, the cheque is still accepted at the nearest open branch and moved back later.</span></dd>
+
+      <dt>Hinted handoff</dt>
+      <dd><span class="plain">A temporary write sent to a stand-in node, tagged with the original recipient's name, and delivered once that node returns.</span>
+          <span class="india">The Amazon delivery boy leaves your parcel with the pharmacy next door and pastes a note — you pick it up when you're back home.</span></dd>
+
+      <dt>Vector clock</dt>
+      <dd><span class="plain">A list of (node, counter) pairs attached to a value so the system can tell whether one version descended from another or they diverged.</span>
+          <span class="india">A shared Google-Doc-style edit history saying "Ravi edited 3 times, Priya edited 1 time" — you can see if edits conflict or one followed the other.</span></dd>
+
+      <dt>Syntactic reconciliation</dt>
+      <dd><span class="plain">The system itself can pick the newer version when one vector clock clearly dominates the other. No human judgement needed.</span>
+          <span class="india">Two versions of your Aadhaar update — one is newer on every field, obviously use that one.</span></dd>
+
+      <dt>Semantic reconciliation</dt>
+      <dd><span class="plain">The system returns both divergent versions to the application, which knows how to merge them meaningfully.</span>
+          <span class="india">Your mother added atta to the cart on one phone, you added ghee from another — the app just keeps both items in the final cart.</span></dd>
+
+      <dt>Anti-entropy</dt>
+      <dd><span class="plain">A background process that walks through replicas and pulls them back into agreement over time.</span>
+          <span class="india">Monthly society ledger reconciliation — two secretaries sit and match register entries so both books agree.</span></dd>
+
+      <dt>Merkle tree</dt>
+      <dd><span class="plain">A tree of hashes where each parent hash summarises its children — lets two replicas compare huge datasets by exchanging one hash at a time.</span>
+          <span class="india">Comparing two thick railway timetables by first checking the front-page total, then only the chapters where totals differ, then only the rows in those chapters.</span></dd>
+
+      <dt>Gossip protocol</dt>
+      <dd><span class="plain">Each node picks a random peer every second and shares what it knows, so information spreads through the cluster like rumour.</span>
+          <span class="india">WhatsApp forwards in a family group — one aunty tells two, they tell four, and within minutes everyone in the extended family knows.</span></dd>
+
+      <dt>Seed node</dt>
+      <dd><span class="plain">A well-known starting-point node whose address is in static config so a fresh node knows whom to gossip with first.</span>
+          <span class="india">The trusted &quot;pandalji&quot; whose phone number everyone in the wedding party has — new relatives arriving in town call him first.</span></dd>
+
+      <dt>Read repair</dt>
+      <dd><span class="plain">If a read reveals a lagging replica, the coordinator quietly pushes the fresh value to it on the way back — no separate job needed.</span>
+          <span class="india">While copying a document at a Xerox shop, the boy notices your neighbour's copy is older and hands them a fresh one for free.</span></dd>
+
+      <dt>Read-your-writes</dt>
+      <dd><span class="plain">A consistency guarantee that says once you write X, your very next read will see X (or newer).</span>
+          <span class="india">You deposit ₹5,000 at the ATM and the very next mini-statement shows the balance — you shouldn't have to wait for it to appear.</span></dd>
+
+      <dt>Eventually consistent</dt>
+      <dd><span class="plain">All replicas agree eventually, given enough quiet time — but a reader mid-flight may see stale data.</span>
+          <span class="india">Your Aadhaar address update reflects on the online portal within minutes but on a printed KYC letter only after a few days — same info, delayed sync.</span></dd>
+
+      <dt>p99.9 latency</dt>
+      <dd><span class="plain">The response time by which 99.9% of requests are served — a much stricter target than the average.</span>
+          <span class="india">Not "average IRCTC page loads in 3 seconds" but "999 out of every 1,000 clicks respond within 3 seconds" — the hard promise.</span></dd>
+
+      <dt>SEDA architecture</dt>
+      <dd><span class="plain">A server design where each request flows through a pipeline of stages, each with its own queue and thread pool, so back-pressure is localised.</span>
+          <span class="india">A passport office where your form moves from token counter → biometrics → verification → payment, each with its own queue.</span></dd>
+
+      <dt>Back-pressure</dt>
+      <dd><span class="plain">When a downstream stage is slow, it signals upstream to slow down so queues don't explode.</span>
+          <span class="india">The billing counter at Big Bazaar tells the entrance guard to hold customers when the checkout queue is too long.</span></dd>
+
+      <dt>BDB (Berkeley DB) / RocksDB</dt>
+      <dd><span class="plain">Embedded key-value libraries a service links into its own process for fast local storage.</span>
+          <span class="india">Like keeping your own steel almirah at home instead of renting a bank locker — no round-trip to a separate building.</span></dd>
+
+      <dt>Zero-hop DHT</dt>
+      <dd><span class="plain">Every node knows the full routing table, so a request goes directly to the right node in one network hop — no chain of forwards.</span>
+          <span class="india">Direct-dial STD calls instead of asking the operator to connect you through three exchanges.</span></dd>
+    </dl>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://cdn.amazon.science/ac/1d/eb50c4064c538c8ac440ce6a1d91/dynamo-amazons-highly-available-key-value-store.pdf" target="_blank" rel="noopener">DeCandia et al., <em>"Dynamo: Amazon's Highly Available Key-value Store"</em>, SOSP 2007</a> — the primary source. All numbers and algorithm details above are drawn from §4 (System Architecture) and §5 (Implementation), with §6 for the (3,2,2) config and load-distribution numbers.</li>
+      <li><a href="https://www.allthingsdistributed.com/2007/10/amazons_dynamo.html" target="_blank" rel="noopener">Werner Vogels — <em>"Amazon's Dynamo"</em> (All Things Distributed)</a> — companion blog post from the paper's co-author.</li>
+      <li><a href="https://aws.amazon.com/blogs/database/amazon-dynamodb-a-scalable-predictably-performant-and-fully-managed-nosql-database-service/" target="_blank" rel="noopener">AWS Blog — DynamoDB: the managed descendant of the paper's design</a>.</li>
+      <li><a href="https://dl.acm.org/doi/10.1145/258533.258660" target="_blank" rel="noopener">Karger et al., <em>"Consistent Hashing and Random Trees"</em>, STOC 1997</a> — reference [10] in the Dynamo paper; the original consistent-hashing algorithm Dynamo builds on.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched from the Dynamo whitepaper §4–5 · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

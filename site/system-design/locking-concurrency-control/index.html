@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Locking &amp; Concurrency Control — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #ffb703;
+    --laymen-bg: #fff8e1;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --danger: #d90429;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #d90429 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.15rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.08rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); color: #3b2b00; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.48rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.14rem; }
+  h4 { margin: 16px 0 6px; font-size: 1.02rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .93rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .87rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 16px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre; font-size: .86rem; line-height: 1.5;
+  }
+  .callout {
+    border-radius: 12px; padding: 14px 18px; margin: 14px 0; font-size: .95rem;
+    border-left: 4px solid var(--arch); background: #eef2ff;
+  }
+  .callout.warn { border-left-color: var(--danger); background: #fff0f4; }
+  .callout.ok   { border-left-color: var(--accent); background: #e6f9ec; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 14px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.02rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  /* animation harness */
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Concurrency · Solution Architect Playbook</div>
+    <h1>Locking &amp; Concurrency Control in Distributed Systems</h1>
+    <p>A field guide for choosing between optimistic, pessimistic, row-level, distributed, atomic-update, and versioning strategies — with the real-world scenarios that make each one the right answer, and the interview traps that make them the wrong one.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Problem</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Approaches</a>
+    <a href="#arch">🏗️ Big picture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Each mechanism</a>
+    <a href="#scenarios">🎬 Scenarios</a>
+    <a href="#failures">💥 Failures</a>
+    <a href="#matrix">🧭 Decision matrix</a>
+    <a href="#traps">🪤 Interview traps</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <!-- ============================ PROBLEM ============================ -->
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 The problem</span>
+    <h2>Two things want to change the same thing at the same time</h2>
+    <p>Every real system eventually hits the same shape of bug: two requests arrive concurrently, both read the same value, both make an independent decision, and both write. The second write silently overwrites the first — money vanishes, inventory goes negative, five copies of a "daily report" email land in the customer's inbox, or a table row shows a state that neither user actually asked for. This is the concurrency problem, and it doesn't care whether you have one server, five servers, or five hundred.</p>
+    <p>The concurrency literature offers a small toolbox: <strong>optimistic locking</strong> (let everyone work, verify before saving), <strong>pessimistic locking</strong> (lock the resource before touching it), <strong>row-level database locks</strong>, <strong>distributed locks</strong> across servers via Redis or ZooKeeper, <strong>advisory locks</strong> for cross-transaction coordination, <strong>atomic database operations</strong> that dodge locking altogether, and <strong>versioning / compare-and-swap / ETag</strong> patterns for stateless APIs. Each is right somewhere. Each is disastrous somewhere else.</p>
+    <p>This page is the map. Every mechanism is explained the same way: what problem it solves, its mental model, an architecture diagram, one crisp production scenario, and where it fails. Then a decision matrix and a decision tree bring it all back together. The goal is not to be able to say what optimistic locking is — it is to look at a new problem and instantly answer "which mechanism, why, and what fails if we pick wrong?".</p>
+  </section>
+
+  <!-- ============================ LAYMEN ============================ -->
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Five ways to share one whiteboard</h2>
+    <p>Imagine a whiteboard in a shared office. Ten people occasionally walk up, read what's there, erase some part, and write something new. If two of them arrive at once, one person's changes disappear. How do we prevent that?</p>
+    <p><strong>Pessimistic locking</strong> is the most obvious answer — put a padlock on the whiteboard. Whoever arrives first turns the key, does their edit, then unlocks. Everyone else stands in a queue. Nothing gets lost, but the queue can be slow and if the first person faints while holding the key, nobody moves.</p>
+    <p><strong>Optimistic locking</strong> is more relaxed. Everyone photocopies the whiteboard, walks off to their desk, edits their copy in peace, then comes back. Before they write anything on the real board, they check: "is the board still exactly the way it was when I photocopied?" If yes, they write. If someone else has edited it in the meantime, they throw their copy away, take a fresh photocopy, and redo the edit. Fast when conflicts are rare, wasteful when they aren't.</p>
+    <p><strong>Atomic operations</strong> are cleverer still — instead of locking the whole board, you tell it: "if the current number is 1, subtract 1". The board handles the check and the write in one indivisible motion. No lock. No photocopy. This is what a good database engine does on your behalf when you write <code>UPDATE stock SET qty = qty - 1 WHERE qty &gt; 0</code>.</p>
+    <p><strong>Distributed locks</strong> are for when the whiteboard is on a different floor and multiple offices want to edit it. Now you need one shared padlock that every office can see — usually a Redis key. Whoever writes their name on the padlock first owns it for a while.</p>
+    <p><strong>Versioning / ETag</strong> is the postal-mail version of optimistic locking. Every version of the board is stamped with a number. When you mail in your edit, you also mail in the version you were editing. The board only applies your edit if that version is still the latest.</p>
+    <p>Every real product uses several of these together. Gmail's drafts are optimistic (last-save-wins, with conflict UI). Payment systems are pessimistic on money rows. Instagram inventory decrements are atomic. Kubernetes scheduling is distributed-lock territory. The trick is not knowing what each does — it's knowing which to reach for.</p>
+  </section>
+
+  <!-- ============================ APPROACHES OVERVIEW ============================ -->
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 The 8 approaches at a glance</span>
+    <h2>Every mechanism in one table</h2>
+    <table>
+      <tr><th>Mechanism</th><th>Mental model</th><th>Where it lives</th><th>Best for</th><th>Pain</th></tr>
+      <tr><td>Optimistic locking</td><td>"Verify before save"</td><td>App + DB (Version col)</td><td>Rare conflicts, UI edits</td><td>Retries under contention</td></tr>
+      <tr><td>Pessimistic locking</td><td>"Lock, then modify"</td><td>DB row lock</td><td>Short critical section on scarce row</td><td>Blocks readers, deadlock risk</td></tr>
+      <tr><td>Row-level DB lock</td><td><code>SELECT … FOR UPDATE</code></td><td>Inside a transaction</td><td>Reserving a single resource</td><td>Long transactions kill throughput</td></tr>
+      <tr><td>Atomic DB operation</td><td>"Check + write in one query"</td><td>DB engine</td><td>Counters, inventory, balances</td><td>Only works for expressible predicates</td></tr>
+      <tr><td>Distributed lock (Redis)</td><td>"One winner across N servers"</td><td>Redis / ZooKeeper / etcd</td><td>Cross-server coordination (jobs, singletons)</td><td>Async replication, no fencing, complex</td></tr>
+      <tr><td>DB advisory lock</td><td>Application-defined named lock</td><td>Postgres / SQL Server</td><td>Cross-transaction coordination inside one DB</td><td>Tied to one DB, connection-scoped</td></tr>
+      <tr><td>Compare-and-Swap / Version</td><td>"Only write if version = X"</td><td>DB / cache / DynamoDB</td><td>Stateless services, DynamoDB</td><td>Same conflict cost as optimistic locking</td></tr>
+      <tr><td>ETag / <code>If-Match</code></td><td>Optimistic over HTTP</td><td>REST APIs</td><td>Concurrent editors of a document</td><td>Requires clients to send the header</td></tr>
+    </table>
+    <p>Two rules of thumb before we dive in. First, <strong>reach for an atomic DB operation first</strong> — the fewer explicit locks in your design, the fewer failure modes. Second, <strong>distributed locks are a coordination tool, not a correctness tool</strong> — always pair them with an idempotency ledger if the outcome must be exactly-once.</p>
+  </section>
+
+  <!-- ============================ BIG PICTURE ============================ -->
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ Big picture</span>
+    <h2>Where each mechanism sits in a real stack</h2>
+    <p>The two "sides" of concurrency control are the <em>data layer</em> (where the resource actually lives) and the <em>application layer</em> (where the caller decides how to touch it). Locks can live on either side; usually the answer is the one closer to the resource.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7aa2f7"/>
+          </marker>
+        </defs>
+        <g font-family="sans-serif" font-size="12" fill="#e7ecf3">
+          <!-- clients -->
+          <rect x="30"  y="30" width="120" height="50" rx="10" fill="#2a3652" stroke="#7aa2f7"/>
+          <text x="90" y="52" text-anchor="middle" font-weight="700">Client A</text>
+          <text x="90" y="70" text-anchor="middle" font-size="10" fill="#a3b1c8">edit customer</text>
+          <rect x="30" y="100" width="120" height="50" rx="10" fill="#2a3652" stroke="#7aa2f7"/>
+          <text x="90" y="122" text-anchor="middle" font-weight="700">Client B</text>
+          <text x="90" y="140" text-anchor="middle" font-size="10" fill="#a3b1c8">edit same customer</text>
+          <rect x="30" y="170" width="120" height="50" rx="10" fill="#2a3652" stroke="#7aa2f7"/>
+          <text x="90" y="192" text-anchor="middle" font-weight="700">Client C</text>
+          <text x="90" y="210" text-anchor="middle" font-size="10" fill="#a3b1c8">nightly job trigger</text>
+
+          <!-- app servers -->
+          <rect x="200" y="30"  width="150" height="220" rx="12" fill="#151a2e" stroke="#4361ee" stroke-width="2"/>
+          <text x="275" y="52" text-anchor="middle" font-weight="700" fill="#7fa2ff">App instances (N)</text>
+          <text x="275" y="72" text-anchor="middle" font-size="10" fill="#a3b1c8">check ETag/Version</text>
+          <text x="275" y="90" text-anchor="middle" font-size="10" fill="#a3b1c8">issue atomic UPDATE</text>
+          <text x="275" y="108" text-anchor="middle" font-size="10" fill="#a3b1c8">retry on version conflict</text>
+          <text x="275" y="130" text-anchor="middle" font-size="10" fill="#c6d0e0">— OR —</text>
+          <text x="275" y="152" text-anchor="middle" font-size="10" fill="#a3b1c8">BEGIN TX + FOR UPDATE</text>
+          <text x="275" y="170" text-anchor="middle" font-size="10" fill="#a3b1c8">short critical section</text>
+          <text x="275" y="192" text-anchor="middle" font-size="10" fill="#c6d0e0">— OR —</text>
+          <text x="275" y="212" text-anchor="middle" font-size="10" fill="#a3b1c8">SET NX PX → Redis</text>
+          <text x="275" y="230" text-anchor="middle" font-size="10" fill="#a3b1c8">one winner per key</text>
+
+          <!-- redis -->
+          <rect x="400" y="30" width="180" height="90" rx="12" fill="#1a1a2e" stroke="#dc382d" stroke-width="2"/>
+          <text x="490" y="54" text-anchor="middle" font-weight="700" fill="#ffb703">Redis / etcd / ZK</text>
+          <text x="490" y="74" text-anchor="middle" font-size="10" fill="#c6d0e0">distributed lock key</text>
+          <text x="490" y="92" text-anchor="middle" font-size="10" fill="#c6d0e0">TTL + unique token</text>
+          <text x="490" y="110" text-anchor="middle" font-size="10" fill="#a3b1c8">"Only one owner"</text>
+
+          <!-- DB -->
+          <rect x="400" y="140" width="470" height="240" rx="12" fill="#0f2418" stroke="#2dc653" stroke-width="2"/>
+          <text x="635" y="164" text-anchor="middle" font-weight="700" fill="#9be7a3">Database</text>
+          <text x="635" y="182" text-anchor="middle" font-size="10" fill="#a3b1c8">the actual resource lives here</text>
+
+          <rect x="420" y="200" width="200" height="80" rx="10" fill="#183a24" stroke="#2dc653"/>
+          <text x="520" y="222" text-anchor="middle" font-weight="700">Row lock (pessimistic)</text>
+          <text x="520" y="240" text-anchor="middle" font-size="10" fill="#a3b1c8">FOR UPDATE / UPDLOCK</text>
+          <text x="520" y="258" text-anchor="middle" font-size="10" fill="#a3b1c8">held for tx duration</text>
+
+          <rect x="640" y="200" width="210" height="80" rx="10" fill="#183a24" stroke="#2dc653"/>
+          <text x="745" y="222" text-anchor="middle" font-weight="700">Atomic UPDATE</text>
+          <text x="745" y="240" text-anchor="middle" font-size="10" fill="#a3b1c8">SET qty=qty-1 WHERE qty&gt;0</text>
+          <text x="745" y="258" text-anchor="middle" font-size="10" fill="#a3b1c8">no lock held after commit</text>
+
+          <rect x="420" y="290" width="200" height="80" rx="10" fill="#183a24" stroke="#2dc653"/>
+          <text x="520" y="312" text-anchor="middle" font-weight="700">Version / RowVersion</text>
+          <text x="520" y="330" text-anchor="middle" font-size="10" fill="#a3b1c8">WHERE Version = @old</text>
+          <text x="520" y="348" text-anchor="middle" font-size="10" fill="#a3b1c8">→ rows affected = 0 → retry</text>
+
+          <rect x="640" y="290" width="210" height="80" rx="10" fill="#183a24" stroke="#2dc653"/>
+          <text x="745" y="312" text-anchor="middle" font-weight="700">Advisory lock</text>
+          <text x="745" y="330" text-anchor="middle" font-size="10" fill="#a3b1c8">pg_advisory_lock(hash)</text>
+          <text x="745" y="348" text-anchor="middle" font-size="10" fill="#a3b1c8">app-defined named lock</text>
+
+          <!-- HTTP ETag -->
+          <rect x="30" y="410" width="820" height="90" rx="12" fill="#2a1810" stroke="#ff9900" stroke-width="2"/>
+          <text x="440" y="434" text-anchor="middle" font-weight="700" fill="#ffb703">HTTP layer — optimistic across the wire</text>
+          <text x="440" y="454" text-anchor="middle" font-size="11" fill="#c6d0e0">GET returns  ETag: "v15"   ·   PUT sends  If-Match: "v15"   ·   412 Precondition Failed on stale</text>
+          <text x="440" y="476" text-anchor="middle" font-size="11" fill="#a3b1c8">Same math as WHERE Version = @old — just exposed as an HTTP header</text>
+        </g>
+        <g stroke="#7aa2f7" stroke-width="1.5" fill="none" marker-end="url(#a1)">
+          <path d="M 150,55 L 200,55"/>
+          <path d="M 150,125 L 200,120"/>
+          <path d="M 150,195 L 200,180"/>
+          <path d="M 350,90 L 400,60"/>
+          <path d="M 350,160 L 400,200"/>
+          <path d="M 350,240 L 400,240"/>
+        </g>
+      </svg>
+    </div>
+    <p>The picture makes one thing obvious. <strong>Row-level, atomic, versioning, and advisory locks all live inside the database</strong> — they are natural, transactional, and safe. <strong>Distributed locks live outside the database</strong> in Redis / etcd / ZooKeeper — they exist precisely because the database cannot help coordinate work between servers that aren't touching the DB (like "only one pod runs the nightly job"). <strong>ETag is optimistic locking translated to HTTP</strong>. Pick the layer closest to where the actual conflict happens.</p>
+  </section>
+
+  <!-- ============================ ANIMATION ============================ -->
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>The inventory race — three strategies, one shared row</h2>
+    <p>Stock = 1. Customer A and Customer B both hit "Buy" at the same time. Watch how the same race plays out under three designs: no locking (lost update), pessimistic lock (blocking wait), and atomic update (one query wins, no lock).</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg">
+        <g font-family="sans-serif" font-size="11" fill="#e7ecf3">
+          <!-- three lanes -->
+          <text x="20" y="30" fill="#7fa2ff" font-weight="700">Design</text>
+          <text x="140" y="30" fill="#7fa2ff" font-weight="700">Customer A</text>
+          <text x="360" y="30" fill="#7fa2ff" font-weight="700">Customer B</text>
+          <text x="580" y="30" fill="#7fa2ff" font-weight="700">DB row · stock</text>
+          <text x="760" y="30" fill="#7fa2ff" font-weight="700">Outcome</text>
+
+          <!-- design A: no locking -->
+          <g id="d1">
+            <text x="20" y="80" fill="#ff9dbb" font-weight="700">A · none</text>
+            <rect id="d1a" x="130" y="60" width="200" height="34" rx="6" fill="#2a3652" stroke="#f7567c" class="a-el a-hidden"/>
+            <text id="d1atxt" x="230" y="82" text-anchor="middle" fill="#e7ecf3" class="a-el a-hidden">reads stock=1 · sets 0</text>
+            <rect id="d1b" x="350" y="60" width="200" height="34" rx="6" fill="#2a3652" stroke="#f7567c" class="a-el a-hidden"/>
+            <text id="d1btxt" x="450" y="82" text-anchor="middle" fill="#e7ecf3" class="a-el a-hidden">reads stock=1 · sets 0</text>
+            <rect id="d1s" x="570" y="60" width="150" height="34" rx="6" fill="#3a2a12" stroke="#ffb703" class="a-el a-hidden"/>
+            <text id="d1stxt" x="645" y="82" text-anchor="middle" fill="#ffd166" font-family="monospace" class="a-el a-hidden">stock=0</text>
+            <text id="d1out" x="760" y="82" fill="#f7567c" font-weight="700" class="a-el a-hidden">both bought — lost update</text>
+          </g>
+
+          <!-- design B: pessimistic -->
+          <g id="d2">
+            <text x="20" y="170" fill="#9be7a3" font-weight="700">B · lock</text>
+            <rect id="d2a" x="130" y="150" width="200" height="34" rx="6" fill="#2a3652" stroke="#2dc653" class="a-el a-hidden"/>
+            <text id="d2atxt" x="230" y="172" text-anchor="middle" fill="#e7ecf3" class="a-el a-hidden">FOR UPDATE · buys · commit</text>
+            <rect id="d2b" x="350" y="150" width="200" height="34" rx="6" fill="#2a3652" stroke="#f4a259" class="a-el a-hidden"/>
+            <text id="d2btxt" x="450" y="172" text-anchor="middle" fill="#e7ecf3" class="a-el a-hidden">WAIT · then sees stock=0</text>
+            <rect id="d2s" x="570" y="150" width="150" height="34" rx="6" fill="#3a2a12" stroke="#ffb703" class="a-el a-hidden"/>
+            <text id="d2stxt" x="645" y="172" text-anchor="middle" fill="#ffd166" font-family="monospace" class="a-el a-hidden">stock=0 (A committed)</text>
+            <text id="d2out" x="760" y="172" fill="#2dc653" font-weight="700" class="a-el a-hidden">A wins · B blocked · correct</text>
+          </g>
+
+          <!-- design C: atomic -->
+          <g id="d3">
+            <text x="20" y="260" fill="#ffd166" font-weight="700">C · atomic</text>
+            <rect id="d3a" x="130" y="240" width="200" height="34" rx="6" fill="#2a3652" stroke="#2dc653" class="a-el a-hidden"/>
+            <text id="d3atxt" x="230" y="262" text-anchor="middle" fill="#e7ecf3" class="a-el a-hidden">UPDATE … WHERE qty&gt;0</text>
+            <rect id="d3b" x="350" y="240" width="200" height="34" rx="6" fill="#2a3652" stroke="#f7567c" class="a-el a-hidden"/>
+            <text id="d3btxt" x="450" y="262" text-anchor="middle" fill="#e7ecf3" class="a-el a-hidden">same UPDATE — rowsAffected=0</text>
+            <rect id="d3s" x="570" y="240" width="150" height="34" rx="6" fill="#3a2a12" stroke="#ffb703" class="a-el a-hidden"/>
+            <text id="d3stxt" x="645" y="262" text-anchor="middle" fill="#ffd166" font-family="monospace" class="a-el a-hidden">stock=0 (atomic)</text>
+            <text id="d3out" x="760" y="262" fill="#2dc653" font-weight="700" class="a-el a-hidden">A wins · B rejected · no lock</text>
+          </g>
+
+          <!-- summary -->
+          <g id="d4">
+            <rect id="dsum" x="20" y="310" width="860" height="50" rx="10" fill="#151a2e" stroke="#4361ee" class="a-el a-hidden"/>
+            <text id="dsumtxt" x="450" y="336" text-anchor="middle" fill="#7fa2ff" font-weight="700" class="a-el a-hidden">Atomic update is the cheapest correct answer — no explicit lock, no waiting, and the DB engine handles concurrency for you.</text>
+          </g>
+        </g>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+    (function () {
+      const root = document.getElementById('anim1');
+      if (!root) return;
+      const $ = (s) => root.querySelector(s);
+      const label = $('.anim-step-label');
+      const cap   = $('.anim-step-caption');
+      const btnPlay = root.querySelector('[data-act="play"]');
+      const btnNext = root.querySelector('[data-act="next"]');
+      const btnPrev = root.querySelector('[data-act="prev"]');
+      const btnReset= root.querySelector('[data-act="reset"]');
+
+      const CFG = {
+        intro: 'Same scenario — Stock = 1, two buyers — under three designs.',
+        interval: 2000,
+        reset: (r) => {
+          ['#d1a','#d1atxt','#d1b','#d1btxt','#d1s','#d1stxt','#d1out',
+           '#d2a','#d2atxt','#d2b','#d2btxt','#d2s','#d2stxt','#d2out',
+           '#d3a','#d3atxt','#d3b','#d3btxt','#d3s','#d3stxt','#d3out',
+           '#dsum','#dsumtxt'].forEach(id => r.querySelector(id).classList.add('a-hidden'));
+        },
+        steps: [
+          { caption: 'DESIGN A (no locking): Customer A reads stock=1.',
+            apply: () => { $('#d1a').classList.remove('a-hidden'); $('#d1atxt').classList.remove('a-hidden'); } },
+          { caption: 'Customer B reads stock=1 concurrently.',
+            apply: () => { $('#d1b').classList.remove('a-hidden'); $('#d1btxt').classList.remove('a-hidden'); } },
+          { caption: 'Both write stock=0. DB accepts both. Bug: two customers bought one item.',
+            apply: () => { $('#d1s').classList.remove('a-hidden'); $('#d1stxt').classList.remove('a-hidden'); $('#d1out').classList.remove('a-hidden'); } },
+          { caption: 'DESIGN B (pessimistic): A acquires FOR UPDATE lock, buys, commits.',
+            apply: () => { $('#d2a').classList.remove('a-hidden'); $('#d2atxt').classList.remove('a-hidden'); } },
+          { caption: 'B blocks on the row lock until A commits, then reads stock=0.',
+            apply: () => { $('#d2b').classList.remove('a-hidden'); $('#d2btxt').classList.remove('a-hidden'); } },
+          { caption: 'Correct — A wins, B rejected. Cost: B was blocked; A held a lock for the whole transaction.',
+            apply: () => { $('#d2s').classList.remove('a-hidden'); $('#d2stxt').classList.remove('a-hidden'); $('#d2out').classList.remove('a-hidden'); } },
+          { caption: 'DESIGN C (atomic): both issue UPDATE stock=stock-1 WHERE qty>0.',
+            apply: () => { $('#d3a').classList.remove('a-hidden'); $('#d3atxt').classList.remove('a-hidden'); } },
+          { caption: 'DB serialises the two writes internally. First one succeeds (rowsAffected=1), second returns 0.',
+            apply: () => { $('#d3b').classList.remove('a-hidden'); $('#d3btxt').classList.remove('a-hidden'); } },
+          { caption: 'Correct — A wins, B rejected. No explicit lock held. Recommended default.',
+            apply: () => { $('#d3s').classList.remove('a-hidden'); $('#d3stxt').classList.remove('a-hidden'); $('#d3out').classList.remove('a-hidden'); } },
+          { caption: 'Verdict: atomic update > pessimistic lock > read-then-write.',
+            apply: () => { $('#dsum').classList.remove('a-hidden'); $('#dsumtxt').classList.remove('a-hidden'); } }
+        ]
+      };
+      let idx = -1, playing = false, timer = null;
+      function goto(i){ if(i<0||i>=CFG.steps.length) return; CFG.reset(root); for(let k=0;k<=i;k++) CFG.steps[k].apply(root); idx=i;
+        label.textContent = `Step ${i+1}/${CFG.steps.length}`; cap.textContent = CFG.steps[i].caption; }
+      function reset(){ idx=-1; playing=false; if(timer){clearTimeout(timer);timer=null;} CFG.reset(root);
+        label.textContent='Ready'; cap.textContent=CFG.intro; btnPlay.textContent='▶ Play'; }
+      function play(){ if(playing){playing=false; if(timer) clearTimeout(timer); btnPlay.textContent='▶ Play'; return;}
+        if(idx>=CFG.steps.length-1) reset(); playing=true; btnPlay.textContent='⏸ Pause';
+        function tick(){ if(!playing) return; if(idx+1<CFG.steps.length) goto(idx+1);
+          if(idx<CFG.steps.length-1) timer=setTimeout(tick,CFG.interval); else { playing=false; btnPlay.textContent='▶ Replay'; } }
+        timer=setTimeout(tick,400); }
+      btnPlay.addEventListener('click',play); btnReset.addEventListener('click',reset);
+      btnNext&&btnNext.addEventListener('click',()=>{ if(playing){playing=false; if(timer) clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx+1); });
+      btnPrev&&btnPrev.addEventListener('click',()=>{ if(playing){playing=false; if(timer) clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx-1); });
+      reset();
+    })();
+    </script>
+  </section>
+
+  <!-- ============================ EACH MECHANISM ============================ -->
+  <section id="deep" class="card">
+    <h2>🔍 Every mechanism — concept, architecture, and one scenario</h2>
+
+    <!-- OPTIMISTIC -->
+    <h3>1. Optimistic locking — "let everyone work, verify before saving"</h3>
+    <p><strong>Concept.</strong> Nobody blocks. Two users can open the same row and edit it side-by-side. When one of them clicks Save, the server checks whether the row is still the way it was when they opened it. If yes, save. If not, the save is rejected and the user reloads. Called <em>optimistic</em> because it assumes conflicts are rare and does not pay any locking cost upfront.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 900 200" xmlns="http://www.w3.org/2000/svg">
+        <g font-family="sans-serif" font-size="12" fill="#e7ecf3">
+          <rect x="30" y="30" width="140" height="50" rx="10" fill="#2a3652" stroke="#7aa2f7"/>
+          <text x="100" y="52" text-anchor="middle" font-weight="700">User A</text>
+          <text x="100" y="70" text-anchor="middle" font-size="10" fill="#a3b1c8">reads row v10</text>
+
+          <rect x="30" y="110" width="140" height="50" rx="10" fill="#2a3652" stroke="#7aa2f7"/>
+          <text x="100" y="132" text-anchor="middle" font-weight="700">User B</text>
+          <text x="100" y="150" text-anchor="middle" font-size="10" fill="#a3b1c8">reads row v10</text>
+
+          <rect x="230" y="30" width="240" height="130" rx="12" fill="#151a2e" stroke="#4361ee"/>
+          <text x="350" y="54" text-anchor="middle" font-weight="700" fill="#7fa2ff">App</text>
+          <text x="350" y="80" text-anchor="middle" font-size="10" fill="#c6d0e0">A: UPDATE … WHERE Version=10 → OK (v=11)</text>
+          <text x="350" y="102" text-anchor="middle" font-size="10" fill="#c6d0e0">B: UPDATE … WHERE Version=10 → 0 rows</text>
+          <text x="350" y="124" text-anchor="middle" font-size="10" fill="#f7567c">B must reload and retry</text>
+          <text x="350" y="144" text-anchor="middle" font-size="10" fill="#a3b1c8">nobody was blocked</text>
+
+          <rect x="520" y="60" width="180" height="80" rx="12" fill="#0f2418" stroke="#2dc653"/>
+          <text x="610" y="86" text-anchor="middle" font-weight="700" fill="#9be7a3">DB row</text>
+          <text x="610" y="106" text-anchor="middle" font-size="10" fill="#c6d0e0">CustomerId=1001</text>
+          <text x="610" y="124" text-anchor="middle" font-size="10" fill="#c6d0e0">Version=11 (post A)</text>
+        </g>
+      </svg>
+    </div>
+    <p><strong>Scenario — two edits to the same customer row.</strong> User A opens Customer 1001 and changes the phone. User B opens the same row and changes the address. Both saved rows started as <code>Version = 10</code>. The application issues:</p>
+    <pre><span class="cmt">-- Optimistic UPDATE embeds the previously-read version</span>
+UPDATE Customer
+SET    Address = <span class="str">'Mumbai'</span>,
+       Version = 11
+WHERE  CustomerId = 1001
+  AND  Version    = 10;</pre>
+    <p>The first request lands. <code>RowsAffected = 1</code>. The second lands moments later — the row is now Version 11, so the <code>WHERE</code> clause matches nothing. <code>RowsAffected = 0</code>. The app returns a 409 Conflict; the client reloads and re-applies. No locks were held during editing, so a user could take three hours in the form and not block anyone.</p>
+
+    <!-- PESSIMISTIC -->
+    <h3>2. Pessimistic locking — "lock, then modify"</h3>
+    <p><strong>Concept.</strong> Before I read the row, I claim it. Anyone else who tries to read it with intent-to-write must wait. Guarantees no conflict but at the cost of throughput. Called <em>pessimistic</em> because it assumes conflicts are common and pays the coordination cost upfront.</p>
+    <p><strong>Scenario — the last hospital appointment slot.</strong> One slot remains at 10 AM. Two receptionists on two servers both click "Book". Server A begins a transaction and issues <code>SELECT … FOR UPDATE</code>, which places a row lock. Server B issues the same statement moments later — its request queues inside the DB until Server A commits.</p>
+    <div class="viz">Server A                          DB row: appointment 123
+   │                                     │
+   │  BEGIN                               │
+   │  SELECT * FROM Appointment
+   │    WHERE Id = 123 FOR UPDATE ────────▶  lock granted
+   │  (verify slot available)             │
+   │  UPDATE Appointment SET userId = A   │
+   │  COMMIT                              │
+   │  ────────────────────────────────────▶  lock released
+   │                                     │
+Server B                                  │
+   │  BEGIN                               │
+   │  SELECT * FROM Appointment
+   │    WHERE Id = 123 FOR UPDATE ────────▶  WAIT for A
+   │                                     │
+   │  ← Server A commits ←                │
+   │  ────────────────────────────────────▶  lock granted, sees userId=A
+   │  (slot no longer available)          │
+   │  ROLLBACK                            │</div>
+    <p>Syntax differs by engine:</p>
+    <pre><span class="cmt">-- Postgres / MySQL</span>
+SELECT * FROM Appointment WHERE Id = 123 FOR UPDATE;
+
+<span class="cmt">-- SQL Server</span>
+SELECT * FROM Appointment WITH (UPDLOCK, ROWLOCK) WHERE Id = 123;
+
+<span class="cmt">-- Oracle</span>
+SELECT * FROM Appointment WHERE Id = 123 FOR UPDATE;</pre>
+    <p><strong>Rules.</strong> Hold the lock as briefly as possible — a transaction that lingers on a hot row destroys throughput. Never call external services (SMTP, payment gateway, HTTP APIs) while holding a row lock. Match lock ordering across code paths to avoid deadlocks.</p>
+
+    <!-- ROW-LEVEL DB LOCK -->
+    <h3>3. Database row-level locking — pessimistic, done right</h3>
+    <p>Row-level locking is the granular form of pessimistic locking. Modern engines (Postgres, MySQL InnoDB, SQL Server) default to per-row locks rather than table locks, so contention only happens on the exact rows being modified. Lock escalation (row → page → table) is the pathological failure mode when too many rows are locked in one transaction — beware bulk updates without a batching strategy.</p>
+
+    <!-- ATOMIC -->
+    <h3>4. Atomic database operations — the "no lock at all" option</h3>
+    <p><strong>Concept.</strong> Express both the check and the write in one SQL statement, and let the engine handle the concurrency. This is the cheapest correct answer for inventory decrement, account debit, quota consumption — any pattern shaped as "if the value satisfies X, change it".</p>
+    <pre><span class="cmt">-- Inventory decrement — DB engine serialises writes to the same row</span>
+UPDATE Inventory
+SET    Quantity = Quantity - 1
+WHERE  ProductId = 101
+  AND  Quantity  &gt; 0;
+
+<span class="cmt">-- rowsAffected = 1  →  purchase allowed</span>
+<span class="cmt">-- rowsAffected = 0  →  out of stock — reject purchase</span></pre>
+    <p><strong>Why prefer this over pessimistic locks?</strong> No lock is <em>explicitly</em> held by application code; the DB acquires and releases a very short internal lock on the affected row for the duration of one <code>UPDATE</code>. Application timeouts, client crashes, and GC pauses cannot leave a lock behind. Common atomic idioms:</p>
+    <ul>
+      <li><strong>Conditional increment/decrement</strong> — inventory, credits, seats.</li>
+      <li><strong>Insert-if-not-exists</strong> — <code>INSERT … ON CONFLICT DO NOTHING</code> (Postgres) or a <code>UNIQUE</code> constraint. Great for idempotency ledgers.</li>
+      <li><strong>Conditional update on state</strong> — <code>UPDATE order SET status='PAID' WHERE id=@id AND status='PENDING'</code>. State-machine transitions.</li>
+      <li><strong>DynamoDB conditional writes</strong> — <code>ConditionExpression: attribute_not_exists(pk)</code> or <code>ConditionExpression: version = :v</code>.</li>
+    </ul>
+
+    <!-- DISTRIBUTED -->
+    <h3>5. Distributed locking — coordinate work across servers</h3>
+    <p><strong>Concept.</strong> Sometimes the resource you want to protect is not a database row — it's an <em>action</em>. "Only one of our five pods runs the nightly report." "Only one process rebuilds the cache." Row locks and atomic updates cannot help because the resource is a job, not a row. A distributed lock is a shared coordination primitive — a Redis key, an etcd lease, a ZooKeeper ephemeral znode — that only one caller across the whole cluster can own at a time.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 900 260" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="dm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7aa2f7"/>
+          </marker>
+        </defs>
+        <g font-family="sans-serif" font-size="12" fill="#e7ecf3">
+          <rect x="30"  y="30" width="140" height="34" rx="8" fill="#2a3652" stroke="#7aa2f7"/><text x="100" y="52" text-anchor="middle">Server A</text>
+          <rect x="30"  y="74" width="140" height="34" rx="8" fill="#2a3652" stroke="#7aa2f7"/><text x="100" y="96" text-anchor="middle">Server B</text>
+          <rect x="30" y="118" width="140" height="34" rx="8" fill="#2a3652" stroke="#7aa2f7"/><text x="100" y="140" text-anchor="middle">Server C</text>
+          <rect x="30" y="162" width="140" height="34" rx="8" fill="#2a3652" stroke="#7aa2f7"/><text x="100" y="184" text-anchor="middle">Server D</text>
+          <rect x="30" y="206" width="140" height="34" rx="8" fill="#2a3652" stroke="#7aa2f7"/><text x="100" y="228" text-anchor="middle">Server E</text>
+
+          <rect x="360" y="80" width="220" height="110" rx="14" fill="#1a1a2e" stroke="#dc382d" stroke-width="2"/>
+          <text x="470" y="106" text-anchor="middle" font-weight="700" fill="#ffb703">Redis</text>
+          <text x="470" y="128" text-anchor="middle" font-family="monospace" font-size="11">SET lock:daily-report</text>
+          <text x="470" y="146" text-anchor="middle" font-family="monospace" font-size="11">&lt;token&gt; NX PX 30000</text>
+          <text x="470" y="168" text-anchor="middle" font-size="10" fill="#a3b1c8">only 1st SET wins</text>
+
+          <rect x="700" y="80" width="170" height="110" rx="14" fill="#12331d" stroke="#2dc653"/>
+          <text x="785" y="108" text-anchor="middle" font-weight="700" fill="#9be7a3">Winner: A</text>
+          <text x="785" y="130" text-anchor="middle" font-size="10">runs the job</text>
+          <text x="785" y="150" text-anchor="middle" font-size="10">B/C/D/E skip</text>
+          <text x="785" y="172" text-anchor="middle" font-size="10" fill="#a3b1c8">Lua-safe release</text>
+        </g>
+        <g stroke="#7aa2f7" stroke-width="1.4" fill="none" marker-end="url(#dm)">
+          <path d="M 170,47 L 360,105"/>
+          <path d="M 170,91 L 360,115"/>
+          <path d="M 170,135 L 360,135"/>
+          <path d="M 170,179 L 360,155"/>
+          <path d="M 170,223 L 360,175"/>
+          <path d="M 580,135 L 700,135"/>
+        </g>
+      </svg>
+    </div>
+    <p><strong>Scenario — five app servers, one nightly report.</strong> All five have the same code and the same cron. At 00:00 each server races to Redis with:</p>
+    <pre><span class="cmt"># One atomic write. NX = only if not exists. PX = expire in 30 s.</span>
+SET daily-report-lock &lt;unique-token&gt; NX PX 30000</pre>
+    <p>Redis awards the lock to exactly one caller and returns <code>OK</code>; the others receive <code>nil</code> and skip. The winner runs the job, then releases the lock atomically:</p>
+    <pre><span class="cmt">-- Safe release: DEL only if the stored token still equals mine.</span>
+<span class="kw">if</span> redis.call(<span class="str">"GET"</span>, KEYS[1]) == ARGV[1] <span class="kw">then</span>
+    <span class="kw">return</span> redis.call(<span class="str">"DEL"</span>, KEYS[1])
+<span class="kw">else</span>
+    <span class="kw">return</span> 0
+<span class="kw">end</span></pre>
+    <p><strong>Every option matters:</strong></p>
+    <ul>
+      <li><code>SET</code> — the write. Redis is single-threaded, so evaluation of NX + write is one indivisible step.</li>
+      <li><code>NX</code> — "only if the key does not exist" — this is the mutual-exclusion primitive.</li>
+      <li><code>PX 30000</code> — lease expiration in milliseconds. A crashed owner cannot hold the lock forever.</li>
+      <li><code>&lt;unique-token&gt;</code> — a 128-bit random value identifying <em>this specific execution</em>. Not the hostname.</li>
+    </ul>
+
+    <h3>6. Why the unique token is not optional</h3>
+    <p>Consider the timeline where Server A's job overruns:</p>
+    <div class="viz">t=0    A acquires lock  (token=A-uuid, TTL=30s)
+t=30   Redis TTL expires  →  lock auto-deleted
+t=30   B acquires the same key  (token=B-uuid)
+t=40   A finishes its work
+t=40   A calls DEL daily-report-lock   ⚠  would erase B's lock!</div>
+    <p>Solution: A releases only if the stored value equals its own token. But even a client-side <code>GET</code>-then-<code>DEL</code> is unsafe — another owner can intervene between the two commands. Redis's Lua execution is atomic on the single-threaded event loop, so the <code>GET</code>+<code>DEL</code>+comparison happen indivisibly. That is why the release is a Lua script, not two client calls.</p>
+
+    <h3>7. Lock renewal — the watchdog</h3>
+    <p>If the job may take longer than the TTL, run a background thread that renews the lease every <code>TTL/3</code> seconds, but only if the token still matches:</p>
+    <pre><span class="cmt">-- Compare-and-renew</span>
+<span class="kw">if</span> redis.call(<span class="str">"GET"</span>, KEYS[1]) == ARGV[1] <span class="kw">then</span>
+    <span class="kw">return</span> redis.call(<span class="str">"PEXPIRE"</span>, KEYS[1], ARGV[2])
+<span class="kw">else</span>
+    <span class="kw">return</span> 0
+<span class="kw">end</span></pre>
+    <p>With TTL = 30 s and renewal every 10 s, you tolerate two consecutive missed ticks (network blip, brief Redis slowness) before losing the lock. If renewal fails, the owner must treat the lock as lost and abort the job — do not "keep going and hope". This is precisely what Redisson's watchdog does. See our companion page for the full nightly-job walkthrough.</p>
+    <div class="callout warn"><strong>Failure modes to alert on:</strong> network partition (renewal fails), application pause (GC / stop-the-world) longer than the TTL, Redis primary failure with async replication lag, and process crash between "did the work" and "wrote the completion row". Distributed locking is genuinely harder than DB locking — <em>combine with an idempotency ledger</em> if you need exactly-once outcomes.</p></div>
+
+    <!-- ADVISORY -->
+    <h3>8. Database advisory locks — named locks inside your DB</h3>
+    <p><strong>Concept.</strong> Postgres and SQL Server expose <em>application-defined</em> named locks: your app calls <code>pg_advisory_lock('nightly-report'::hashtext)</code> and the DB serialises all callers who ask for the same name. Great for coordinating actions inside a single DB deployment when the "resource" isn't a specific row.</p>
+    <pre><span class="cmt">-- Postgres — session-scoped advisory lock</span>
+SELECT pg_advisory_lock(hashtext(<span class="str">'nightly-report'</span>));
+<span class="cmt">-- do the work</span>
+SELECT pg_advisory_unlock(hashtext(<span class="str">'nightly-report'</span>));
+
+<span class="cmt">-- Postgres — transaction-scoped variant (auto-releases at commit)</span>
+SELECT pg_advisory_xact_lock(hashtext(<span class="str">'nightly-report'</span>));
+
+<span class="cmt">-- SQL Server</span>
+EXEC sp_getapplock @Resource = <span class="str">'nightly-report'</span>, @LockMode = <span class="str">'Exclusive'</span>;
+<span class="cmt">-- work</span>
+EXEC sp_releaseapplock @Resource = <span class="str">'nightly-report'</span>;</pre>
+    <p><strong>Best for:</strong> lightweight cross-transaction coordination in a single-DB deployment. Less operational overhead than adding Redis just for this. <strong>Not great for:</strong> multi-service coordination where the DB isn't the common denominator (use Redis / etcd) or when the DB itself is the bottleneck.</p>
+
+    <!-- CAS / VERSION / ETAG -->
+    <h3>9. Compare-and-Swap · RowVersion · ETag — optimistic in three costumes</h3>
+    <p>The same idea shows up under different names depending on the layer:</p>
+    <table>
+      <tr><th>Layer</th><th>Name</th><th>Wire form</th></tr>
+      <tr><td>Application ↔ SQL DB</td><td>Version column</td><td><code>UPDATE … WHERE Version = @old</code></td></tr>
+      <tr><td>Application ↔ SQL Server</td><td>RowVersion / <code>rowversion</code></td><td>Auto-incremented per row; used same way</td></tr>
+      <tr><td>Application ↔ DynamoDB</td><td>Conditional writes</td><td><code>ConditionExpression: version = :old</code></td></tr>
+      <tr><td>Client ↔ REST API</td><td>ETag / <code>If-Match</code></td><td>HTTP 412 Precondition Failed on stale</td></tr>
+      <tr><td>Kernel primitive</td><td>CAS (compare-and-swap)</td><td>Atomic CPU instruction; foundation of lock-free data structures</td></tr>
+    </table>
+    <p><strong>ETag in REST — the wire trace.</strong> A first-class citizen of HTTP:</p>
+    <pre>GET /customers/1001                        HTTP/1.1
+&lt;-- 200 OK
+    ETag: "v15"
+    { "id": 1001, "address": "Bangalore", "phone": "…" }
+
+PUT /customers/1001                        HTTP/1.1
+    If-Match: "v15"
+    { "address": "Mumbai" }
+&lt;-- 200 OK              if the resource is still v15
+    ETag: "v16"
+
+&lt;-- 412 Precondition Failed
+    if some other client updated it to v16 in the meantime</pre>
+    <p>Conceptually identical to <code>WHERE Version = 15</code> — expressed at the HTTP layer so a stateless client can participate in the concurrency control.</p>
+  </section>
+
+  <!-- ============================ SCENARIOS ============================ -->
+  <section id="scenarios" class="card">
+    <h2>🎬 Full production scenarios — what to actually build</h2>
+
+    <h3>Payment flow — never hold a lock across a slow external call</h3>
+    <p>An order service reserves inventory, then calls a payment gateway. The gateway takes 5–20 seconds on the slow path. The wrong design holds a database row lock the whole time:</p>
+    <div class="viz">BAD:
+BEGIN TX
+  SELECT … FROM Inventory WHERE product = 42 FOR UPDATE      ← lock held
+  qty -= 1
+  <span style="color:#f7567c">call Stripe /charges  (takes 10 s)</span>                       ← still holding lock
+  if success then commit else rollback
+COMMIT</div>
+    <p>Ten seconds of held lock across the entire product's peak traffic will melt the DB. The fix is a <strong>reservation state machine</strong> — commit the "reserved" state to the DB (releasing the lock), call the gateway, then transition state:</p>
+    <div class="viz">GOOD:
+BEGIN TX
+  UPDATE Inventory SET qty = qty - 1
+    WHERE product = 42 AND qty &gt; 0                            ← atomic
+  INSERT INTO Reservation (order_id, product, expires_at) …
+COMMIT                                                       ← lock released
+
+<span style="color:#9be7a3">call Stripe /charges  (async, off-lock)</span>
+
+if paid:
+  BEGIN TX
+    UPDATE Order SET status='PAID' WHERE id=? AND status='RESERVED'
+    UPDATE Reservation SET status='CONFIRMED' …
+  COMMIT
+else:                                                        ← payment failed / timed out
+  BEGIN TX
+    UPDATE Inventory SET qty = qty + 1 WHERE product = 42
+    UPDATE Reservation SET status='RELEASED' …
+  COMMIT</div>
+    <p>State transitions: <code>Available → Reserved → Payment Pending → Paid → Confirmed</code>, with the escape hatch <code>Reserved → Payment Failed → Reservation Released</code>. Every transition is an atomic conditional UPDATE. This pattern is what powers real-world checkout at Amazon, Shopify, Bookmyshow, etc. Combine with a Saga if the workflow crosses microservices.</p>
+
+    <h3>REST document editing — ETag is the whole answer</h3>
+    <p>Two editors open <code>PUT /docs/42</code>. Server returns <code>ETag: "v9"</code>. Both edit locally. Editor A saves first; server responds 200, ETag now <code>"v10"</code>. Editor B saves; server compares <code>If-Match: "v9"</code> against current <code>"v10"</code>, returns 412. Client reloads, offers a diff/merge to the user. No server-side lock, no timeouts, works across mobile clients on slow networks.</p>
+
+    <h3>Kubernetes: exactly-one leader across pods</h3>
+    <p>Not a DB row problem, so Redis / etcd is the right layer. Kubernetes itself uses <em>etcd leader election</em> for the controller manager, scheduler, and every operator that must be a singleton. Applications typically use a Redis lock or a lease object. Same "unique-token + TTL + safe release" pattern applies.</p>
+  </section>
+
+  <!-- ============================ FAILURES ============================ -->
+  <section id="failures" class="card">
+    <h2>💥 Failure modes — how each mechanism breaks and recovers</h2>
+    <table>
+      <tr><th>#</th><th>Failure</th><th>What happens</th><th>Recovery / mitigation</th></tr>
+      <tr><td>1</td><td>Server crashes holding a DB lock</td><td>DB detects the connection is gone and releases the lock automatically at connection close.</td><td>Nothing to do — DB engine handles it. Keep transactions short so recovery is fast.</td></tr>
+      <tr><td>2</td><td>Server crashes holding a Redis lock</td><td>TTL is the safety net. Lock auto-expires; a later run acquires cleanly.</td><td>Always set <code>PX</code>. Keep TTL longer than expected work time; use watchdog for long jobs.</td></tr>
+      <tr><td>3</td><td>Redis lock expires before work completes</td><td>Two "owners" for a brief window — potential duplicate side effects.</td><td>Watchdog to renew lease; idempotency ledger to absorb duplicates; fencing tokens for stronger correctness.</td></tr>
+      <tr><td>4</td><td>Network partition between app and Redis</td><td>Renewal fails; app thinks it still owns the lock but Redis has expired it.</td><td>Owner must detect renewal failure and stop the work (fail-fast). Do not keep going.</td></tr>
+      <tr><td>5</td><td>DB transaction times out</td><td>DB rolls back; row lock released; caller sees an error.</td><td>Retry with exponential backoff; shorten transactions; index the <code>WHERE</code> columns.</td></tr>
+      <tr><td>6</td><td>Two services think they own the same lock (split-brain)</td><td>Concurrent writes to the resource.</td><td>Fencing tokens; use ZooKeeper/etcd if the SLA requires stronger safety.</td></tr>
+      <tr><td>7</td><td>Deadlock</td><td>Two transactions each hold what the other wants → circular wait.</td><td>DB detects and aborts one; retry the loser. Consistent lock ordering prevents most.</td></tr>
+      <tr><td>8</td><td>Optimistic locking hot-conflict</td><td>Retries pile up on a hot row → user-visible latency and errors.</td><td>Move to atomic UPDATE or (as a last resort) a short pessimistic lock for the truly hot row.</td></tr>
+    </table>
+
+    <h3>Deadlock — the classical picture</h3>
+    <div class="viz">Transaction A       Transaction B
+    │                    │
+Lock Row 1          Lock Row 2
+    │                    │
+Wait for Row 2 ←──── Wait for Row 1
+
+A owns Row1  ─────►  wants Row2
+                        ▲
+                        │  ← DB deadlock detector aborts one
+                        │     transaction; the other proceeds
+B owns Row2  ─────►  wants Row1</div>
+    <p><strong>Prevention.</strong> Always acquire multi-row locks in a consistent order (e.g. by primary key ascending). Prefer atomic single-row updates when possible. Keep transactions short so the window for cycles is small. Alert on deadlock rate; a spike almost always indicates a bug in lock ordering or a missing index that turned a "row lock" into a "scan + range lock".</p>
+  </section>
+
+  <!-- ============================ DECISION MATRIX ============================ -->
+  <section id="matrix" class="card">
+    <h2>🧭 Decision matrix — which mechanism for which problem</h2>
+    <table>
+      <tr><th>Scenario</th><th>Preferred mechanism</th><th>Why (and what to avoid)</th></tr>
+      <tr><td>User profile update from a form</td><td>Optimistic locking (Version / ETag)</td><td>Conflicts rare; users may edit for minutes — never hold a DB lock. On conflict, 409 + reload.</td></tr>
+      <tr><td>Configuration / document editing</td><td>ETag / <code>If-Match</code></td><td>Same as above but expressed at the HTTP layer.</td></tr>
+      <tr><td>Appointment reservation (scarce slot)</td><td>Atomic conditional update, else short pessimistic lock</td><td><code>UPDATE … SET userId=@me WHERE slot=@s AND userId IS NULL</code> — no need for FOR UPDATE.</td></tr>
+      <tr><td>Inventory decrement</td><td>Atomic <code>UPDATE … SET qty = qty - 1 WHERE qty &gt; 0</code></td><td>Never read-then-write. DB engine handles concurrency internally.</td></tr>
+      <tr><td>Prevent duplicate scheduled job across pods</td><td>Distributed lock (Redis / etcd)</td><td>Not a DB row problem; you need cross-server coordination. Pair with idempotency ledger.</td></tr>
+      <tr><td>Prevent duplicate API request</td><td>Idempotency key</td><td>Client sends a UUID; server stores the response for that key and re-returns it on retry. No lock needed.</td></tr>
+      <tr><td>Financial account update</td><td>DB transaction + atomic conditional update</td><td>Serial ACID guarantees. Never span accounts in a single lock — use a two-phase / Saga.</td></tr>
+      <tr><td>Long-running business workflow</td><td>State machine + Saga</td><td>Do NOT hold locks across the workflow. Each step is an atomic state transition.</td></tr>
+      <tr><td>Concurrent REST edits to a resource</td><td>ETag + <code>If-Match</code></td><td>412 Precondition Failed → client reload/merge.</td></tr>
+      <tr><td>Leader election / singleton runner</td><td>etcd / ZooKeeper lease</td><td>Real consensus; fencing tokens available; used by Kubernetes itself.</td></tr>
+      <tr><td>Prevent thundering herd on cache miss</td><td>Distributed lock (short TTL) or single-flight per key</td><td>One request rebuilds the cache; others wait for it.</td></tr>
+      <tr><td>Analytics counter increments</td><td>Atomic INCR (Redis) or approximate counter (HLL)</td><td>Never lock a counter row; you'll serialise your write traffic to a single row.</td></tr>
+    </table>
+    <div class="callout"><strong>The correct question is not "which lock?" but "does this need a lock at all?".</strong> Atomic updates, unique constraints, idempotency keys, message queues, state machines, and Sagas replace locks in more scenarios than most engineers realise.</div>
+  </section>
+
+  <!-- ============================ TRAPS ============================ -->
+  <section id="traps" class="card">
+    <h2>🪤 Common system-design interview traps</h2>
+    <div class="qa"><p class="q">"I'll use a Redis distributed lock for every concurrency problem."</p><p class="a">This is the biggest tell of an inexperienced answer. Redis locks are a coordination primitive for actions that span servers — nightly jobs, cache warmup, singleton runners. For single-row concurrency, an atomic <code>UPDATE</code> or a short pessimistic row lock is safer, simpler, and doesn't add a coordination service to the failure surface.</p></div>
+    <div class="qa"><p class="q">"I'll hold a database lock while calling the payment gateway."</p><p class="a">This will melt production. External calls take seconds; row locks take microseconds. Never combine them. Use a reservation state machine — commit the "reserved" state, release the lock, then call the gateway, then transition state.</p></div>
+    <div class="qa"><p class="q">"I'll set the Redis TTL to 10 minutes to be safe."</p><p class="a">A long TTL means a crashed owner wedges the system for 10 minutes before recovery. Set the TTL just longer than expected work + one renewal cycle. Use a watchdog to renew rather than a giant fixed TTL.</p></div>
+    <div class="qa"><p class="q">"I'll just call <code>DEL</code> when done."</p><p class="a">Not without ownership validation. If your work overran the TTL, the lock now belongs to someone else, and your <code>DEL</code> just released their lock. Always use the Lua compare-and-DEL script.</p></div>
+    <div class="qa"><p class="q">"A distributed lock gives me exactly-once processing."</p><p class="a">It does not. If you acquire the lock, send an email, then crash before writing "done", the next run acquires and re-sends. Locks prevent concurrent execution; idempotency ledgers prevent duplicate outcome. Use both.</p></div>
+    <div class="qa"><p class="q">"I read the row, then update it — that's enough."</p><p class="a">Classical lost update. In-between your read and your write, someone else has done the same. Move to an atomic <code>UPDATE</code> with a predicate, or add a Version column for optimistic locking.</p></div>
+    <div class="qa"><p class="q">"I'll just use SERIALIZABLE isolation everywhere."</p><p class="a">You just made the DB single-threaded on any dataset the two transactions touch. Retry storms and abort rates will spike. Match isolation level to the specific data conflict, not the app globally.</p></div>
+    <div class="qa"><p class="q">"HttpOnly cookies prevent all attacks, so we don't need CSRF tokens."</p><p class="a">(For completeness — not a locking trap, but often asked together.) HttpOnly prevents JS from reading the cookie. CSRF uses the browser's auto-attach behaviour, which HttpOnly doesn't affect. Different problem, different control.</p></div>
+    <div class="qa"><p class="q">"Distributed lock in Redis is safe even during failover."</p><p class="a">Redis replication is asynchronous. A lock written on the primary that isn't yet on the replica can be lost after failover — briefly, two owners can hold the same lock. For correctness-critical workloads use etcd / ZooKeeper (Raft / ZAB consensus) or add a fencing token that the resource itself enforces.</p></div>
+  </section>
+
+  <!-- ============================ CODE ============================ -->
+  <section id="code" class="card">
+    <h2>💻 C# reference — every mechanism in one file</h2>
+    <pre><span class="cmt">// -----------------------------------------------------------------------
+// 1. Optimistic locking — Dapper / EF Core with a Version column
+// -----------------------------------------------------------------------</span>
+<span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="kw">bool</span>&gt; <span class="fn">UpdateCustomerAsync</span>(<span class="typ">Customer</span> c)
+{
+    <span class="kw">const string</span> sql = <span class="str">@"
+        UPDATE Customer
+        SET    Address = @Address, Phone = @Phone, Version = Version + 1
+        WHERE  CustomerId = @Id AND Version = @Version"</span>;
+    <span class="kw">var</span> affected = <span class="kw">await</span> _db.ExecuteAsync(sql, c);
+    <span class="kw">return</span> affected == 1;   <span class="cmt">// false → tell the caller to reload and retry</span>
+}
+
+<span class="cmt">// -----------------------------------------------------------------------
+// 2. Pessimistic locking — SELECT … FOR UPDATE inside a transaction
+// -----------------------------------------------------------------------</span>
+<span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">ReserveAppointmentAsync</span>(<span class="typ">Guid</span> apptId, <span class="typ">Guid</span> userId)
+{
+    <span class="kw">using var</span> tx = _db.BeginTransaction(<span class="typ">IsolationLevel</span>.ReadCommitted);
+    <span class="kw">var</span> row = <span class="kw">await</span> _db.QuerySingleAsync&lt;<span class="typ">Appointment</span>&gt;(
+        <span class="str">"SELECT * FROM Appointment WHERE Id=@id FOR UPDATE"</span>,
+        <span class="kw">new</span> { id = apptId }, tx);
+    <span class="kw">if</span> (row.UserId <span class="kw">is not null</span>) { tx.Rollback(); <span class="kw">throw new</span> <span class="typ">ConflictException</span>(); }
+    <span class="kw">await</span> _db.ExecuteAsync(
+        <span class="str">"UPDATE Appointment SET UserId=@u WHERE Id=@id"</span>,
+        <span class="kw">new</span> { u = userId, id = apptId }, tx);
+    tx.Commit();
+}
+
+<span class="cmt">// -----------------------------------------------------------------------
+// 3. Atomic UPDATE — the recommended default for inventory / counters
+// -----------------------------------------------------------------------</span>
+<span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="kw">bool</span>&gt; <span class="fn">TryDecrementStockAsync</span>(<span class="kw">int</span> productId)
+{
+    <span class="kw">const string</span> sql = <span class="str">@"
+        UPDATE Inventory SET Quantity = Quantity - 1
+        WHERE ProductId = @pid AND Quantity &gt; 0"</span>;
+    <span class="kw">return</span> (<span class="kw">await</span> _db.ExecuteAsync(sql, <span class="kw">new</span> { pid = productId })) == 1;
+}
+
+<span class="cmt">// -----------------------------------------------------------------------
+// 4. Redis distributed lock — SET NX PX + Lua safe release
+// -----------------------------------------------------------------------</span>
+<span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">string</span>?&gt; <span class="fn">TryAcquireAsync</span>(<span class="typ">string</span> key, <span class="typ">TimeSpan</span> ttl)
+{
+    <span class="kw">var</span> token = <span class="typ">Guid</span>.NewGuid().ToString(<span class="str">"N"</span>);
+    <span class="kw">bool</span> ok = <span class="kw">await</span> _redis.StringSetAsync(
+        key, token, expiry: ttl, when: <span class="typ">When</span>.NotExists);
+    <span class="kw">return</span> ok ? token : <span class="kw">null</span>;
+}
+<span class="kw">public</span> <span class="typ">Task</span> <span class="fn">ReleaseAsync</span>(<span class="typ">string</span> key, <span class="typ">string</span> token) =&gt;
+    _redis.ScriptEvaluateAsync(
+        <span class="str">@"if redis.call('GET', KEYS[1]) == ARGV[1] then
+             return redis.call('DEL', KEYS[1])
+          else return 0 end"</span>,
+        <span class="kw">new</span>[] { (<span class="typ">RedisKey</span>)key },
+        <span class="kw">new</span> <span class="typ">RedisValue</span>[] { token });
+
+<span class="cmt">// -----------------------------------------------------------------------
+// 5. HTTP ETag — ASP.NET Core minimal-API endpoint
+// -----------------------------------------------------------------------</span>
+app.MapPut(<span class="str">"/customers/{id}"</span>, <span class="kw">async</span> (<span class="kw">int</span> id, <span class="typ">HttpRequest</span> req, <span class="typ">CustomerRepo</span> repo) =&gt;
+{
+    <span class="kw">var</span> current = <span class="kw">await</span> repo.GetAsync(id);
+    <span class="kw">var</span> incoming = req.Headers.IfMatch.ToString().Trim(<span class="str">'"'</span>);
+    <span class="kw">if</span> (incoming != $<span class="str">"v{current.Version}"</span>)
+        <span class="kw">return</span> <span class="typ">Results</span>.StatusCode(412);   <span class="cmt">// Precondition Failed</span>
+
+    <span class="kw">var</span> updated = <span class="kw">await</span> req.ReadFromJsonAsync&lt;<span class="typ">Customer</span>&gt;();
+    <span class="kw">var</span> saved   = <span class="kw">await</span> repo.SaveWithOptimisticLockAsync(updated!, current.Version);
+    <span class="kw">return</span> saved
+        ? <span class="typ">Results</span>.Ok().WithHeader(<span class="str">"ETag"</span>, $<span class="str">"\"v{current.Version + 1}\""</span>)
+        : <span class="typ">Results</span>.StatusCode(412);
+});
+
+<span class="cmt">// -----------------------------------------------------------------------
+// 6. Postgres advisory lock — one-liner via Dapper
+// -----------------------------------------------------------------------</span>
+<span class="kw">await</span> _db.ExecuteAsync(<span class="str">"SELECT pg_advisory_xact_lock(hashtext(@name))"</span>, <span class="kw">new</span> { name = <span class="str">"nightly-report"</span> });
+<span class="cmt">// … work inside the same transaction; lock releases at commit</span></pre>
+    <p>Six mechanisms, one file. The point is not the specific library — it's that each mechanism collapses to a few lines when you pick the right one, and to hundreds of lines of retry logic and bug reports when you pick the wrong one.</p>
+  </section>
+
+  <!-- ============================ CHEAT SHEET / DECISION TREE ============================ -->
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Final mental model — the decision tree you memorize</h2>
+    <div class="viz" style="background:rgba(0,0,0,.25);color:#e7ecf3">Multiple requests modifying the same thing?
+                │
+                ▼
+       Can the operation be expressed as a single atomic DB query?
+          │             │
+         Yes            No
+          │             │
+   <span style="color:#9be7a3">Atomic UPDATE</span>       ▼
+                  Conflicts rare?
+                    │       │
+                   Yes      No
+                    │       │
+             <span style="color:#ffd166">Optimistic</span>     Need short exclusive access?
+             (Version /       │
+              ETag)           ▼
+                        <span style="color:#f4a259">Pessimistic (FOR UPDATE)</span>
+
+Different servers must coordinate a job / action?
+                │
+                ▼
+       <span style="color:#dc382d">Distributed lock (Redis / etcd)</span>  + idempotency ledger
+
+Long-running business workflow with external calls?
+                │
+                ▼
+       <span style="color:#7fa2ff">State machine / Saga</span> — do NOT hold locks
+
+Duplicate request retries from clients?
+                │
+                ▼
+       <span style="color:#c6d0e0">Idempotency key</span> — no lock needed</div>
+
+    <p class="pitch"><strong>Say this in the interview.</strong> "I default to an atomic <code style="color:#fff;background:rgba(255,255,255,.2)">UPDATE</code> when the operation can be expressed as a single predicate — inventory, counters, state transitions. When the conflict window is longer than a query, I use optimistic locking with a Version column, or ETag/If-Match if the concurrency crosses HTTP. Pessimistic <code style="color:#fff;background:rgba(255,255,255,.2)">FOR UPDATE</code> is reserved for genuinely scarce rows where the critical section is short and inside one transaction. Distributed locks come out only when the resource isn't a DB row — nightly jobs, singletons, cache warmup — and I always pair them with an idempotency ledger because a lock alone does not give exactly-once. And I never hold a lock across an external call — that's what reservation state machines and Sagas are for."</p>
+
+    <h3>The 5 lines that win the round</h3>
+    <ul>
+      <li><strong>"Atomic UPDATE first, lock only if you can't."</strong></li>
+      <li><strong>"Optimistic when conflicts are rare, pessimistic when they aren't."</strong></li>
+      <li><strong>"Distributed lock is for actions across servers, not rows in a DB."</strong></li>
+      <li><strong>"Lock ≠ exactly-once. Combine with idempotency."</strong></li>
+      <li><strong>"Never hold any lock across a network call to a third party."</strong></li>
+    </ul>
+  </section>
+
+  <!-- ============================ FAQ ============================ -->
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <!-- ============================ SOURCES ============================ -->
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://www.postgresql.org/docs/current/explicit-locking.html">PostgreSQL — Explicit Locking</a> — row locks, <code>FOR UPDATE</code>, and advisory locks.</li>
+      <li><a href="https://learn.microsoft.com/en-us/sql/relational-databases/sql-server-transaction-locking-and-row-versioning-guide">SQL Server — Locking and Row-Versioning Guide</a> — <code>UPDLOCK</code>, RowVersion, deadlock detection.</li>
+      <li><a href="https://redis.io/docs/latest/commands/set/">Redis SET command</a> — canonical NX/PX semantics used for distributed locks.</li>
+      <li><a href="https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html">Martin Kleppmann — "How to do distributed locking"</a> — the critique explaining why Redis locks alone aren't safe for correctness, and why fencing tokens matter.</li>
+      <li><a href="https://etcd.io/docs/latest/dev-guide/api_concurrency_reference_v3/">etcd — Concurrency API</a> — leases and leader election used by Kubernetes.</li>
+      <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag">MDN — ETag &amp; <code>If-Match</code></a> — HTTP optimistic concurrency.</li>
+      <li><a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.ConditionExpressions.html">DynamoDB — Condition Expressions</a> — conditional writes for CAS/versioning.</li>
+      <li><a href="https://www.enterpriseintegrationpatterns.com/patterns/messaging/IdempotentReceiver.html">EIP — Idempotent Receiver</a> — pattern that replaces locks in many scenarios.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

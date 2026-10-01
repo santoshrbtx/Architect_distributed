@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stripe Zero-Downtime Migration — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #e8b4b8;
+    --laymen-bg: #fdf6f6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #635bff 0%, #4361ee 55%, #00b4d8 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen   .badge { background: #c07a7f; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+  .phase-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0;
+  }
+  .phase-grid .phase {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px; text-align: center;
+  }
+  .phase-grid .phase .n {
+    display: inline-grid; place-items: center; width: 32px; height: 32px;
+    border-radius: 50%; background: var(--arch); color: #fff; font-weight: 800;
+    margin-bottom: 8px;
+  }
+  .phase-grid .phase strong { display: block; margin-bottom: 4px; font-size: .95rem; }
+  .phase-grid .phase span { color: var(--muted); font-size: .82rem; }
+  @media (max-width: 720px) { .phase-grid { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Stripe's Zero-Downtime Data Migration</h1>
+    <p>How Stripe moves hundreds of millions of live records — and reshapes the schema underneath them — without a single minute of downtime and zero data inconsistency.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>Stripe processes payments for millions of businesses — DigitalOcean, Squarespace, Shopify merchants, Amazon, Uber Eats — and its <strong>Subscriptions</strong> table alone holds hundreds of millions of live records. In its early days, Stripe stored subscription data as an <em>array field inside the Customer record</em>. That worked at a few hundred customers. It stopped working at scale: every subscription change had to rewrite the whole Customer document, and the design collapsed once customers wanted multiple subscriptions.</p>
+    <p>The obvious fix — pull subscriptions into their own dedicated table — is trivial on paper and terrifying in practice. The old field is referenced from <strong>thousands of lines of code across many services</strong>. The system serves live traffic 24/7 for businesses that make real revenue every second the API is up. And running a bulk migration sequentially would take, in Stripe's own math, <strong>over three years</strong> for 100M records at one second each.</p>
+    <p>This is the "engine change while the plane is flying" problem, and every large system hits it — Facebook, Shopify, GitHub, LinkedIn, Uber. The playbook Stripe wrote for it is now the industry-standard <strong>four-phase online migration</strong>: dual-write, backfill, migrate reads with a shadow-compare, then remove the old field. It's a classic staff/senior interview question because every candidate has to migrate a schema someday, and doing it without downtime — or a Sunday-morning outage post-mortem — is what separates senior engineers from principal ones.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Explain it like I've never written code</h2>
+    <p>Imagine you run a <strong>massive filing cabinet business</strong>. Every customer has a folder, and inside that folder — jammed into the same page — you scribble down their monthly subscriptions. It worked when you had 200 customers. Now you have <strong>hundreds of millions</strong>, some with dozens of subscriptions each, and every time someone changes one, your clerk has to grab the whole folder, rewrite the whole page, and file it back. Everything is slow. Everything is fragile.</p>
+    <p>You decide subscriptions deserve their <strong>own filing cabinet</strong>. Great idea — but here's the catch: your business never closes. Customers are signing up, cancelling, and paying <em>right now, this second</em>. You cannot say "we'll be back Monday." You cannot lose a single record. And you have <strong>thousands of clerks</strong> in different departments who all know the old system by heart.</p>
+    <p>So you move in four calm phases, and this is the whole trick:</p>
+    <p><strong>1) Write to both places.</strong> From today, whenever a clerk updates a subscription, they write it in <em>both</em> the old folder <em>and</em> the new cabinet. New data is safe from day one.</p>
+    <p><strong>2) Copy the old stuff over.</strong> At night, a huge team of movers scans a <em>snapshot</em> of every folder (not the live ones — a photocopy, so you don't slow the business down) and copies each subscription into the new cabinet. When they're done, they run the scan again to confirm nothing was missed.</p>
+    <p><strong>3) Switch reading, but check yourself.</strong> Now, whenever someone looks up a subscription, you read from the <em>new</em> cabinet — but you also secretly peek at the old folder and compare. If the two ever disagree, an alarm rings. Only when the alarms stay silent for weeks do you trust the new cabinet fully.</p>
+    <p><strong>4) Throw out the old page.</strong> Finally, stop writing to the old folder, delete the scribbled subscription page, and the migration is done.</p>
+    <p>Every big company you use — <strong>WhatsApp, Instagram, Uber, Netflix, your bank</strong> — has done this dance many times. Nobody noticed. That's the whole point.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Move a live entity (<em>Subscriptions</em>) from being nested inside a parent record to its own dedicated table with its own schema.</li>
+      <li>All existing code paths — thousands of call sites across many services — must keep working through the transition.</li>
+      <li>New writes go to the new store from day one; old data must be reconciled without blocking traffic.</li>
+      <li>Every read must return the correct value at every moment of the migration; there is no "wrong for 10 minutes" tolerance.</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Zero downtime.</strong> No maintenance windows. Stripe's API SLA is 99.999%+ — every second of outage is real merchant money lost.</li>
+      <li><strong>Zero data inconsistency.</strong> Any divergence between old and new must be detected in seconds, not days.</li>
+      <li><strong>Bounded blast radius per change.</strong> Rollback must be possible at every phase.</li>
+      <li><strong>Incremental rollout.</strong> Ramp writes and reads by percentage, monitor, escalate.</li>
+    </ul>
+
+    <h3>Back-of-the-envelope</h3>
+    <table>
+      <tr><th>Dimension</th><th>Number</th><th>Why it matters</th></tr>
+      <tr><td>Objects to migrate</td><td>~100M–500M subscriptions</td><td>Stripe cites "hundreds of millions"; sizing anchor for the whole plan.</td></tr>
+      <tr><td>Sequential time (1 s/obj)</td><td>~3.2 years for 100M</td><td>Motivates parallel/offline processing.</td></tr>
+      <tr><td>MapReduce parallelism</td><td>1,000–10,000 mappers</td><td>100M objects at 10k parallelism × 100 ms each ≈ 17 min pass.</td></tr>
+      <tr><td>Backfill throttle</td><td>~5–10% of prod QPS budget</td><td>Enough to finish in days, not weeks; small enough not to page oncall.</td></tr>
+      <tr><td>Dual-write overhead</td><td>+1 write per mutation</td><td>Roughly doubles the write path; ramp gradually while watching p99.</td></tr>
+      <tr><td>Scientist mismatch budget</td><td>&lt; 0.001% after warmup</td><td>Below that, cut reads over. Above it, keep debugging.</td></tr>
+      <tr><td>Rollout duration</td><td>Weeks to months per entity</td><td>Not a sprint — a sustained, monitored campaign.</td></tr>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the four phases fit together</h2>
+    <p>The end-to-end pattern is a <strong>four-phase incremental rollout</strong>. The system is never in a "transitional half-state" — at every moment one store is authoritative for reads, both stores are being written, and a shadow-compare is running to detect drift. The migration only progresses when the previous phase has been silent for long enough to trust.</p>
+
+    <div class="phase-grid">
+      <div class="phase"><div class="n">1</div><strong>Dual write</strong><span>New table exists; every write goes to both. Old store still authoritative for reads.</span></div>
+      <div class="phase"><div class="n">2</div><strong>Backfill</strong><span>Copy the tail of old records into the new table using offline MapReduce over a DB snapshot.</span></div>
+      <div class="phase"><div class="n">3</div><strong>Shadow reads</strong><span>Read from new, compare vs old with GitHub Scientist. When drift ≈ 0, cut reads over.</span></div>
+      <div class="phase"><div class="n">4</div><strong>Cleanup</strong><span>Stop writing to old field, lazily delete stragglers, drop the old column.</span></div>
+    </div>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/>
+          </marker>
+          <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/>
+          </marker>
+          <marker id="aho" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/>
+          </marker>
+        </defs>
+
+        <!-- Client -->
+        <rect x="20" y="150" width="120" height="60" rx="10" fill="#4361ee"/>
+        <text x="80" y="177" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">Stripe API</text>
+        <text x="80" y="196" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">/customers /subscriptions</text>
+
+        <!-- Service -->
+        <rect x="200" y="150" width="150" height="60" rx="10" fill="#7048e8"/>
+        <text x="275" y="177" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">Data Access Layer</text>
+        <text x="275" y="196" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">reads · writes · flags</text>
+
+        <!-- Old store -->
+        <rect x="450" y="40" width="180" height="90" rx="10" fill="#5b6677"/>
+        <text x="540" y="72" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">Old: Customers table</text>
+        <text x="540" y="93" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">subscriptions[] array field</text>
+        <text x="540" y="112" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">legacy, being drained</text>
+
+        <!-- New store -->
+        <rect x="450" y="230" width="180" height="90" rx="10" fill="#2dc653"/>
+        <text x="540" y="262" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">New: Subscriptions table</text>
+        <text x="540" y="283" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">1 row per subscription</text>
+        <text x="540" y="302" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">future source of truth</text>
+
+        <!-- Scientist -->
+        <rect x="700" y="150" width="180" height="60" rx="10" fill="#f7567c"/>
+        <text x="790" y="177" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">Scientist compare</text>
+        <text x="790" y="196" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">alert on any mismatch</text>
+
+        <!-- MapReduce backfill -->
+        <rect x="200" y="290" width="150" height="60" rx="10" fill="#f4a259"/>
+        <text x="275" y="317" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">Backfill job</text>
+        <text x="275" y="336" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">Scalding / MapReduce</text>
+
+        <!-- Snapshot -->
+        <rect x="20" y="290" width="130" height="60" rx="10" fill="#2a3652" stroke="#5b6677"/>
+        <text x="85" y="317" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">Hadoop snapshot</text>
+        <text x="85" y="336" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">of production DB</text>
+
+        <!-- Arrows -->
+        <line x1="140" y1="180" x2="200" y2="180" stroke="#c6d0e0" stroke-width="2" marker-end="url(#ah)"/>
+        <path d="M350,170 L440,90" stroke="#c6d0e0" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+        <text x="380" y="120" fill="#c6d0e0" font-size="11">read/write</text>
+        <path d="M350,190 L440,270" stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#ahg)"/>
+        <text x="380" y="245" fill="#2dc653" font-size="11">dual write</text>
+        <path d="M630,270 Q680,240 700,190" stroke="#f7567c" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+        <path d="M630,90 Q680,120 700,170" stroke="#f7567c" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+        <text x="655" y="150" fill="#f7567c" font-size="11">compare</text>
+        <line x1="150" y1="320" x2="200" y2="320" stroke="#f4a259" stroke-width="2" marker-end="url(#aho)"/>
+        <path d="M350,320 L470,320" stroke="#f4a259" stroke-width="2" fill="none" marker-end="url(#aho)"/>
+        <text x="380" y="312" fill="#f4a259" font-size="11">bulk copy</text>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#4361ee"></span>Live traffic</span>
+      <span><span class="dot" style="background:#2dc653"></span>Dual write</span>
+      <span><span class="dot" style="background:#f4a259"></span>Offline backfill</span>
+      <span><span class="dot" style="background:#f7567c"></span>Shadow verify (Scientist)</span>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch the four phases run, step by step</h2>
+    <p>The animation walks through the migration in the same order you'd narrate it to an interviewer. Watch a write go to just the old store, then to both, then a backfill sweep, then a Scientist read comparison catching a mismatch, then the final cutover.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" fill="none">
+        <defs>
+          <marker id="a-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/>
+          </marker>
+        </defs>
+
+        <!-- API -->
+        <rect id="api-box" x="30" y="150" width="120" height="60" rx="10" fill="#4361ee"/>
+        <text x="90" y="185" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Stripe API</text>
+
+        <!-- DAL -->
+        <rect id="dal-box" x="210" y="150" width="130" height="60" rx="10" fill="#7048e8"/>
+        <text x="275" y="185" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Data Layer</text>
+
+        <!-- Old store -->
+        <rect id="old-box" x="500" y="60" width="180" height="80" rx="10" fill="#5b6677"/>
+        <text x="590" y="92" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Old: Customers</text>
+        <text x="590" y="113" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">subscriptions[] array</text>
+
+        <!-- New store -->
+        <rect id="new-box" x="500" y="220" width="180" height="80" rx="10" fill="#2dc653"/>
+        <text x="590" y="252" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">New: Subscriptions</text>
+        <text x="590" y="273" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">dedicated table</text>
+
+        <!-- Scientist -->
+        <rect id="sci-box" x="720" y="150" width="150" height="60" rx="10" fill="#f7567c" data-anim class="a-hidden"/>
+        <text id="sci-text" x="795" y="180" text-anchor="middle" fill="#fff" font-weight="700" font-size="13" data-anim class="a-hidden">Scientist</text>
+        <text id="sci-text2" x="795" y="197" text-anchor="middle" fill="#fff" font-size="11" opacity=".85" data-anim class="a-hidden">compare</text>
+
+        <!-- Write packet (moves from API -> DAL -> stores) -->
+        <circle id="pkt1" cx="90" cy="180" r="10" fill="#00b4d8" data-anim class="a-hidden"/>
+        <circle id="pkt2" cx="90" cy="180" r="10" fill="#00b4d8" data-anim class="a-hidden"/>
+
+        <!-- Backfill mapper cells -->
+        <g id="mappers" data-anim>
+          <rect x="200" y="310" width="26" height="26" rx="4" fill="#f4a259" class="a-hidden" data-anim id="m1"/>
+          <rect x="235" y="310" width="26" height="26" rx="4" fill="#f4a259" class="a-hidden" data-anim id="m2"/>
+          <rect x="270" y="310" width="26" height="26" rx="4" fill="#f4a259" class="a-hidden" data-anim id="m3"/>
+          <rect x="305" y="310" width="26" height="26" rx="4" fill="#f4a259" class="a-hidden" data-anim id="m4"/>
+          <rect x="340" y="310" width="26" height="26" rx="4" fill="#f4a259" class="a-hidden" data-anim id="m5"/>
+          <rect x="375" y="310" width="26" height="26" rx="4" fill="#f4a259" class="a-hidden" data-anim id="m6"/>
+          <text x="150" y="328" fill="#c6d0e0" font-size="11" text-anchor="end" class="a-hidden" data-anim id="mlabel">Backfill mappers →</text>
+        </g>
+
+        <!-- Read arrow / result -->
+        <circle id="read1" cx="500" cy="255" r="10" fill="#2dc653" data-anim class="a-hidden"/>
+        <circle id="read2" cx="500" cy="95" r="10" fill="#f7567c" data-anim class="a-hidden"/>
+
+        <!-- Old-store cross (removed at cleanup) -->
+        <line id="cross1" x1="500" y1="60" x2="680" y2="140" stroke="#f7567c" stroke-width="4" data-anim class="a-hidden"/>
+        <line id="cross2" x1="680" y1="60" x2="500" y2="140" stroke="#f7567c" stroke-width="4" data-anim class="a-hidden"/>
+
+        <!-- Static arrows -->
+        <line x1="150" y1="180" x2="210" y2="180" stroke="#c6d0e0" stroke-width="2" marker-end="url(#a-ah)"/>
+        <path d="M340,170 L500,100" stroke="#c6d0e0" stroke-width="2" fill="none" marker-end="url(#a-ah)"/>
+        <path d="M340,190 L500,260" stroke="#c6d0e0" stroke-width="2" fill="none" marker-end="url(#a-ah)"/>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'Stripe moves subscriptions from a nested field to a new table in four safe phases.',
+          interval: 2000,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.add('a-hidden');
+              el.classList.remove('a-glow', 'a-dim');
+              el.removeAttribute('transform');
+            });
+            const oldB = r.querySelector('#old-box');
+            const newB = r.querySelector('#new-box');
+            if (oldB) { oldB.setAttribute('fill', '#5b6677'); oldB.classList.remove('a-dim'); }
+            if (newB) newB.setAttribute('fill', '#2dc653');
+          },
+          steps: [
+            { caption: 'Phase 0 — Before: every write goes only to the old Customers table with its nested subscriptions[] array.',
+              apply: (r, $) => {
+                $('#pkt1').classList.remove('a-hidden');
+                $('#pkt1').setAttribute('transform', 'translate(400,-90)');
+              }
+            },
+            { caption: 'Phase 1 — Dual write begins: the same write is duplicated to the new Subscriptions table, ramped by percentage.',
+              apply: (r, $) => {
+                $('#pkt1').classList.remove('a-hidden');
+                $('#pkt1').setAttribute('transform', 'translate(400,-90)');
+                $('#pkt2').classList.remove('a-hidden');
+                $('#pkt2').setAttribute('transform', 'translate(400,70)');
+                $('#pkt2').classList.add('a-glow');
+              }
+            },
+            { caption: 'Phase 2 — Backfill: MapReduce mappers run over a Hadoop snapshot and copy the tail of old records into the new table.',
+              apply: (r, $, $$) => {
+                $('#mlabel').classList.remove('a-hidden');
+                $$('#mappers rect').forEach(m => { m.classList.remove('a-hidden'); m.classList.add('a-glow'); });
+              }
+            },
+            { caption: 'Phase 2 done — a second Scalding pass confirms zero rows were missed; both stores now hold identical data.',
+              apply: (r, $, $$) => {
+                $('#mlabel').classList.remove('a-hidden');
+                $$('#mappers rect').forEach(m => { m.classList.remove('a-hidden'); m.classList.add('a-dim'); });
+                $('#new-box').setAttribute('fill', '#2dc653');
+              }
+            },
+            { caption: 'Phase 3 — Shadow reads: every read hits both stores; Scientist compares results and alerts on any mismatch.',
+              apply: (r, $) => {
+                $('#sci-box').classList.remove('a-hidden');
+                $('#sci-text').classList.remove('a-hidden');
+                $('#sci-text2').classList.remove('a-hidden');
+                $('#read1').classList.remove('a-hidden'); $('#read1').setAttribute('transform', 'translate(200,-90)');
+                $('#read2').classList.remove('a-hidden'); $('#read2').setAttribute('transform', 'translate(200,60)');
+              }
+            },
+            { caption: 'Mismatch caught! An inconsistency between old and new fires an alert. Engineers investigate before promoting reads.',
+              apply: (r, $) => {
+                $('#sci-box').classList.remove('a-hidden');
+                $('#sci-text').classList.remove('a-hidden');
+                $('#sci-text2').classList.remove('a-hidden');
+                $('#read1').classList.remove('a-hidden'); $('#read1').setAttribute('transform', 'translate(200,-90)');
+                $('#read2').classList.remove('a-hidden'); $('#read2').setAttribute('transform', 'translate(200,60)');
+                $('#sci-box').classList.add('a-glow');
+              }
+            },
+            { caption: 'Mismatches drop to zero. Reads cut over to the new table — old store is still written for safety and rollback.',
+              apply: (r, $) => {
+                $('#new-box').classList.add('a-glow');
+                $('#old-box').classList.add('a-dim');
+              }
+            },
+            { caption: 'Phase 4 — Cleanup: writes to old field stop, the deprecated accessor hard-errors, stragglers are deleted.',
+              apply: (r, $) => {
+                $('#old-box').classList.add('a-dim');
+                $('#cross1').classList.remove('a-hidden');
+                $('#cross2').classList.remove('a-hidden');
+                $('#new-box').classList.add('a-glow');
+              }
+            }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>Phase 1 — Dual writing</h3>
+    <p>The first move is <strong>additive, not disruptive</strong>. Create the new <code>Subscriptions</code> table. Add a <em>dual-write</em> code path in the data-access layer so every mutation on a subscription writes to both stores. Guard it behind a feature flag with a percentage rollout — Stripe ramps to 100% while watching p99 latency, error rate, and cache-hit rates on the primary DB. Existing objects that get touched during this phase are <strong>lazily copied</strong> on write, so hot data heals itself. The old field remains the source of truth for reads.</p>
+    <p>Key invariants: writes are ordered (old first, then new — or use an outbox pattern to avoid partial failures); dual-write failures are logged and retried; the code path is small enough (a few hundred lines) to review in one PR.</p>
+
+    <h3>Phase 2 — Backfill via offline MapReduce</h3>
+    <p>Running the backfill against production would double the write load and page oncall. Stripe instead used <strong>Hadoop snapshots</strong> — a nightly copy of the production DB into their data warehouse — and wrote MapReduce jobs using <strong>Scalding</strong>, Twitter's Scala DSL over Cascading. A "simple job in 10 lines of code" enumerates every subscription ID that exists in the old field, then a parallel multi-threaded migrator copies each into the new table via the same API path as a dual write. After the sweep, they <strong>re-run the Scalding job</strong> to confirm the delta is empty. This "scan → migrate → re-scan to zero" pattern is the safety net.</p>
+
+    <h3>Phase 3 — Shadow reads and Scientist</h3>
+    <p>Cutting reads over is the scariest phase — a bug here shows up as wrong data returned to real customers. Stripe uses <strong>GitHub Scientist</strong>, a library that runs two code paths in production for the same request, returning the control's result to the caller while asynchronously executing the candidate and <strong>publishing a mismatch record</strong> when the two disagree. In practice this means every read from the old store is shadowed by a read from the new; the returned value is still from the old (so no user-facing risk), but the difference feeds a dashboard.</p>
+    <p>Only when the mismatch rate stays effectively zero for days — after ignoring known-benign differences like ordering — does Stripe flip the primary read to the new store. Even then, dual-writes and shadow reads on the old store are kept live for a while so rollback is a one-flag flip.</p>
+
+    <h3>Phase 4 — Cleanup and hard errors</h3>
+    <p>The last phase drops the deprecated field. Stripe's technique is aggressive: replace the old accessor with a <strong>hard error</strong> so any straggler code path that still touches it explodes in staging or canary before it can silently regress. The <code>subscriptions</code> array on Customer becomes <code>Opus::Error.hard("Accessing subscriptions array on customer")</code>. A final Scalding job lazily deletes any remaining data, and the column can eventually be dropped.</p>
+
+    <h3>Why it works</h3>
+    <p>The whole design is a <strong>staircase of small, reversible steps</strong>. At every phase, one side is authoritative, the other is being validated. There is never a moment where the system depends on both being correct simultaneously. Every phase has a clear go/no-go metric — dual-write error rate, backfill completeness, Scientist mismatch rate — and rollback is always a feature-flag flip away.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Zero-downtime migration looks like ops, but under the hood it's a stack of classical CS primitives — parallel scans, set differences, distributed consensus (implicitly, through feature flags and consistent hashing), and probabilistic sketches for verification.</p>
+
+    <h3>The core algorithms</h3>
+    <ul>
+      <li><strong>MapReduce over a snapshot</strong> — the backfill is a distributed map (parse each old record → emit the flattened row) with no reduce; Scalding compiles it down to Hadoop tasks. Complexity: <code>O(N/P)</code> wall time on <code>P</code> mappers.</li>
+      <li><strong>Set difference for completeness</strong> — after the sweep, compute <code>{old_ids} − {new_ids}</code>. If empty, we're done; otherwise re-migrate the delta. Two big-set diff via sort-merge is <code>O(N log N)</code> per store on the snapshot.</li>
+      <li><strong>Shadow compare (Scientist)</strong> — deep-equality of two candidate values, with configurable normalization for known-benign ordering / whitespace / rounding differences. Runs on every read; overhead is bounded by <code>enabled?</code> sampling.</li>
+      <li><strong>Reservoir sampling / percentage rollout</strong> — feature flags use a hash of the object ID modulo 100 to decide "does this request take the new path?" — a deterministic sampler that ramps cleanly from 0% → 100% and gives idempotent per-object routing.</li>
+      <li><strong>Idempotent writes</strong> — dual writes must be safe to retry. Stripe uses <em>idempotency keys</em> (originally exposed in their public API) so the same write hitting both stores twice does not double-insert.</li>
+      <li><strong>Bloom / count-min sketches (optional)</strong> — for very large datasets, a Bloom filter of "already migrated IDs" fits in RAM and avoids re-processing during checkpointed sweeps.</li>
+      <li><strong>Transactional outbox pattern</strong> — an alternative to raw dual-write; the app writes to one DB with an <em>outbox</em> row in the same transaction, and a relay tails that outbox and writes to the new store. Guarantees at-least-once delivery even on partial failures.</li>
+    </ul>
+
+    <table>
+      <tr><th>Primitive</th><th>Where it appears</th><th>Complexity</th></tr>
+      <tr><td>Parallel scan (MapReduce)</td><td>Backfill sweep of the snapshot</td><td>O(N/P) time · O(N) work</td></tr>
+      <tr><td>Set diff on IDs</td><td>Post-sweep completeness check</td><td>O(N log N) with sort-merge</td></tr>
+      <tr><td>Deep-equality compare</td><td>Scientist shadow reads</td><td>O(K) per read, K = record size</td></tr>
+      <tr><td>Consistent hashing / mod rollout</td><td>Percentage feature flags</td><td>O(1) per decision</td></tr>
+      <tr><td>Outbox tail (log-replay)</td><td>Ordering &amp; retry of dual writes</td><td>O(1) amortized per event</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>Stripe's own stack uses Ruby, MongoDB, Hadoop, and Kafka — but every piece of the pattern has a clean AWS counterpart, which is what interviewers usually want to hear.</p>
+    <table>
+      <tr><th>Migration component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Old store (source)</td><td>RDS PostgreSQL / DynamoDB</td><td>Whatever the current primary is — the migration pattern is store-agnostic.</td></tr>
+      <tr><td>New store (target)</td><td>DynamoDB / RDS / Aurora</td><td>The pattern works for any schema/store change, including cross-engine (RDS → Dynamo).</td></tr>
+      <tr><td>Dual-write orchestrator</td><td>Lambda + application code</td><td>App code writes to both stores; feature flags gate the percentage.</td></tr>
+      <tr><td>Feature flags</td><td>AWS AppConfig or LaunchDarkly</td><td>Percent rollout with instant kill switch, without redeploy.</td></tr>
+      <tr><td>Snapshot for backfill</td><td>DMS + S3 · DynamoDB export to S3</td><td>Consistent point-in-time copy without hitting the live DB.</td></tr>
+      <tr><td>Backfill compute</td><td>AWS Glue · EMR (Spark) · Athena</td><td>Distributed scan/transform over the S3 snapshot — the modern Scalding equivalent.</td></tr>
+      <tr><td>Change data capture</td><td>DynamoDB Streams · DMS CDC · Kinesis</td><td>Streams post-snapshot mutations to the new store to close the gap.</td></tr>
+      <tr><td>Shadow read comparator</td><td>Custom Lambda + CloudWatch metric</td><td>Application-side Scientist analogue emits a "mismatch" metric per read.</td></tr>
+      <tr><td>Async plumbing</td><td>SQS · SNS · EventBridge · MSK (Kafka)</td><td>Buffers dual-writes, isolates retries, decouples failure modes.</td></tr>
+      <tr><td>Observability</td><td>CloudWatch · X-Ray · Managed Grafana</td><td>Dashboards for mismatch rate, backfill progress, dual-write error rate.</td></tr>
+      <tr><td>Rollback control plane</td><td>AppConfig flag flip · IAM policy</td><td>Every phase is one flag away from being undone.</td></tr>
+    </table>
+    <p>Concretely: use <strong>DMS with ongoing replication</strong> to seed the target and <strong>keep it warm</strong>; run <strong>Glue Spark</strong> against a nightly S3 export for the heavy sweep; use <strong>DynamoDB Streams into Lambda</strong> to catch anything mutated after the export; drive dual-writes from application code guarded by <strong>AppConfig</strong>; emit a <em>mismatch</em> CloudWatch metric from every shadow read and alarm on any non-zero value; and gate the read cutover on that alarm being silent for a full week.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>Below is the shape of the pattern in C# — a repository wrapper that owns dual-write, shadow-read, and the Scientist-style compare. The exact percentages and stores are pluggable; the invariants are what matter.</p>
+    <pre><span class="cmt">// SubscriptionRepository — a dual-write, shadow-read facade over old + new stores.</span>
+<span class="cmt">// Feature flags drive the phase: dual-write %, read source, shadow-compare on/off.</span>
+<span class="kw">public sealed class</span> <span class="typ">SubscriptionRepository</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">ISubscriptionStore</span> _old;      <span class="cmt">// Customers.subscriptions[]</span>
+    <span class="kw">private readonly</span> <span class="typ">ISubscriptionStore</span> _new;      <span class="cmt">// dedicated Subscriptions table</span>
+    <span class="kw">private readonly</span> <span class="typ">IFeatureFlags</span>       _flags;
+    <span class="kw">private readonly</span> <span class="typ">IMetrics</span>            _metrics;
+    <span class="kw">private readonly</span> <span class="typ">ILogger</span>&lt;<span class="typ">SubscriptionRepository</span>&gt; _log;
+
+    <span class="kw">public</span> <span class="fn">SubscriptionRepository</span>(
+        <span class="typ">ISubscriptionStore</span> oldStore, <span class="typ">ISubscriptionStore</span> newStore,
+        <span class="typ">IFeatureFlags</span> flags, <span class="typ">IMetrics</span> metrics,
+        <span class="typ">ILogger</span>&lt;<span class="typ">SubscriptionRepository</span>&gt; log)
+    { _old = oldStore; _new = newStore; _flags = flags; _metrics = metrics; _log = log; }
+
+    <span class="cmt">// ---------- WRITE PATH ----------</span>
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">Subscription</span>&gt; <span class="fn">SaveAsync</span>(<span class="typ">Subscription</span> s, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="cmt">// Phase 1: always write to old; dual-write to new for X% of rollout.</span>
+        <span class="kw">var</span> saved = <span class="kw">await</span> _old.<span class="fn">UpsertAsync</span>(s, ct);
+
+        <span class="kw">if</span> (_flags.<span class="fn">IsEnabled</span>(<span class="str">"dual_write.subscriptions"</span>, s.Id))
+        {
+            <span class="kw">try</span> { <span class="kw">await</span> _new.<span class="fn">UpsertAsync</span>(saved, ct); }
+            <span class="kw">catch</span> (<span class="typ">Exception</span> ex)
+            {
+                _metrics.<span class="fn">Increment</span>(<span class="str">"migration.dual_write.new.error"</span>);
+                _log.<span class="fn">LogError</span>(ex, <span class="str">"dual-write to new store failed for {Id}"</span>, s.Id);
+                <span class="cmt">// swallow: old store is still authoritative in phase 1</span>
+            }
+        }
+        <span class="kw">return</span> saved;
+    }
+
+    <span class="cmt">// ---------- READ PATH — Scientist-style shadow compare ----------</span>
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">Subscription?</span>&gt; <span class="fn">GetAsync</span>(<span class="typ">string</span> id, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">bool</span> readFromNew  = _flags.<span class="fn">IsEnabled</span>(<span class="str">"read.subscriptions.from_new"</span>, id);
+        <span class="kw">bool</span> shadowCompare = _flags.<span class="fn">IsEnabled</span>(<span class="str">"shadow.subscriptions"</span>, id);
+
+        <span class="cmt">// Choose "control" (returned to caller) and "candidate" (validated silently).</span>
+        <span class="kw">var</span> primary   = readFromNew ? _new : _old;
+        <span class="kw">var</span> secondary = readFromNew ? _old : _new;
+
+        <span class="kw">var</span> primaryTask = primary.<span class="fn">GetAsync</span>(id, ct);
+        <span class="kw">if</span> (!shadowCompare) <span class="kw">return await</span> primaryTask;
+
+        <span class="cmt">// Run both, catch candidate exceptions, publish mismatches — never affect the caller.</span>
+        <span class="kw">var</span> secondaryTask = <span class="fn">SafeGet</span>(secondary, id, ct);
+        <span class="kw">await</span> <span class="typ">Task</span>.<span class="fn">WhenAll</span>(primaryTask, secondaryTask);
+
+        <span class="kw">var</span> p = primaryTask.Result;
+        <span class="kw">var</span> s = secondaryTask.Result;
+        <span class="kw">if</span> (!<span class="fn">Equivalent</span>(p, s))
+        {
+            _metrics.<span class="fn">Increment</span>(<span class="str">"migration.shadow.mismatch"</span>);
+            _log.<span class="fn">LogWarning</span>(<span class="str">"mismatch id={Id} primary={P} secondary={S}"</span>, id, p, s);
+        }
+        <span class="kw">return</span> p;
+    }
+
+    <span class="kw">private async</span> <span class="typ">Task</span>&lt;<span class="typ">Subscription?</span>&gt; <span class="fn">SafeGet</span>(<span class="typ">ISubscriptionStore</span> store, <span class="typ">string</span> id, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">try</span> { <span class="kw">return await</span> store.<span class="fn">GetAsync</span>(id, ct); }
+        <span class="kw">catch</span> (<span class="typ">Exception</span> ex)
+        { _metrics.<span class="fn">Increment</span>(<span class="str">"migration.shadow.error"</span>); _log.<span class="fn">LogWarning</span>(ex, <span class="str">"shadow read failed"</span>); <span class="kw">return null</span>; }
+    }
+
+    <span class="cmt">// Normalize before compare — ordering, timestamps, whitespace, etc.</span>
+    <span class="kw">private static bool</span> <span class="fn">Equivalent</span>(<span class="typ">Subscription?</span> a, <span class="typ">Subscription?</span> b)
+    {
+        <span class="kw">if</span> (a <span class="kw">is null</span> &amp;&amp; b <span class="kw">is null</span>) <span class="kw">return true</span>;
+        <span class="kw">if</span> (a <span class="kw">is null</span> || b <span class="kw">is null</span>) <span class="kw">return false</span>;
+        <span class="kw">return</span> a.Id == b.Id
+            &amp;&amp; a.CustomerId == b.CustomerId
+            &amp;&amp; a.Status == b.Status
+            &amp;&amp; a.PlanId == b.PlanId
+            &amp;&amp; a.PeriodEnd == b.PeriodEnd;
+    }
+}
+
+<span class="cmt">// The backfill worker — idempotent, parallel, resumable.</span>
+<span class="kw">public sealed class</span> <span class="typ">BackfillWorker</span>
+{
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">RunAsync</span>(<span class="typ">IAsyncEnumerable</span>&lt;<span class="typ">string</span>&gt; snapshotIds, <span class="typ">int</span> parallelism, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">await</span> <span class="typ">Parallel</span>.<span class="fn">ForEachAsync</span>(snapshotIds,
+            <span class="kw">new</span> <span class="typ">ParallelOptions</span> { MaxDegreeOfParallelism = parallelism, CancellationToken = ct },
+            <span class="kw">async</span> (id, token) =&gt;
+            {
+                <span class="kw">var</span> record = <span class="kw">await</span> _oldStore.<span class="fn">GetAsync</span>(id, token);
+                <span class="kw">if</span> (record <span class="kw">is null</span>) <span class="kw">return</span>;
+                <span class="cmt">// Idempotency: upsert by primary key so re-runs are safe.</span>
+                <span class="kw">await</span> _newStore.<span class="fn">UpsertAsync</span>(record, token);
+                _metrics.<span class="fn">Increment</span>(<span class="str">"migration.backfill.copied"</span>);
+            });
+    }
+}</pre>
+    <p>The pattern generalizes: swap Ruby for C#, MongoDB for RDS, Hadoop for Glue — the shape is identical. Idempotent upserts, feature-flag ramps, shadow reads with a metric, and a bounded rollback path.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Where this pattern hurts</h3>
+    <p><strong>Dual-write doubles the write path.</strong> If the primary store was already at 80% CPU, dual-writing sends it over. Mitigation: ramp slowly, throttle backfill during business hours, run the sweep off a <em>snapshot</em> not the live DB. Alternative: the <strong>transactional outbox</strong> pattern — write only once (to the outbox) inside the primary transaction and let a relay do the second write async. See <a href="../outbox-pattern/index.html">Transactional Outbox</a>.</p>
+    <p><strong>Ordering across two stores is hard.</strong> If the new-store write succeeds but the old fails, you have a phantom row. Guardrails: idempotency keys, outbox to guarantee at-least-once, and a periodic reconciler that finds phantoms.</p>
+    <p><strong>Deep-equality is fragile.</strong> Two stores rarely produce byte-identical results — timestamps have different precision, JSON key ordering differs, floats round differently. You'll spend real time writing the <code>Equivalent()</code> function and ignoring known-benign differences. Scientist supports this via <code>ignore</code> / <code>compare</code> blocks.</p>
+    <p><strong>Feature-flag explosion.</strong> A big migration accumulates dozens of flags: dual-write, shadow-read, cutover, backfill-scope. Own the lifecycle — every flag has an owner and a deletion date, or your codebase will drown in ifs.</p>
+    <p><strong>The final 0.001% is the hardest.</strong> Getting Scientist mismatches to zero takes weeks. The last mismatches are almost always <em>real bugs</em> in the new code path or race conditions between the two writes — that's exactly why the shadow phase exists.</p>
+
+    <h3>Likely interview follow-ups</h3>
+    <div class="qa">
+      <p class="q">Why not just take a maintenance window?</p>
+      <p class="a">For a payment API the outage cost is real merchant revenue and SLA credits. Even a 30-min window at Stripe's scale would strand thousands of live checkouts. And you can't "just do it faster" — sequential migration of 100M rows is measured in years.</p>
+    </div>
+    <div class="qa">
+      <p class="q">What if the backfill runs during dual-writes and overwrites a fresh value with an old one?</p>
+      <p class="a">Use <em>compare-and-swap</em> or last-write-wins with a version/timestamp column. Backfill writes only if <code>new.updated_at &lt; source.updated_at</code>, so a live dual-write that hit the new store first is never clobbered.</p>
+    </div>
+    <div class="qa">
+      <p class="q">How do you handle deletes during the migration?</p>
+      <p class="a">Tombstones. Deletes are dual-written just like inserts. Backfill of a snapshot must reconcile against a tombstone log so it doesn't "resurrect" already-deleted rows.</p>
+    </div>
+    <div class="qa">
+      <p class="q">How do you roll back if you're already in phase 3 and something goes wrong?</p>
+      <p class="a">Flip the <code>read.from_new</code> flag back to <code>false</code>. Because you kept dual-writing to the old store, its state is still fresh; the shadow-read alarm goes silent immediately. That's why you never remove the safety net early.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Would you use CDC (Change Data Capture) instead?</p>
+      <p class="a">CDC (DynamoDB Streams, Debezium, DMS CDC) is a fine implementation of the "outbox tail" — it eliminates dual-write in application code by streaming DB changes into the new store. The four-phase strategy stays; the mechanism changes.</p>
+    </div>
+    <div class="qa">
+      <p class="q">How is this different from a schema migration inside one DB?</p>
+      <p class="a">Same pattern, smaller blast radius. Add the new column, backfill it, cut reads over, drop the old. Tools like <em>gh-ost</em> / <em>pt-online-schema-change</em> for MySQL implement this at the storage layer. The Stripe pattern generalizes to cross-store and cross-schema.</p>
+    </div>
+    <div class="qa">
+      <p class="q">What's the analog to Scientist in a .NET / Java shop?</p>
+      <p class="a">There's no library as popular; teams roll their own. Practically it's ~50 lines: run both code paths inside a <code>Task.WhenAll</code>, catch candidate exceptions, deep-compare, publish a metric. That's the C# snippet above.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>The 30-second pitch:</strong> "Stripe migrates hundreds of millions of live records with a four-phase online strategy: dual-write to both stores, backfill the tail from a Hadoop snapshot via Scalding MapReduce, cut reads over using GitHub Scientist for shadow-compare, then remove the old field. Every phase is feature-flag gated, monitored on a mismatch metric, and rollback is one flag flip away. That's the industry-standard playbook for zero-downtime schema changes."</p>
+    <ul>
+      <li><strong>Numbers to quote:</strong> ~100M–500M subscriptions; sequential 1 s/obj = 3+ years; MapReduce parallelism = 1k–10k workers; mismatch budget &lt; 0.001% before cutover.</li>
+      <li><strong>Five talking points that win the round:</strong>
+        <ol>
+          <li>The <em>four phases</em>, in order: dual-write → backfill → shadow-read → cleanup.</li>
+          <li>Offline MapReduce over a <em>snapshot</em> — never hammer prod for backfill.</li>
+          <li>Scientist / shadow reads: caller sees old, we <em>compare</em> new silently, alarm on drift.</li>
+          <li>Every phase is <em>feature-flag gated</em> for percentage rollout and instant rollback.</li>
+          <li>Kill the old field with a <em>hard error</em> so nothing sneaks a call back in.</li>
+        </ol>
+      </li>
+      <li><strong>Words to say:</strong> "idempotent upsert", "outbox pattern", "shadow compare", "mismatch metric", "one-flag rollback", "CDC-driven variant".</li>
+      <li><strong>Trade-offs to volunteer:</strong> dual-write doubles load; deep-equality is fragile; feature-flag hygiene matters; the last 0.001% is real bugs.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://stripe.com/blog/online-migrations">Online migrations at scale — Stripe engineering blog</a> — the canonical four-step description from Stripe itself.</li>
+      <li><a href="https://github.com/github/scientist">GitHub Scientist</a> — the Ruby library Stripe used to shadow-read and compare old vs new code paths in production.</li>
+      <li><a href="https://youtu.be/FtJPvgMsn-Q">How Stripe Migrates Millions of Records and Schema with Zero Downtime</a> — the video walkthrough this page is built around.</li>
+      <li><a href="https://github.com/twitter/scalding">Scalding</a> — the Scala DSL on Hadoop / Cascading used for the offline backfill sweeps.</li>
+      <li><a href="https://microservices.io/patterns/data/transactional-outbox.html">Transactional Outbox pattern</a> — the safer alternative to raw dual-write.</li>
+      <li><a href="https://docs.aws.amazon.com/dms/latest/userguide/CHAP_Introduction.html">AWS DMS</a> and <a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Streams.html">DynamoDB Streams</a> — the AWS building blocks for a CDC-based variant.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

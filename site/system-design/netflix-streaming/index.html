@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Design Netflix — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #e50914;
+    --scenario-bg: #fff0f2;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #ffb703;
+    --laymen-bg: #fff8e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #000 0%, #831010 55%, #e50914 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); color: #1b2230; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Design Netflix</h1>
+    <p>260M+ subscribers, ~98% of traffic served from a private CDN inside your ISP, and a play button that has to feel instant on every screen in the world.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>We're designing a global <strong>on-demand video-streaming service with a curated catalog</strong> — a service that ingests studio masters, transcodes them into hundreds of device-specific renditions, delivers those bytes to a viewer in Nairobi or Nagoya with sub-second startup, and personalizes every homepage row for every profile. This is the archetype for <strong>Netflix</strong>, and closely related to <strong>Amazon Prime Video</strong>, <strong>Disney+</strong>, <strong>Hulu</strong>, <strong>HBO Max</strong>, <strong>Apple TV+</strong>, and <strong>Hotstar/JioCinema</strong>. Netflix differs from YouTube in one critical way: the <strong>catalog is curated and finite</strong>, not user-uploaded — which changes the CDN math dramatically.</p>
+    <p>Companies build this because <strong>streaming has replaced broadcast television</strong>, and doing it well is the difference between a Sunday-night binge and an angry churn. The design touches every core distributed-systems primitive: a globally-distributed <strong>CDN</strong> (which Netflix famously operates itself as Open Connect), multi-region <strong>caching</strong> (EVCache on Memcached), <strong>distributed databases</strong> (Cassandra for viewing history, MySQL for billing), massive <strong>asynchronous pipelines</strong> (Kafka at 8 M events/sec peak), and a <strong>personalization stack</strong> that ranks the entire catalog per user per session. It's a favorite interview question because a good answer proves you can reason about the whole stack — not just a REST endpoint.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Explained without any tech words</h2>
+    <p><strong>The everyday problem.</strong> You come home, kick off your shoes, sit on the couch, and press play on a movie. It starts in about a second, looks crisp, and doesn't stutter — no matter whether you're in Tokyo, Toronto, or a small town in South Africa. That is genuinely magical, and the entire business of Netflix is making that one second feel effortless for hundreds of millions of people at the same time.</p>
+    <p><strong>The story of one tap.</strong> When you press play, Netflix doesn't fly the movie to you from a warehouse in California — that would take too long. Instead, Netflix has quietly shipped <strong>little fridges of hard drives</strong> (yes, real physical boxes) into your internet provider's building down the road, and it fills them up overnight with the movies most people in your neighborhood are likely to watch. So when you press play, the movie is not travelling across the ocean — it's coming from a box that is maybe a mile from your couch. That's why it starts so fast.</p>
+    <p><strong>The homepage magic.</strong> Before you even press play, Netflix has to decide <em>which shows to show you</em>. The homepage rows — "Trending Now," "Because You Watched…," "Top 10 in your country" — are not the same for anyone else. Netflix ran a giant matching game in the background all day, guessing which rows would tempt you the most, and even <strong>picked a different thumbnail image</strong> for the same show based on what it thinks you find eye-catching. All of that had to be ready the millisecond you opened the app.</p>
+    <p><strong>The hard part.</strong> The tricky bit is <strong>Sunday evening in every timezone</strong>. Everyone finishes dinner, everyone wants to watch, and suddenly Netflix is the biggest single tenant on the entire internet — at peak, more than a tenth of the world's internet traffic is Netflix videos moving through the pipes. If they got it even slightly wrong — one crashed database, one overloaded cache — you'd see a spinning circle instead of a show, and you'd cancel your subscription. The whole design is built around <strong>never showing that spinning circle</strong>, even when small pieces break in the background.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Browse</strong> a curated catalog, with personalized rows and search.</li>
+      <li><strong>Stream</strong> on 2 200+ device types with adaptive bitrate (HLS/DASH).</li>
+      <li><strong>Resume</strong> exactly where you left off — on any device.</li>
+      <li><strong>Recommend</strong> what to watch next, personalize every row and every thumbnail.</li>
+      <li><strong>Manage</strong> profiles, subscriptions, billing.</li>
+      <li><strong>Ingest</strong> studio masters, transcode into 1 100+ device-specific renditions per title.</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Startup latency &lt; 1 second</strong> — the "TTFF" (time to first frame) target.</li>
+      <li><strong>Availability &gt; strong consistency</strong> everywhere except billing. A stale view count is fine; a stuck play button is fatal.</li>
+      <li><strong>Global reach</strong>: viewers on every continent, on 3G to gigabit fiber.</li>
+      <li><strong>Read-heavy</strong>: ~9:1 read/write ratio on viewing history alone; on catalog metadata, closer to 10 000:1.</li>
+      <li><strong>Peak-heavy</strong>: evening prime-time in each region is ~5–8× the daily average.</li>
+    </ul>
+
+    <h3>Back-of-the-envelope (Netflix-scale)</h3>
+    <table>
+      <thead><tr><th>Metric</th><th>Estimate</th><th>How we got there</th></tr></thead>
+      <tbody>
+        <tr><td>Subscribers</td><td>~260 M globally</td><td>Public 2024 figure.</td></tr>
+        <tr><td>Hours streamed / day</td><td>~250 M+ hours</td><td>~5 hours/week × 260 M / 7.</td></tr>
+        <tr><td>Peak concurrent streams</td><td>~40 M+ globally at prime time</td><td>Multiple public estimates.</td></tr>
+        <tr><td>Avg stream bitrate</td><td>~3.65 Mbps</td><td>SD 500 kbps up to 4K ~15 Mbps; weighted avg.</td></tr>
+        <tr><td>Peak egress bandwidth</td><td>~150–200 Tbps aggregate</td><td>40 M × ~4 Mbps.</td></tr>
+        <tr><td>Netflix % of internet at peak</td><td>~10-15% North America evenings</td><td>Sandvine reports.</td></tr>
+        <tr><td>CDN hit rate (Open Connect)</td><td>~98%</td><td>Only ~2% of edge traffic hits origin.</td></tr>
+        <tr><td>Renditions per title</td><td>~1 100–1 200</td><td>Codecs × resolutions × audio × HDR × subtitles.</td></tr>
+        <tr><td>Catalog storage (all renditions)</td><td>~PB per major title over time</td><td>~1 PB for full HD/UHD library variants of a hit series.</td></tr>
+        <tr><td>Event pipeline (Kafka)</td><td>~500 B events/day, peak 8 M events/sec, 24 GB/sec, ~1.3 PB/day</td><td>Netflix Tech Blog / GfG.</td></tr>
+        <tr><td>Cassandra footprint</td><td>50+ clusters, 500+ nodes, biggest cluster 250 K writes/sec</td><td>Netflix Tech Blog.</td></tr>
+        <tr><td>Elasticsearch</td><td>~150 clusters, ~3 500 hosts</td><td>Netflix Tech Blog.</td></tr>
+      </tbody>
+    </table>
+    <p>Two costs dominate: <strong>egress bandwidth at peak</strong> and <strong>storage of thousands of renditions per title across the CDN</strong>. That's why Netflix runs its own CDN (Open Connect) — buying that egress from a commercial CDN would be untenable at their scale.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The whole system splits into <strong>three planes</strong>. The <strong>control plane</strong> runs on AWS: microservices behind the Zuul gateway, EVCache in front of Cassandra and MySQL, Kafka for events. Its job is to answer "who are you, what can you watch, where did you leave off, what should we recommend?" — and to hand the client a <strong>signed manifest URL</strong>. The <strong>data plane</strong> is <strong>Open Connect</strong>: Netflix's own CDN, with servers embedded directly inside ISPs and IXPs. It stores the transcoded video and serves 98%+ of playback bytes without ever touching AWS. The <strong>offline plane</strong> is the ingest+transcode pipeline plus the ML/recommendation training pipeline — everything that runs on Spark and EMR while you sleep.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Netflix high-level architecture">
+        <defs>
+          <marker id="nfar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="nfar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#f4a259"/>
+          </marker>
+          <marker id="nfar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#2dc653"/>
+          </marker>
+        </defs>
+        <style>
+          .nfbox { fill:#1b2940; stroke:#4361ee; stroke-width:1.5; rx:10; }
+          .nfaws { fill:#1b2940; stroke:#ff9900; stroke-width:1.5; rx:10; }
+          .nfoc  { fill:#1b2940; stroke:#e50914; stroke-width:1.5; rx:10; }
+          .nfoff { fill:#1b2940; stroke:#7048e8; stroke-width:1.5; rx:10; }
+          .nflbl { fill:#eef2ff; font: 700 12px sans-serif; text-anchor:middle; }
+          .nfsub { fill:#9db1e6; font: 400 10px sans-serif; text-anchor:middle; }
+          .flow { stroke:#7fa2ff; stroke-width:2; fill:none; }
+          .async{ stroke:#f4a259; stroke-width:2; fill:none; stroke-dasharray:6 4; }
+          .data { stroke:#2dc653; stroke-width:2; fill:none; }
+          .grp  { fill:none; stroke:#2a3652; stroke-width:1; stroke-dasharray:2 3; rx:12; }
+          .grpL { fill:#7f8aa0; font: 700 11px sans-serif; }
+        </style>
+
+        <!-- Client -->
+        <rect class="nfbox" x="30" y="30" width="130" height="60"/>
+        <text class="nflbl" x="95" y="56">Netflix Client</text>
+        <text class="nfsub" x="95" y="74">TV / phone / browser</text>
+
+        <!-- CONTROL PLANE (AWS) -->
+        <rect class="grp" x="200" y="12" width="670" height="220"/>
+        <text class="grpL" x="212" y="30">CONTROL PLANE · AWS multi-region</text>
+
+        <rect class="nfaws" x="215" y="50" width="120" height="50"/>
+        <text class="nflbl" x="275" y="72">Zuul Gateway</text>
+        <text class="nfsub" x="275" y="88">routing · auth · canary</text>
+
+        <rect class="nfaws" x="355" y="50" width="140" height="50"/>
+        <text class="nflbl" x="425" y="72">Microservices</text>
+        <text class="nfsub" x="425" y="88">catalog · user · playback</text>
+
+        <rect class="nfaws" x="515" y="50" width="140" height="50"/>
+        <text class="nflbl" x="585" y="72">EVCache</text>
+        <text class="nfsub" x="585" y="88">Memcached, multi-AZ</text>
+
+        <rect class="nfaws" x="675" y="50" width="180" height="50"/>
+        <text class="nflbl" x="765" y="72">Recs Service</text>
+        <text class="nfsub" x="765" y="88">candidate + rank + bandit</text>
+
+        <rect class="nfaws" x="215" y="120" width="120" height="50"/>
+        <text class="nflbl" x="275" y="142">Eureka</text>
+        <text class="nfsub" x="275" y="158">service discovery</text>
+
+        <rect class="nfaws" x="355" y="120" width="140" height="50"/>
+        <text class="nflbl" x="425" y="142">Cassandra</text>
+        <text class="nfsub" x="425" y="158">viewing history · profiles</text>
+
+        <rect class="nfaws" x="515" y="120" width="140" height="50"/>
+        <text class="nflbl" x="585" y="142">MySQL</text>
+        <text class="nfsub" x="585" y="158">billing · ACID</text>
+
+        <rect class="nfaws" x="675" y="120" width="180" height="50"/>
+        <text class="nflbl" x="765" y="142">Elasticsearch</text>
+        <text class="nfsub" x="765" y="158">search · ops logs</text>
+
+        <rect class="nfaws" x="215" y="180" width="290" height="42"/>
+        <text class="nflbl" x="360" y="200">Kafka · 500B events/day · 24 GB/s peak</text>
+        <text class="nfsub" x="360" y="216">viewing events, telemetry, playback QoE</text>
+
+        <rect class="nfaws" x="525" y="180" width="330" height="42"/>
+        <text class="nflbl" x="690" y="200">S3 · master originals + rendition staging</text>
+        <text class="nfsub" x="690" y="216">source of truth · cross-region replicated</text>
+
+        <!-- Client → Zuul -->
+        <path class="flow" d="M160 60 L215 75" marker-end="url(#nfar)"/>
+        <path class="flow" d="M335 75 L355 75" marker-end="url(#nfar)"/>
+        <path class="flow" d="M495 75 L515 75" marker-end="url(#nfar)"/>
+        <path class="flow" d="M655 75 L675 75" marker-end="url(#nfar)"/>
+        <path class="flow" d="M425 100 L425 120" marker-end="url(#nfar)"/>
+        <path class="flow" d="M585 100 L585 120" marker-end="url(#nfar)"/>
+        <path class="async" d="M425 170 L425 180" marker-end="url(#nfar2)"/>
+
+        <!-- OPEN CONNECT (data plane) -->
+        <rect class="grp" x="30" y="250" width="840" height="140"/>
+        <text class="grpL" x="42" y="268">DATA PLANE · Open Connect CDN · ~98% hit rate</text>
+
+        <rect class="nfoc" x="60" y="290" width="180" height="70"/>
+        <text class="nflbl" x="150" y="316">OCA in your ISP</text>
+        <text class="nfsub" x="150" y="334">embedded appliance</text>
+        <text class="nfsub" x="150" y="348">~1 mile from viewer</text>
+
+        <rect class="nfoc" x="280" y="290" width="180" height="70"/>
+        <text class="nflbl" x="370" y="316">OCA at IXP</text>
+        <text class="nfsub" x="370" y="334">SFI peering</text>
+        <text class="nfsub" x="370" y="348">metro fallback</text>
+
+        <rect class="nfoc" x="500" y="290" width="180" height="70"/>
+        <text class="nflbl" x="590" y="316">Regional Fill Cluster</text>
+        <text class="nfsub" x="590" y="334">tier-2 · fills the edge</text>
+
+        <rect class="nfoc" x="720" y="290" width="140" height="70"/>
+        <text class="nflbl" x="790" y="316">Origin (S3)</text>
+        <text class="nfsub" x="790" y="334">last-resort · ~2%</text>
+
+        <path class="data" d="M160 90 L160 290" marker-end="url(#nfar3)"/>
+        <path class="async" d="M240 325 L280 325" marker-end="url(#nfar2)"/>
+        <path class="async" d="M460 325 L500 325" marker-end="url(#nfar2)"/>
+        <path class="async" d="M680 325 L720 325" marker-end="url(#nfar2)"/>
+
+        <!-- OFFLINE PLANE -->
+        <rect class="grp" x="30" y="410" width="840" height="100"/>
+        <text class="grpL" x="42" y="428">OFFLINE PLANE · ingest, transcode, ML training</text>
+
+        <rect class="nfoff" x="60" y="450" width="180" height="50"/>
+        <text class="nflbl" x="150" y="472">Studio Ingest</text>
+        <text class="nfsub" x="150" y="488">masters → S3</text>
+
+        <rect class="nfoff" x="280" y="450" width="180" height="50"/>
+        <text class="nflbl" x="370" y="472">Transcode Farm</text>
+        <text class="nfsub" x="370" y="488">1 100+ renditions / title</text>
+
+        <rect class="nfoff" x="500" y="450" width="180" height="50"/>
+        <text class="nflbl" x="590" y="472">Prefill to OCAs</text>
+        <text class="nfsub" x="590" y="488">nightly, off-peak</text>
+
+        <rect class="nfoff" x="720" y="450" width="140" height="50"/>
+        <text class="nflbl" x="790" y="472">Recs Training</text>
+        <text class="nfsub" x="790" y="488">Spark on EMR</text>
+
+        <path class="async" d="M240 475 L280 475" marker-end="url(#nfar2)"/>
+        <path class="async" d="M460 475 L500 475" marker-end="url(#nfar2)"/>
+        <path class="async" d="M680 475 L720 475" marker-end="url(#nfar2)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7fa2ff"></span>Sync API call (control plane)</span>
+        <span><span class="dot" style="background:#2dc653"></span>Video bytes (data plane)</span>
+        <span><span class="dot" style="background:#f4a259"></span>Async / offline</span>
+      </div>
+    </div>
+
+    <p>The magic move is that the two planes <strong>only meet once, at manifest time</strong>. The client asks AWS "what should I play, and where's my personalized homepage?" — AWS returns metadata + a manifest URL. From that moment on, every byte of video comes from Open Connect, never from AWS. That's how Netflix keeps its AWS bill tractable and its startup latency low.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a play request run, step by step</h2>
+    <p>This walks through the full path of pressing "play" on a Netflix title: browse (control plane) → manifest (control plane) → segments (Open Connect data plane) → adaptive bitrate as network changes. Notice how AWS is completely out of the loop after the manifest hop.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Netflix play request animation">
+        <defs>
+          <marker id="anfar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <style>
+          .abox { fill:#1b2940; stroke:#4361ee; stroke-width:1.5; rx:8; }
+          .anfaws { fill:#1b2940; stroke:#ff9900; stroke-width:1.5; rx:8; }
+          .anfoc { fill:#1b2940; stroke:#e50914; stroke-width:1.5; rx:8; }
+          .albl { fill:#eef2ff; font: 700 12px sans-serif; text-anchor:middle; }
+          .asub { fill:#9db1e6; font: 400 10px sans-serif; text-anchor:middle; }
+          .aflow { stroke:#7fa2ff; stroke-width:1.6; fill:none; }
+          .lane  { fill:none; stroke:#2a3652; stroke-width:1; stroke-dasharray:2 3; rx:10; }
+          .laneL { fill:#7f8aa0; font: 700 10px sans-serif; }
+          .chunk { rx:3; }
+        </style>
+
+        <!-- CONTROL PLANE lane -->
+        <rect class="lane" x="10" y="10" width="880" height="150"/>
+        <text class="laneL" x="20" y="26">CONTROL PLANE · AWS</text>
+
+        <rect class="abox" x="30" y="60" width="90" height="50"/>
+        <text class="albl" x="75" y="82">Client</text>
+        <text class="asub" x="75" y="98">Smart TV</text>
+
+        <rect id="zuul" class="anfaws a-el" x="150" y="60" width="120" height="50"/>
+        <text class="albl" x="210" y="82">Zuul</text>
+        <text class="asub" x="210" y="98">gateway · auth</text>
+
+        <rect id="evc" class="anfaws a-el" x="300" y="60" width="130" height="50"/>
+        <text class="albl" x="365" y="82">EVCache</text>
+        <text class="asub" x="365" y="98">Memcached</text>
+
+        <rect id="cass" class="anfaws a-el" x="460" y="60" width="130" height="50"/>
+        <text class="albl" x="525" y="82">Cassandra</text>
+        <text class="asub" x="525" y="98">viewing history</text>
+
+        <rect id="recs" class="anfaws a-el" x="620" y="60" width="130" height="50"/>
+        <text class="albl" x="685" y="82">Recs Service</text>
+        <text class="asub" x="685" y="98">rank + bandit</text>
+
+        <rect id="mani" class="anfaws a-el" x="780" y="60" width="90" height="50"/>
+        <text class="albl" x="825" y="82">Manifest</text>
+        <text class="asub" x="825" y="98">signed URL</text>
+
+        <path class="aflow" d="M120 85 L150 85" marker-end="url(#anfar)"/>
+        <path class="aflow" d="M270 85 L300 85" marker-end="url(#anfar)"/>
+        <path class="aflow" d="M430 85 L460 85" marker-end="url(#anfar)"/>
+        <path class="aflow" d="M590 85 L620 85" marker-end="url(#anfar)"/>
+        <path class="aflow" d="M750 85 L780 85" marker-end="url(#anfar)"/>
+
+        <!-- DATA PLANE lane -->
+        <rect class="lane" x="10" y="180" width="880" height="190"/>
+        <text class="laneL" x="20" y="196">DATA PLANE · Open Connect</text>
+
+        <rect class="abox" x="30" y="220" width="90" height="50"/>
+        <text class="albl" x="75" y="242">Client</text>
+        <text class="asub" x="75" y="258">plays segments</text>
+
+        <rect id="oca" class="anfoc a-el" x="160" y="220" width="140" height="50"/>
+        <text class="albl" x="230" y="242">OCA in ISP</text>
+        <text class="asub" x="230" y="258">~1 mile away</text>
+
+        <rect id="ixp" class="anfoc a-el" x="330" y="220" width="140" height="50"/>
+        <text class="albl" x="400" y="242">OCA at IXP</text>
+        <text class="asub" x="400" y="258">metro fallback</text>
+
+        <rect id="fill" class="anfoc a-el" x="500" y="220" width="140" height="50"/>
+        <text class="albl" x="570" y="242">Regional Fill</text>
+        <text class="asub" x="570" y="258">tier-2</text>
+
+        <rect id="orig" class="anfoc a-el" x="670" y="220" width="130" height="50"/>
+        <text class="albl" x="735" y="242">Origin (S3)</text>
+        <text class="asub" x="735" y="258">last resort</text>
+
+        <!-- Segment bar -->
+        <g id="segbar" transform="translate(160,300)">
+          <rect id="s1" class="abox chunk a-el a-hidden" data-anim x="0"  y="0" width="34" height="20" fill="#2dc653"/>
+          <rect id="s2" class="abox chunk a-el a-hidden" data-anim x="40" y="0" width="34" height="20" fill="#2dc653"/>
+          <rect id="s3" class="abox chunk a-el a-hidden" data-anim x="80" y="0" width="34" height="20" fill="#2dc653"/>
+          <rect id="s4" class="abox chunk a-el a-hidden" data-anim x="120" y="0" width="34" height="20" fill="#f4a259"/>
+          <rect id="s5" class="abox chunk a-el a-hidden" data-anim x="160" y="0" width="34" height="20" fill="#f4a259"/>
+          <rect id="s6" class="abox chunk a-el a-hidden" data-anim x="200" y="0" width="34" height="20" fill="#f7567c"/>
+          <rect id="s7" class="abox chunk a-el a-hidden" data-anim x="240" y="0" width="34" height="20" fill="#2dc653"/>
+          <text class="asub" x="0" y="38" style="text-anchor:start">← time — 4K / HD / SD segments as bandwidth changes</text>
+        </g>
+
+        <path class="aflow" d="M120 245 L160 245" marker-end="url(#anfar)"/>
+        <path class="aflow" d="M300 245 L330 245" marker-end="url(#anfar)"/>
+        <path class="aflow" d="M470 245 L500 245" marker-end="url(#anfar)"/>
+        <path class="aflow" d="M640 245 L670 245" marker-end="url(#anfar)"/>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'AWS answers "what to play". Open Connect delivers the bytes. The two planes only meet at manifest time.',
+          interval: 1700,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.add('a-hidden');
+              el.classList.remove('a-glow', 'a-dim');
+              el.removeAttribute('transform');
+            });
+            ['#zuul','#evc','#cass','#recs','#mani',
+             '#oca','#ixp','#fill','#orig'].forEach(id => {
+              const el = r.querySelector(id);
+              if (el) el.classList.remove('a-glow', 'a-dim');
+            });
+          },
+          steps: [
+            { caption: 'Client opens the app → request hits Zuul (auth, routing, canary).',
+              apply: (r, $) => { $('#zuul').classList.add('a-glow'); } },
+            { caption: 'EVCache checked first — for hot metadata (title info, homepage rows) this is a cache hit.',
+              apply: (r, $) => { $('#zuul').classList.remove('a-glow'); $('#evc').classList.add('a-glow'); } },
+            { caption: 'Cache miss for user-specific data → Cassandra returns your viewing history and "resume where you left off".',
+              apply: (r, $) => { $('#evc').classList.remove('a-glow'); $('#cass').classList.add('a-glow'); } },
+            { caption: 'Recs service ranks candidates for the homepage and picks a personalized thumbnail image.',
+              apply: (r, $) => { $('#cass').classList.remove('a-glow'); $('#recs').classList.add('a-glow'); } },
+            { caption: 'Server returns a signed manifest URL — that\'s the last time AWS is in the loop. Everything below is Open Connect.',
+              apply: (r, $) => { $('#recs').classList.remove('a-glow'); $('#mani').classList.add('a-glow'); } },
+            { caption: 'Client asks the nearest OCA (inside your ISP) for the first segment — TTFF ~500ms.',
+              apply: (r, $) => { $('#mani').classList.remove('a-glow'); $('#oca').classList.add('a-glow');
+                                 $('#s1').classList.remove('a-hidden'); $('#s2').classList.remove('a-hidden'); $('#s3').classList.remove('a-hidden'); } },
+            { caption: 'Long tail miss? OCA at the IXP has it — still local to the metro.',
+              apply: (r, $) => { $('#oca').classList.remove('a-glow'); $('#ixp').classList.add('a-glow');
+                                 $('#s4').classList.remove('a-hidden'); } },
+            { caption: 'Network dips → player asks for a lower bitrate from the same OCA — no rebuffer.',
+              apply: (r, $) => { $('#ixp').classList.remove('a-glow'); $('#oca').classList.add('a-glow');
+                                 $('#s5').classList.remove('a-hidden'); $('#s6').classList.remove('a-hidden'); } },
+            { caption: 'Bandwidth recovers → back to HD. All of this happens without any origin traffic — ~98% CDN hit rate.',
+              apply: (r, $) => { $('#s7').classList.remove('a-hidden'); $('#orig').classList.add('a-dim'); } }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. Open Connect — a private CDN inside your ISP</h3>
+    <p>Netflix built its own CDN because the commercial CDNs of 2011 couldn't handle its egress economics. Open Connect deploys physical appliances — <strong>OCAs (Open Connect Appliances)</strong> — in two places: <strong>embedded inside ISP networks</strong> (free of charge to qualifying ISPs, over <strong>1 000+ ISP partners</strong>), and <strong>clustered at internet exchange points (IXPs)</strong> via settlement-free interconnect (SFI). Each OCA is packed with HDDs and NVMe SSDs, and each is prefilled during the ISP's off-peak window (usually 2–6 AM local) with the titles most likely to be watched in that region the next day. When you press play in Tokyo, the bytes are already sitting on a box a mile from your couch. Netflix reports the CDN hit rate at <strong>~98%</strong> — only ~2% of playback traffic escapes back toward AWS. This is the single biggest reason startup latency (TTFF) is under a second: the bytes never travel far.</p>
+
+    <h3>2. Streaming — DASH/HLS adaptive bitrate at rendition-level extreme fan-out</h3>
+    <p>Every title is transcoded into <strong>~1 100–1 200 renditions</strong>: resolutions from 240p through 4K HDR, codecs H.264 (broad), H.265/HEVC (bandwidth-efficient), VP9 (older Android), AV1 (newer), audio in dozens of languages and multiple bitrates (stereo, 5.1, Atmos), plus subtitles. Netflix uses <strong>per-title encoding</strong> and <strong>per-shot encoding</strong> — running an optimization to find the best bitrate ladder for <em>each individual title</em> (a talky drama needs fewer bits than a Marvel action sequence). At playback, the client uses <strong>DASH or HLS adaptive bitrate</strong>: it measures its own bandwidth and buffer level and switches rendition between segments. This is why a viewer whose Wi-Fi drops from strong to weak sees the picture dim slightly instead of buffering.</p>
+
+    <h3>3. Startup latency — how to make TTFF &lt; 1 second</h3>
+    <p>Reducing time-to-first-frame is a design theme, not one component. Key techniques: (a) <strong>the manifest is tiny</strong> — a few KB — and can be fetched from AWS in ~100 ms via anycast + regional caching; (b) <strong>segments are pre-warmed</strong> in the OCA closest to you before you even open the app — the "top 10 in your country" is on the local box; (c) <strong>parallel probes</strong> at manifest time — the client fires off connections to multiple OCAs and races them; (d) <strong>the first segment is intentionally short</strong> (2–4 s vs 6–8 s later segments) so the buffer fills fast; (e) <strong>the initial rendition is chosen conservatively</strong> — start at a bitrate the client is likely to sustain, then ratchet up. In an interview, name these five tactics: "manifest, prewarm, parallel probes, short-first-segment, conservative-first-bitrate."</p>
+
+    <h3>4. Caching — EVCache and the "cold cache is worse than no cache" problem</h3>
+    <p><strong>EVCache</strong> is Netflix's open-source wrapper around Memcached. It's designed for the failure mode Netflix cares about: <strong>cold caches during a region failover</strong>. Writes are propagated to <em>all</em> replica nodes and cross-region; reads hit only the nearest cluster. This means the cache is <strong>full and warm on both coasts</strong>, so when a region evacuates, the incoming region doesn't stampede Cassandra. Metadata caches (title info, homepage rows) commonly hit &gt; 99%. This pattern — <strong>write-fan-out, read-local</strong> — is the reason Netflix can survive an entire AWS region failure without visible impact to the user.</p>
+
+    <h3>5. Distributed databases — Cassandra + MySQL, each for a specific reason</h3>
+    <p><strong>Cassandra</strong> holds the write-heavy, eventually-consistent workloads: viewing history (~9:1 write:read), user activity, playback events. Netflix runs <strong>50+ Cassandra clusters, 500+ nodes</strong>, with the biggest cluster handling <strong>250 000 writes per second</strong>. To keep viewing-history reads fast, Netflix splits it into a <strong>LiveVH</strong> (recent, uncompressed rows) and <strong>CompressedVH</strong> (older rows, compressed and denser) — a classic hot/cold tier. <strong>MySQL</strong> is reserved for the <em>strongly-consistent</em> workloads: billing, subscriptions, payment. Netflix runs MySQL master-master with InnoDB and cross-region read replicas; failover is DNS-driven via Route 53.</p>
+
+    <h3>6. Event pipeline — Kafka, at eye-watering scale</h3>
+    <p>Every play, pause, scrub, rating, and click flows into <strong>Kafka: ~500 billion events per day, peak 8 million events per second, ~24 GB/s, ~1.3 PB/day</strong>. Consumers include: the recommendation feature store (real-time signals), Elasticsearch (for on-call ops and CS tooling), the analytics warehouse (S3 → Spark → Redshift-equivalent), and the QoE (quality-of-experience) telemetry pipeline that measures whether that spinning circle ever appeared. Kafka being the "spinal cord" of the data plane is a common answer at Netflix-scale interviews.</p>
+
+    <h3>7. Recommendations — two-stage ranking + contextual bandits + artwork personalization</h3>
+    <p>The recommendation problem at Netflix is not just "what should the user watch next" — it's <strong>"which rows should be on the homepage, in what order, with what titles in each row, and which thumbnail image for each title."</strong> The high-level architecture is a <strong>two-stage funnel</strong>: (1) <em>candidate generation</em> narrows the ~15 000-title catalog to a few thousand per profile using collaborative filtering, embeddings, and content-based signals; (2) <em>ranking</em> — a heavier GBDT/neural model — orders those candidates using rich features (device, time of day, session context, freshness). On top of ranking sits a <strong>contextual bandit</strong> for row ordering and for <strong>thumbnail personalization</strong>: Netflix has multiple thumbnail images per title and learns which image drives clicks for which taste cluster. Training runs on Spark; online serving is a low-latency service in every region. Model retraining is daily; real-time signals (this session's clicks) feed a feature store so the recommendations adapt as you browse.</p>
+
+    <h3>8. Handling peak traffic — autoscale, chaos-test, and cache-warm</h3>
+    <p>Netflix does not scale reactively — it scales <strong>predictively</strong>. Traffic is highly seasonal (evenings in each region + weekends + release windows), so services are <strong>pre-scaled</strong> before evening prime time. Chaos engineering (<strong>Chaos Monkey, Simian Army, ChAP</strong>) constantly kills nodes and even entire regions in production to prove the failover paths still work. Regional evacuations are practiced monthly. The <strong>zone-based load balancer</strong> is two-tier — DNS round-robin across zones, then round-robin across instances within a zone — so a zone loss doesn't cascade. Combined with the <strong>full cross-region cache</strong> in EVCache, the failure of an entire AWS region is a non-event for the viewer.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Under every subsystem is a specific algorithm doing the heavy lifting. Naming them signals depth.</p>
+
+    <table>
+      <thead><tr><th>Component</th><th>Structure / algorithm</th><th>Why chosen &amp; complexity</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Playback ID / session</td>
+          <td>Snowflake-style 64-bit IDs</td>
+          <td>Time-sortable, unique without coordination. O(1).</td>
+        </tr>
+        <tr>
+          <td>Segment lookup on watch</td>
+          <td>Consistent-hashed key-value on <code>(titleId, resolution, segmentIndex)</code></td>
+          <td>OCA finds segment in O(1); consistent hashing keeps mapping stable on scale-out.</td>
+        </tr>
+        <tr>
+          <td>Adaptive bitrate</td>
+          <td>Rate + buffer PID controller (BOLA/BBA-style)</td>
+          <td>Smooth switches; O(1) per segment on the client.</td>
+        </tr>
+        <tr>
+          <td>Per-title / per-shot encoding</td>
+          <td>Convex-hull optimization over (bitrate, quality) with VMAF</td>
+          <td>Finds the tightest ladder for that title's complexity — offline, O(#shots × #bitrates).</td>
+        </tr>
+        <tr>
+          <td>CDN prefill</td>
+          <td>Popularity forecast (per-region top-N) + Zipf weighting</td>
+          <td>The head of the distribution is 90%+ of watches, so prefilling top-N gets you most of the way.</td>
+        </tr>
+        <tr>
+          <td>Cache eviction (EVCache)</td>
+          <td>LRU / LFU inside Memcached slabs</td>
+          <td>O(1) amortized; hot metadata never evicted.</td>
+        </tr>
+        <tr>
+          <td>Viewing history</td>
+          <td>Wide-row Cassandra by userId; time-sorted; TTL on LiveVH</td>
+          <td>Write-heavy 9:1 ratio; append-only + tombstones handled by compaction.</td>
+        </tr>
+        <tr>
+          <td>Candidate generation (recs)</td>
+          <td>Approximate nearest neighbor over user+item embeddings (HNSW/FAISS)</td>
+          <td>Sub-linear (~O(log N)) over the catalog vs O(N) brute force.</td>
+        </tr>
+        <tr>
+          <td>Ranking (recs)</td>
+          <td>Gradient-boosted trees + deep neural net</td>
+          <td>Bounded O(features × candidates) with candidates capped ~500.</td>
+        </tr>
+        <tr>
+          <td>Row ordering &amp; thumbnails</td>
+          <td>Contextual multi-armed bandit (LinUCB / Thompson sampling)</td>
+          <td>Balances exploit (known winners) with explore (test new artwork). O(1) per impression.</td>
+        </tr>
+        <tr>
+          <td>Search / autocomplete</td>
+          <td>Inverted index + trie (Elasticsearch)</td>
+          <td>Prefix match O(k); ranking layer atop the postings.</td>
+        </tr>
+        <tr>
+          <td>Trending / real-time popularity</td>
+          <td>Count-min sketch, HyperLogLog for uniques</td>
+          <td>Sub-linear memory, tight-bounded approximation. O(1) update.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>The one to remember: <strong>Zipf-driven CDN prefill</strong>. The reason Open Connect hits 98% is not clever caching — it's that 90% of watches concentrate on 10% of titles, and Netflix ships those bytes to your ISP overnight.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>Netflix runs its control plane on AWS across multiple regions, but the CDN (Open Connect) is Netflix-owned hardware, not AWS. If you re-implement Netflix's design entirely on AWS (a common interview follow-up), you'd replace Open Connect with CloudFront. Here is the mapping.</p>
+
+    <table>
+      <thead><tr><th>Component</th><th>AWS service</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>DNS / geo-routing</td><td>Route 53 (latency-based / geolocation)</td><td>Sends the viewer to the nearest region; failover on health.</td></tr>
+        <tr><td>API gateway</td><td>Zuul on EC2 / EKS (or API Gateway if fresh build)</td><td>Auth, canary, throttling, dynamic routing.</td></tr>
+        <tr><td>Microservices</td><td>EKS / ECS Fargate (Spring Boot / Java)</td><td>Netflix runs Java on EC2; either works.</td></tr>
+        <tr><td>Service discovery</td><td>Eureka (internal); AWS Cloud Map is the managed alternative</td><td>Client-side load balancing via Ribbon.</td></tr>
+        <tr><td>Cache</td><td>EVCache on ElastiCache Memcached (or DAX for DynamoDB)</td><td>Write-fan-out across AZs and regions; read-local. Warm on failover.</td></tr>
+        <tr><td>Viewing history / activity</td><td>Amazon Keyspaces (managed Cassandra) or self-hosted C* on EC2</td><td>Write-heavy 9:1; wide-row user-partitioned.</td></tr>
+        <tr><td>Billing / subscriptions</td><td>Aurora MySQL (multi-master) or RDS MySQL</td><td>ACID compliance; failover via Route 53.</td></tr>
+        <tr><td>Search &amp; ops</td><td>Amazon OpenSearch (managed Elasticsearch)</td><td>Search, log analytics, CS tooling.</td></tr>
+        <tr><td>Event bus</td><td>Amazon MSK (Kafka) or Kinesis Data Streams</td><td>Handles play/pause/QoE events at multi-GB/s.</td></tr>
+        <tr><td>Master originals + rendition staging</td><td>S3 with Cross-Region Replication</td><td>11 nines durability; source-of-truth for the catalog.</td></tr>
+        <tr><td>Cold storage</td><td>S3 Glacier Instant Retrieval</td><td>Older / rarely-served titles.</td></tr>
+        <tr><td>Transcode farm</td><td>AWS Elemental MediaConvert or EMR/EKS with FFmpeg on g5/inf2</td><td>1 100+ renditions per title, GPU-accelerated.</td></tr>
+        <tr><td>Content packaging + DRM</td><td>MediaPackage + Widevine/FairPlay/PlayReady</td><td>Just-in-time HLS/DASH manifests, DRM.</td></tr>
+        <tr><td>CDN (if not Open Connect)</td><td>CloudFront + Origin Shield</td><td>~600 PoPs; regional edge cache collapses origin fill.</td></tr>
+        <tr><td>Analytics / ML training</td><td>Kinesis Firehose → S3 → EMR Spark → Redshift / Athena</td><td>Feeds daily model retrain, QoE dashboards.</td></tr>
+        <tr><td>Recs online serving</td><td>SageMaker endpoints + OpenSearch k-NN (or MemoryDB Redis vector)</td><td>ANN candidate gen + real-time ranking.</td></tr>
+        <tr><td>Chaos engineering</td><td>AWS Fault Injection Simulator (managed Simian-Army-style)</td><td>Kill nodes, AZ, region on schedule to prove the design.</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Deployment story</strong>: services run <strong>active-active across 3 AWS regions</strong> (Netflix uses us-east-1, us-west-2, eu-west-1). Route 53 latency-based routing pins users to the nearest region; a regional evacuation just flips the health check and cache-warm-elsewhere ensures no thundering-herd on the surviving regions. S3 replicates masters cross-region so a regional loss cannot destroy the catalog. On the data plane, either <strong>Open Connect appliances</strong> in ISPs (Netflix's actual setup) or <strong>CloudFront with Origin Shield</strong> (the AWS-native equivalent) serves 95–98% of playback bytes locally.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>Two pieces of the design in C#: (1) the <strong>playback authorization</strong> endpoint that reads user state from EVCache/Cassandra and returns a signed manifest URL, and (2) a compact <strong>ABR (adaptive bitrate) selector</strong> the player uses to pick the next segment. These two together are the seam between the control plane and the data plane — exactly what an interviewer wants you to code.</p>
+
+    <h3>Playback authorization (ASP.NET Core minimal API)</h3>
+<pre><code><span class="kw">using</span> Amazon.S3;
+<span class="kw">using</span> Amazon.S3.Model;
+<span class="kw">using</span> Enyim.Caching;                <span class="cmt">// Memcached client (EVCache-equivalent)</span>
+<span class="kw">using</span> Cassandra;                    <span class="cmt">// Datastax C# driver</span>
+
+<span class="kw">var</span> app = WebApplication.CreateBuilder(args).Build();
+
+<span class="cmt">// One request: user opens a title → we return the signed manifest URL
+// and the "resume at" position. This is the LAST time AWS is in the loop
+// for this playback session — every subsequent byte comes from Open Connect.</span>
+app.MapGet(<span class="str">"/playback/{titleId}"</span>, <span class="kw">async</span> (
+        <span class="typ">string</span> titleId,
+        HttpContext ctx,
+        IMemcachedClient cache,
+        ICluster c) =&gt;
+{
+    <span class="kw">var</span> userId = ctx.User.FindFirst(<span class="str">"sub"</span>)!.Value;
+
+    <span class="cmt">// 1) Hot path: EVCache lookup for "resume position" — 99%+ hit rate.</span>
+    <span class="kw">var</span> cacheKey = <span class="str">$"resume:{userId}:{titleId}"</span>;
+    <span class="kw">var</span> resumeSec = <span class="kw">await</span> cache.GetValueAsync&lt;<span class="typ">int</span>?&gt;(cacheKey);
+
+    <span class="kw">if</span> (resumeSec <span class="kw">is null</span>)
+    {
+        <span class="cmt">// 2) Cache miss → Cassandra. Wide-row on userId; latest viewing rows first.</span>
+        <span class="kw">using var</span> session = <span class="kw">await</span> c.ConnectAsync(<span class="str">"viewing"</span>);
+        <span class="kw">var</span> ps = <span class="kw">await</span> session.PrepareAsync(
+            <span class="str">"SELECT position_sec FROM history WHERE user_id=? AND title_id=? LIMIT 1"</span>);
+        <span class="kw">var</span> row = (<span class="kw">await</span> session.ExecuteAsync(ps.Bind(userId, titleId))).FirstOrDefault();
+        resumeSec = row?.GetValue&lt;<span class="typ">int</span>&gt;(<span class="str">"position_sec"</span>) ?? <span class="str">0</span>;
+
+        <span class="cmt">// Write-through so the next request is a cache hit.</span>
+        <span class="kw">await</span> cache.SetAsync(cacheKey, resumeSec.Value, TimeSpan.FromMinutes(<span class="str">10</span>));
+    }
+
+    <span class="cmt">// 3) Pick the OCA closest to the client. In Open Connect this is BGP + DNS
+    //    steering; on AWS you'd let CloudFront do it automatically.</span>
+    <span class="kw">var</span> ocaHost = OcaRouter.PickHostFor(ctx.Connection.RemoteIpAddress!);
+
+    <span class="cmt">// 4) Mint a short-lived signed URL for the manifest (segment URLs inside
+    //    the manifest are also signed). This is the whole handoff to the CDN.</span>
+    <span class="kw">var</span> manifestUrl = SignedUrl.Build(
+        host:   ocaHost,
+        path:   <span class="str">$"/manifests/{titleId}/master.m3u8"</span>,
+        ttl:    TimeSpan.FromHours(<span class="str">6</span>),
+        userId: userId);
+
+    <span class="kw">return</span> Results.Ok(<span class="kw">new</span> {
+        titleId,
+        manifestUrl,
+        resumeSec,
+        drmLicenseUrl = <span class="str">"https://drm.netflix.example/widevine"</span>
+    });
+});
+
+app.Run();
+</code></pre>
+
+    <h3>Client-side ABR selector (segment-by-segment)</h3>
+<pre><code><span class="cmt">// Buffer-based ABR: choose the next segment's bitrate based on how much
+// buffer we already have + measured throughput. This is the algorithm
+// running inside every Netflix client to keep playback smooth without
+// buffering. Similar in spirit to BOLA/BBA published algorithms.</span>
+<span class="kw">public sealed class</span> <span class="typ">AbrSelector</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">int</span>[] _ladderKbps;         <span class="cmt">// e.g. [400, 1200, 3000, 6000, 12000]</span>
+    <span class="kw">private double</span> _emaKbps = <span class="str">2000</span>;              <span class="cmt">// EWMA of measured throughput</span>
+    <span class="kw">private const double</span> Alpha = <span class="str">0.3</span>;             <span class="cmt">// smoothing factor</span>
+
+    <span class="kw">public</span> <span class="typ">AbrSelector</span>(<span class="typ">int</span>[] ladderKbps) =&gt; _ladderKbps = ladderKbps;
+
+    <span class="cmt">// Called after each segment download completes.</span>
+    <span class="kw">public void</span> ObserveSegment(<span class="typ">long</span> bytes, TimeSpan elapsed)
+    {
+        <span class="kw">var</span> kbps = (bytes * <span class="str">8.0</span>) / (elapsed.TotalSeconds * <span class="str">1000</span>);
+        _emaKbps = Alpha * kbps + (<span class="str">1</span> - Alpha) * _emaKbps;
+    }
+
+    <span class="cmt">// Pick the bitrate for the next segment.</span>
+    <span class="kw">public</span> <span class="typ">int</span> PickBitrateKbps(<span class="typ">double</span> bufferSec)
+    {
+        <span class="cmt">// Safety headroom: never request a bitrate above 80% of measured throughput.</span>
+        <span class="kw">var</span> ceiling = _emaKbps * <span class="str">0.8</span>;
+
+        <span class="cmt">// If buffer is tiny (&lt; 8s), be very conservative — avoid the rebuffer cliff.
+        // If buffer is fat (&gt; 30s), we can afford to reach for the top of the ladder.</span>
+        <span class="kw">var</span> allowanceFactor = bufferSec <span class="kw">switch</span> {
+            &lt; <span class="str">8</span>   =&gt; <span class="str">0.6</span>,
+            &lt; <span class="str">15</span>  =&gt; <span class="str">0.8</span>,
+            &lt; <span class="str">30</span>  =&gt; <span class="str">1.0</span>,
+            _         =&gt; <span class="str">1.2</span>
+        };
+        <span class="kw">var</span> target = ceiling * allowanceFactor;
+
+        <span class="cmt">// Pick the highest rung of the ladder we can afford.</span>
+        <span class="kw">var</span> pick = _ladderKbps[<span class="str">0</span>];
+        <span class="kw">foreach</span> (<span class="kw">var</span> r <span class="kw">in</span> _ladderKbps)
+            <span class="kw">if</span> (r &lt;= target) pick = r;
+        <span class="kw">return</span> pick;
+    }
+}
+</code></pre>
+    <p>Two shapes to notice. The <strong>authorization endpoint is thin</strong> — cache first, DB fallback, mint a signed URL, return. That's it. The <strong>real complexity lives on the client</strong>: bitrate selection, segment prefetch, decoder buffer management. This is the correct division of labor for a streaming service — put the intelligence at the edge where the network conditions are actually known.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Where it can break</h3>
+    <p>The three real bottlenecks are <strong>evening prime-time egress</strong> in a single metro (solved by prefilled OCAs), <strong>Cassandra hot partitions</strong> from a global superstar profile (solved by wide-row bucketing and TTL'd LiveVH), and <strong>recommendation freshness lag</strong> — training is daily but users expect instant reactions to their behavior (solved by real-time features and contextual bandits on top of the stale ranker). A subtle failure mode: a rendition that's bad but shipped everywhere — Netflix mitigates this by rolling out new encodes gradually and A/B-testing quality metrics (VMAF) against real users.</p>
+
+    <h3>Consistency vs availability</h3>
+    <p>Everything user-facing chooses <strong>availability</strong>. Viewing history, resume positions, view counts, likes are all eventually consistent — you might see a title show up on two devices' "continue watching" rows a few seconds apart. <strong>Billing</strong> is the exception: it lives in MySQL with ACID semantics because charging you twice would be worse than a spinning circle. In an interview, name this split: <em>"read paths are AP; the money path is CP."</em></p>
+
+    <h3>Likely follow-up questions (with crisp answers)</h3>
+    <div class="qa"><p class="q">Why did Netflix build its own CDN instead of using Akamai or CloudFront?</p>
+      <p class="a">Egress economics at their scale. Netflix is ~10-15% of North American peak internet traffic; commercial CDN pricing on that volume was untenable. Open Connect also gives them tighter control over prefill, telemetry, and codec rollouts — they own the whole video path.</p></div>
+
+    <div class="qa"><p class="q">How does an OCA know what to prefill?</p>
+      <p class="a">Netflix runs a daily popularity forecast per region using recent viewing patterns and release calendars. Each OCA gets a manifest of what to prefill overnight; content moves from the tier-2 regional cluster to the OCA during ISP off-peak hours.</p></div>
+
+    <div class="qa"><p class="q">What happens if a whole AWS region goes down?</p>
+      <p class="a">Route 53 fails DNS over to the surviving region(s); Zuul + microservices are already running there active-active. The critical trick is EVCache is <strong>write-fan-out cross-region</strong>, so the surviving region's cache is already warm — no thundering herd against Cassandra.</p></div>
+
+    <div class="qa"><p class="q">How does Netflix personalize thumbnails?</p>
+      <p class="a">Each title has several thumbnail candidates. A <strong>contextual multi-armed bandit</strong> per user cluster tests which image drives the most clicks. Explore vs exploit is tuned per session — you might see the same title with a different thumbnail depending on which taste cluster you're in.</p></div>
+
+    <div class="qa"><p class="q">Why is the first HLS segment shorter than later segments?</p>
+      <p class="a">To fill the buffer fast and start playback in under a second. A short first segment costs a bit more manifest overhead but earns a huge TTFF win. Subsequent segments are longer (6–8s) for cache-hit efficiency and fewer HTTP requests.</p></div>
+
+    <div class="qa"><p class="q">Why Cassandra for viewing history — not DynamoDB?</p>
+      <p class="a">Wide-partition user-keyed workloads with a 9:1 write:read ratio; also, historical reason — Netflix adopted Cassandra pre-DynamoDB maturity. On a fresh AWS build, DynamoDB with adaptive capacity would be a perfectly good substitute.</p></div>
+
+    <div class="qa"><p class="q">How does chaos engineering fit in?</p>
+      <p class="a">Netflix continuously runs Chaos Monkey (kills instances), Chaos Kong (evacuates regions), and ChAP (chaos experiments in production) so failure paths never atrophy. Regional evacuation is practiced monthly; that's how they can promise no visible impact from an AWS region loss.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch">
+      "Netflix separates the control plane (AWS microservices, EVCache, Cassandra, MySQL) from the data plane (Open Connect appliances embedded in ISPs and IXPs). The client hits Zuul, gets homepage rows from a personalized ranker, and receives a signed manifest URL — that is the last time AWS is in the loop. Every subsequent byte comes from an OCA a mile from the viewer, hit rate <strong>~98%</strong>. Startup latency is under a second because segments are <strong>pre-warmed nightly</strong>. Peak traffic is handled by <strong>predictive pre-scaling, cross-region cache warm, and chaos-tested failover</strong>. Recommendations are a <strong>two-stage funnel</strong> (candidate + rank) topped with a <strong>contextual bandit</strong> for row ordering and thumbnails. Choose availability over consistency everywhere except billing."
+    </div>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li><strong>~260 M subscribers</strong>; <strong>~40 M peak concurrent streams</strong>.</li>
+      <li><strong>Open Connect ~98% hit rate</strong>; only ~2% of playback bytes hit origin.</li>
+      <li><strong>Kafka: 500 B events/day, 8 M events/s peak, 1.3 PB/day</strong>.</li>
+      <li><strong>Cassandra: 50+ clusters, 500+ nodes, 250 K writes/sec on the biggest cluster</strong>.</li>
+      <li><strong>~1 100–1 200 renditions per title</strong> across resolutions/codecs/audio/subtitles.</li>
+      <li><strong>2 200+ device types</strong> supported.</li>
+      <li><strong>Startup latency target: &lt; 1 s TTFF</strong>.</li>
+    </ul>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li>"<strong>Open Connect is what makes this possible</strong> — a private CDN inside 1 000+ ISPs, prefilled nightly using a popularity forecast."</li>
+      <li>"<strong>The two planes only meet at the manifest.</strong> AWS answers 'what to play'; Open Connect delivers the bytes."</li>
+      <li>"<strong>EVCache is write-fan-out cross-region</strong> so a regional failover doesn't cold-cache and stampede Cassandra."</li>
+      <li>"<strong>Recs are a two-stage funnel</strong>: ANN candidate → GBDT/DNN rank, with a contextual bandit on top for row ordering and thumbnails."</li>
+      <li>"<strong>Chaos engineering is a first-class citizen</strong> — Chaos Monkey/Kong constantly kills things so failover paths never atrophy."</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://openconnect.netflix.com/en/">Netflix Open Connect — official (OCAs, ISP embedding, prefill, SFI peering)</a></li>
+      <li><a href="https://www.geeksforgeeks.org/system-design/system-design-netflix-a-complete-architecture/">System Design of Netflix — GeeksforGeeks (Zuul, Hystrix, EVCache, Cassandra, Kafka, transcode numbers)</a></li>
+      <li><a href="https://blog.bytebytego.com/p/a-brief-history-of-scaling-netflix">A Brief History of Scaling Netflix — ByteByteGo (AWS migration, Open Connect evolution)</a></li>
+      <li><a href="https://research.netflix.com/business-area/personalization-and-search">Netflix Research — Personalization &amp; Search (recommendations, artwork personalization)</a></li>
+      <li><a href="https://netflixtechblog.com/">Netflix Tech Blog — EVCache, Cassandra, Kafka, Chaos Engineering series</a></li>
+      <li><a href="https://developer.mozilla.org/en-US/docs/Web/Media/DASH_Adaptive_Streaming_for_HTML_5_Video">DASH adaptive streaming — MDN</a></li>
+      <li><a href="https://aws.amazon.com/media-services/">AWS Media Services (MediaConvert / MediaPackage) — used for the AWS-native equivalent</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

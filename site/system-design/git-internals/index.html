@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How Git Works Internally — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg [data-anim] {
+    transition: transform .8s cubic-bezier(.4,0,.2,1),
+                opacity .45s ease, fill .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.15); }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>How Git Works Internally</h1>
+    <p>Designing a content-addressable, distributed version-control system — the object DAG, SHA hashing, refs, packfiles &amp; delta compression, and the want/have sync protocol.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>The design problem: build a <strong>distributed version-control system</strong> that lets thousands of developers snapshot a directory tree over time, work offline, branch and merge cheaply, and later synchronize their histories with no central authority — while never silently corrupting a byte. That system is <strong>Git</strong>, and its internals are one of the cleanest real-world examples of a <em>content-addressable store</em> layered into an <em>immutable DAG</em> with a <em>peer-to-peer sync protocol</em> on top.</p>
+    <p>Git powers essentially all modern software: it's the storage engine behind <strong>GitHub, GitLab, and Bitbucket</strong>, and it was written by Linus Torvalds in 2005 to manage the Linux kernel after the project lost access to BitKeeper. The design goals were speed, strong integrity guarantees against corruption, and true distributed workflows — any clone is a complete, self-sufficient repository, not a thin checkout.</p>
+    <p>Why it's a great interview topic: under the friendly porcelain commands (<code>add</code>, <code>commit</code>, <code>push</code>) sits a beautifully small set of primitives. If you can explain how a commit is just a hash of a tree, how a branch is just a 41-byte file, and how <code>push</code> is a want/have negotiation that ships a custom packfile, you're demonstrating content addressing, Merkle DAGs, immutability, and distributed reconciliation — all at once.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>A magical notebook that never loses a page</h2>
+    <p>Imagine you're writing a big novel with your friends. Everyone edits the same chapters, everyone worries about accidentally deleting someone else's work, and everyone would love a big red "undo" button that goes back not just one step, but back to any moment in the past — last Tuesday's version, or the version from before Priya rewrote chapter 4. That's the everyday problem this tool solves for the people who write software (and increasingly, anyone who writes anything at all together).</p>
+    <p>Think of it like a <strong>magical notebook that never loses a page</strong>. Every time you tell it "save," it doesn't just save the pages you changed — it silently takes a <strong>photograph of the entire novel as it looks right now</strong>, staples the photo together, and writes a unique fingerprint on the back like "commit #a3f9." Then it drops that stapled photo into a big box in the corner. The box already has hundreds of earlier photos in it, each one a complete snapshot of the whole novel at some earlier moment. Want to see what the novel looked like on Monday morning? Just pull out that photo. Want to compare two photos and see what changed? Easy — flip them side by side.</p>
+    <p>The real magic is two more things. First, the photo album is <strong>copied in full onto every friend's desk</strong> — so if the office burns down, everybody's copy is the whole history, not a fragment. Second, when you and Priya both edit chapter 4 at the same time, the notebook is smart enough to <strong>stitch the two versions together</strong>, and only asks a human for help on the tiny bit where you both changed the exact same sentence. This is the invisible engine behind <strong>GitHub</strong>, which is where nearly every piece of software you use — from your banking app to your video game — actually lives.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Snapshot</strong> the full state of a directory tree at a point in time (a commit), cheaply and repeatedly.</li>
+      <li><strong>Branch &amp; merge</strong> — create divergent lines of history and reconcile them; branching must be O(1).</li>
+      <li><strong>History &amp; diff</strong> — walk backwards through parent pointers; compute diffs between any two snapshots.</li>
+      <li><strong>Distributed sync</strong> — clone, fetch, and push between repositories with no shared central state.</li>
+      <li><strong>Integrity</strong> — detect any corruption or tampering of stored content.</li>
+    </ul>
+
+    <h3>Non-functional requirements (the ones that shape the design)</h3>
+    <ul>
+      <li><strong>Integrity by construction</strong> — the identity of every object <em>is</em> a hash of its content, so corruption is self-evident.</li>
+      <li><strong>Deduplication</strong> — identical content stored once, no matter how many commits or files reference it.</li>
+      <li><strong>Offline-first</strong> — every operation except sync works against the local object database.</li>
+      <li><strong>Space efficiency</strong> — near-identical file versions must not each cost a full copy.</li>
+      <li><strong>Minimal transfer</strong> — sync sends only the objects the other side is missing.</li>
+    </ul>
+
+    <h3>Capacity estimation (a large repo, e.g. the Linux kernel)</h3>
+    <table>
+      <tr><th>Quantity</th><th>Estimate</th><th>Reasoning</th></tr>
+      <tr><td>Object hash</td><td>SHA-1 = 160 bits = 40 hex chars</td><td>Git's original key; SHA-256 (64 hex) is the migration target.</td></tr>
+      <tr><td>Objects in Linux kernel repo</td><td>~10 million</td><td>1M+ commits × trees × historical blobs; all content-addressed &amp; deduplicated.</td></tr>
+      <tr><td>Loose object size</td><td>~7 KB for a 22 KB source file</td><td>zlib deflate on the header+content, ~3× compression.</td></tr>
+      <tr><td>Packed savings</td><td>~2× smaller after <code>git gc</code></td><td>Book example: 15 KB of loose objects → 7 KB packfile via delta compression.</td></tr>
+      <tr><td>Branch / ref file</td><td>41 bytes</td><td>40 hex chars of the commit SHA + newline. Branching is essentially free.</td></tr>
+      <tr><td>SHA-1 collision odds</td><td>~1 in 2¹⁶⁰</td><td>Astronomically unlikely by accident; the design assumes hash = identity.</td></tr>
+      <tr><td>Sync payload</td><td>Only objects reachable from <em>wants</em> but not <em>haves</em></td><td>A push after 3 commits sends ~3 commits + changed trees/blobs, not the whole history.</td></tr>
+    </table>
+    <p><strong>The number to volunteer:</strong> "A branch is a 41-byte file pointing at a commit SHA — that's why creating a branch is instant and why Git can hold thousands of them. The cost of history lives in the shared, deduplicated object database, not in the branches."</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>Git is two layers. The <strong>object database</strong> (<code>.git/objects</code>) is a content-addressable key-value store: give it content, it returns the SHA-1 key; give it the key, it returns the content. On top sits the <strong>reference layer</strong> (<code>.git/refs</code> + <code>HEAD</code>) — tiny mutable pointers that give human names to specific commits. Everything a user does is either (a) adding immutable objects to the store, or (b) moving a mutable pointer.</p>
+    <p>There are exactly <strong>four object types</strong>, and they form a <strong>Merkle DAG</strong> (a directed acyclic graph where every node names its children by their hashes): a <strong>blob</strong> is file content; a <strong>tree</strong> is a directory listing that maps names → blob/tree hashes with file modes; a <strong>commit</strong> points to one top-level tree plus zero-or-more parent commits and carries author/message metadata; and a <strong>tag</strong> object annotates a commit. Because each node embeds its children's hashes, the commit hash transitively fixes the <em>entire</em> tree state — change one byte in one file and every hash up the chain changes. That's the integrity guarantee.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 860 470" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <defs>
+          <marker id="pt" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#7aa2f7"/>
+          </marker>
+          <marker id="ref" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#f4a259"/>
+          </marker>
+          <marker id="par" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill="#f7567c"/>
+          </marker>
+        </defs>
+
+        <!-- Refs layer -->
+        <rect x="30" y="30" width="150" height="52" rx="10" fill="#f4a259"/>
+        <text x="105" y="52" fill="#3a2400" font-size="13" font-weight="700" text-anchor="middle">HEAD</text>
+        <text x="105" y="70" fill="#5a3a00" font-size="10.5" text-anchor="middle">ref: refs/heads/main</text>
+
+        <rect x="30" y="110" width="150" height="52" rx="10" fill="#f4a259" opacity=".85"/>
+        <text x="105" y="132" fill="#3a2400" font-size="13" font-weight="700" text-anchor="middle">refs/heads/main</text>
+        <text x="105" y="150" fill="#5a3a00" font-size="10" text-anchor="middle">a1b2c3… (41-byte file)</text>
+
+        <!-- Commits -->
+        <rect x="290" y="105" width="140" height="66" rx="10" fill="#4361ee"/>
+        <text x="360" y="128" fill="#fff" font-size="13" font-weight="700" text-anchor="middle">commit a1b2c3</text>
+        <text x="360" y="146" fill="#dfe6ff" font-size="10" text-anchor="middle">tree + parent +</text>
+        <text x="360" y="160" fill="#dfe6ff" font-size="10" text-anchor="middle">author + message</text>
+
+        <rect x="290" y="230" width="140" height="60" rx="10" fill="#4361ee" opacity=".7"/>
+        <text x="360" y="255" fill="#fff" font-size="13" font-weight="700" text-anchor="middle">parent commit</text>
+        <text x="360" y="273" fill="#dfe6ff" font-size="10" text-anchor="middle">9f8e7d…</text>
+
+        <!-- Tree -->
+        <rect x="500" y="105" width="140" height="66" rx="10" fill="#7048e8"/>
+        <text x="570" y="128" fill="#fff" font-size="13" font-weight="700" text-anchor="middle">tree d8329f</text>
+        <text x="570" y="146" fill="#e3d9ff" font-size="10" text-anchor="middle">100644 blob → README</text>
+        <text x="570" y="160" fill="#e3d9ff" font-size="10" text-anchor="middle">040000 tree → lib/</text>
+
+        <!-- Blobs -->
+        <rect x="710" y="60" width="120" height="50" rx="10" fill="#2dc653"/>
+        <text x="770" y="82" fill="#04140b" font-size="12" font-weight="700" text-anchor="middle">blob a906cb</text>
+        <text x="770" y="98" fill="#0a2a17" font-size="10" text-anchor="middle">README bytes</text>
+
+        <rect x="710" y="135" width="120" height="50" rx="10" fill="#2dc653" opacity=".85"/>
+        <text x="770" y="157" fill="#04140b" font-size="12" font-weight="700" text-anchor="middle">tree 99f1a6</text>
+        <text x="770" y="173" fill="#0a2a17" font-size="10" text-anchor="middle">lib/ listing</text>
+
+        <!-- Arrows -->
+        <path d="M180 56 Q 230 90 288 125" fill="none" stroke="#f4a259" stroke-width="2.4" marker-end="url(#ref)"/>
+        <path d="M180 136 L 288 138" fill="none" stroke="#f4a259" stroke-width="2.4" marker-end="url(#ref)"/>
+        <path d="M430 138 L 498 138" fill="none" stroke="#7aa2f7" stroke-width="2.4" marker-end="url(#pt)"/>
+        <text x="435" y="128" fill="#7aa2f7" font-size="10">tree</text>
+        <path d="M360 171 L 360 228" fill="none" stroke="#f7567c" stroke-width="2.4" marker-end="url(#par)"/>
+        <text x="368" y="205" fill="#f7567c" font-size="10">parent</text>
+        <path d="M640 128 L 708 92" fill="none" stroke="#7aa2f7" stroke-width="2.4" marker-end="url(#pt)"/>
+        <path d="M640 148 L 708 158" fill="none" stroke="#7aa2f7" stroke-width="2.4" marker-end="url(#pt)"/>
+
+        <!-- Labels for layers -->
+        <text x="105" y="18" fill="#f4a259" font-size="11" font-weight="700" text-anchor="middle">MUTABLE refs</text>
+        <text x="565" y="18" fill="#8fa0bd" font-size="11" font-weight="700" text-anchor="middle">IMMUTABLE object DAG (content-addressed)</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#f4a259"></span>Refs (mutable pointers)</span>
+        <span><span class="dot" style="background:#4361ee"></span>Commit</span>
+        <span><span class="dot" style="background:#7048e8"></span>Tree</span>
+        <span><span class="dot" style="background:#2dc653"></span>Blob</span>
+        <span><span class="dot" style="background:#f7567c"></span>parent edge</span>
+      </div>
+    </div>
+
+    <h3>What happens on <code>git commit</code></h3>
+    <ol class="steps">
+      <li><code>git add</code> writes a <strong>blob</strong> for each changed file into the object DB and records it in the <strong>index</strong> (staging area, <code>.git/index</code>).</li>
+      <li>On commit, Git builds <strong>tree</strong> objects from the index — one per directory — snapshotting the whole hierarchy (<code>write-tree</code>).</li>
+      <li>Git writes a <strong>commit</strong> object pointing to the top tree, to the current <code>HEAD</code> commit as <em>parent</em>, plus author/committer/message (<code>commit-tree</code>).</li>
+      <li>Git updates the current branch ref (e.g. <code>refs/heads/main</code>) to the new commit SHA. <code>HEAD</code> symbolically points at that branch, so "you" move forward automatically.</li>
+    </ol>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch <code>git commit</code> build the Merkle DAG, step by step</h2>
+    <p>This is the moment the whole design makes sense. You'll see a file get hashed into a <strong>blob</strong>, a <strong>tree</strong> named by its contents pick up that blob's hash, a <strong>commit</strong> point at the tree with a parent link, and finally the branch <strong>ref</strong> (a 41-byte file) advance to the new commit SHA. Every arrow is a content hash — that's why the whole graph is tamper-evident.</p>
+
+    <div class="anim-frame" id="git-anim">
+      <svg viewBox="0 0 780 380" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <!-- Working file (left) -->
+        <text x="80" y="34" fill="#c6d0e0" font-size="11" font-weight="700" text-anchor="middle">Working tree</text>
+        <g>
+          <rect x="20" y="50" width="120" height="66" rx="10" fill="#1b2940" stroke="#4cc9f0"/>
+          <text x="80" y="72" fill="#c6d0e0" font-size="11" font-weight="700" text-anchor="middle">README.md</text>
+          <text x="80" y="90" fill="#8fa0bd" font-size="9" text-anchor="middle">"hello world"</text>
+          <text x="80" y="106" fill="#8fa0bd" font-size="9" text-anchor="middle">16 bytes</text>
+        </g>
+
+        <!-- Object DB column heading -->
+        <text x="400" y="34" fill="#c6d0e0" font-size="11" font-weight="700" text-anchor="middle">Object database (.git/objects/) — content-addressed</text>
+
+        <!-- Blob object -->
+        <g id="blob" data-anim class="a-hidden">
+          <rect x="200" y="60" width="150" height="66" rx="10" fill="#155d3a" stroke="#2dc653"/>
+          <text x="275" y="80" fill="#a8f0c6" font-size="11" font-weight="700" text-anchor="middle">blob</text>
+          <text x="275" y="98" fill="#7fd7a3" font-size="9.5" text-anchor="middle" font-family="monospace">a906cb…</text>
+          <text x="275" y="115" fill="#7fd7a3" font-size="9" text-anchor="middle">SHA1("blob 16\0hello world")</text>
+        </g>
+
+        <!-- Tree object -->
+        <g id="tree" data-anim class="a-hidden">
+          <rect x="400" y="60" width="150" height="66" rx="10" fill="#4a2e91" stroke="#7048e8"/>
+          <text x="475" y="80" fill="#e3d9ff" font-size="11" font-weight="700" text-anchor="middle">tree</text>
+          <text x="475" y="98" fill="#c9b8ff" font-size="9.5" text-anchor="middle" font-family="monospace">d8329f…</text>
+          <text x="475" y="115" fill="#c9b8ff" font-size="9" text-anchor="middle">100644 README.md → a906cb</text>
+        </g>
+
+        <!-- Commit object -->
+        <g id="commit" data-anim class="a-hidden">
+          <rect x="600" y="60" width="150" height="66" rx="10" fill="#2b3b95" stroke="#4361ee"/>
+          <text x="675" y="80" fill="#dfe6ff" font-size="11" font-weight="700" text-anchor="middle">commit</text>
+          <text x="675" y="98" fill="#a8b8ff" font-size="9.5" text-anchor="middle" font-family="monospace">a1b2c3…</text>
+          <text x="675" y="115" fill="#a8b8ff" font-size="9" text-anchor="middle">tree d8329f · parent null</text>
+        </g>
+
+        <!-- Existing parent commit (bottom row for later commits — we start empty for first-commit case) -->
+        <!-- HEAD + branch ref -->
+        <text x="380" y="200" fill="#c6d0e0" font-size="11" font-weight="700" text-anchor="middle">References (.git/refs/) — mutable pointers</text>
+        <g>
+          <rect id="head" data-anim x="220" y="220" width="120" height="52" rx="10" fill="#3a2400" stroke="#f4a259"/>
+          <text x="280" y="240" fill="#ffd9b0" font-size="11" font-weight="700" text-anchor="middle">HEAD</text>
+          <text x="280" y="257" fill="#f4a259" font-size="9.5" text-anchor="middle">ref: refs/heads/main</text>
+        </g>
+        <g>
+          <rect id="mainRef" data-anim x="380" y="220" width="200" height="52" rx="10" fill="#3a2400" stroke="#f4a259"/>
+          <text x="480" y="240" fill="#ffd9b0" font-size="11" font-weight="700" text-anchor="middle">refs/heads/main</text>
+          <text id="mainRefSha" x="480" y="257" fill="#f4a259" font-size="9.5" text-anchor="middle" font-family="monospace">(does not exist yet)</text>
+        </g>
+
+        <!-- Arrows (drawn as <path> that appear as steps advance) -->
+        <path id="arrTB" data-anim class="a-hidden" d="M350 93 L 398 93" stroke="#7048e8" stroke-width="2" marker-end="url(#arr1)" fill="none"/>
+        <path id="arrCT" data-anim class="a-hidden" d="M550 93 L 598 93" stroke="#4361ee" stroke-width="2" marker-end="url(#arr2)" fill="none"/>
+        <path id="arrRC" data-anim class="a-hidden" d="M580 244 Q 680 200 690 128" stroke="#f4a259" stroke-width="2.4" marker-end="url(#arr3)" fill="none" stroke-dasharray="4 3"/>
+
+        <defs>
+          <marker id="arr1" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#7048e8"/></marker>
+          <marker id="arr2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#4361ee"/></marker>
+          <marker id="arr3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#f4a259"/></marker>
+        </defs>
+
+        <!-- Terminal output -->
+        <rect x="20" y="310" width="740" height="52" rx="8" fill="#0f1a30" stroke="#1b2940"/>
+        <text id="term" x="34" y="332" fill="#a8f0c6" font-family="monospace" font-size="11">$ git init</text>
+        <text id="term2" x="34" y="350" fill="#8fa0bd" font-family="monospace" font-size="10.5"></text>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to watch git commit build the Merkle DAG.</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('git-anim');
+        if (!root) return;
+        const $ = (s) => root.querySelector(s);
+        const label = root.querySelector('.anim-step-label');
+        const cap   = root.querySelector('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const setTerm = (a, b) => { $('#term').textContent = a; $('#term2').textContent = b || ''; };
+
+        const steps = [
+          { c: 'You edit README.md and stage it with `git add`. Git computes SHA1("blob 16\\0hello world") and writes a blob to the object DB.',
+            a: () => {
+              setTerm('$ git add README.md', '$ echo -n "hello world" | git hash-object --stdin  # a906cb…');
+              $('#blob').classList.remove('a-hidden');
+              $('#blob').classList.add('a-glow');
+            }},
+          { c: 'On `git commit`, Git builds a tree object listing the directory contents — its entries point to child blob and subtree hashes.',
+            a: () => {
+              $('#blob').classList.remove('a-glow');
+              setTerm('$ git commit -m "init"', '# write-tree → d8329f…');
+              $('#tree').classList.remove('a-hidden');
+              $('#tree').classList.add('a-glow');
+              $('#arrTB').classList.remove('a-hidden');
+            }},
+          { c: 'Git writes a commit object naming the top tree plus author, committer, timestamp, message (and parent — none, this is the first commit).',
+            a: () => {
+              $('#tree').classList.remove('a-glow');
+              setTerm('$ git commit -m "init"', '# commit-tree d8329f -m "init" → a1b2c3…');
+              $('#commit').classList.remove('a-hidden');
+              $('#commit').classList.add('a-glow');
+              $('#arrCT').classList.remove('a-hidden');
+            }},
+          { c: 'The branch ref refs/heads/main is a 41-byte file. Git updates it to point at the new commit SHA — that is the entire "branch pointer moves forward" operation.',
+            a: () => {
+              $('#commit').classList.remove('a-glow');
+              $('#mainRefSha').textContent = 'a1b2c3…';
+              $('#mainRef').classList.add('a-glow');
+              $('#arrRC').classList.remove('a-hidden');
+            }},
+          { c: 'HEAD symbolically points at refs/heads/main, so "you" move to the new commit automatically. The Merkle DAG now has one commit, verifiable end-to-end by hash.',
+            a: () => {
+              $('#mainRef').classList.remove('a-glow');
+              $('#head').classList.add('a-glow');
+              setTerm('$ git log --oneline', 'a1b2c3 (HEAD -> main) init');
+            }}
+        ];
+
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          ['#blob','#tree','#commit','#arrTB','#arrCT','#arrRC'].forEach(id => {
+            $(id).classList.add('a-hidden');
+            $(id).classList.remove('a-glow');
+          });
+          ['#head','#mainRef'].forEach(id => $(id).classList.remove('a-glow'));
+          $('#mainRefSha').textContent = '(does not exist yet)';
+          setTerm('$ git init', '# initialized empty Git repository in .git/');
+          label.textContent = 'Ready';
+          cap.textContent = 'Press ▶ Play to watch git commit build the Merkle DAG.';
+          btnPlay.textContent = '▶ Play';
+        }
+        function goto(i) {
+          if (i < 0 || i >= steps.length) return;
+          reset();
+          for (let k = 0; k <= i; k++) steps[k].a();
+          idx = i;
+          label.textContent = `Step ${i + 1}/${steps.length}`;
+          cap.textContent = steps[i].c;
+        }
+        let idx = -1, playing = false, timer = null;
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < steps.length) {
+              idx++;
+              steps[idx].a();
+              label.textContent = `Step ${idx + 1}/${steps.length}`;
+              cap.textContent = steps[idx].c;
+            }
+            if (idx < steps.length - 1) timer = setTimeout(tick, 2400);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 300);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>Content addressing: the hash IS the identity</h3>
+    <p>To store content, Git builds a byte string <code>"&lt;type&gt; &lt;size&gt;\0&lt;content&gt;"</code> — e.g. <code>blob 16\0what is up, doc?</code> — and takes the <strong>SHA-1 over that whole string</strong>. That 40-hex-char digest is the object's key. Crucially the hash is computed on the <em>uncompressed</em> bytes; only afterwards does Git zlib-compress the object for storage. Identical content therefore always yields the identical key, which gives <strong>automatic deduplication</strong> (the same file in 1,000 commits is stored once) and <strong>tamper-evidence</strong> (flip a bit on disk and the recomputed hash no longer matches the filename).</p>
+
+    <h3>The object store on disk</h3>
+    <p>Objects live under <code>.git/objects/</code>. The key is split: the <strong>first 2 hex chars name a subdirectory</strong> and the remaining 38 name the file — so <code>d670460b…</code> is stored at <code>.git/objects/d6/70460b…</code>. This 2-char sharding keeps any one directory from holding millions of files (a classic filesystem performance killer). You can poke at the raw store with plumbing commands: <code>git hash-object -w</code> writes an object and returns its key; <code>git cat-file -p &lt;sha&gt;</code> pretty-prints it; <code>git cat-file -t</code> shows its type.</p>
+
+    <h3>References: branches, HEAD, and tags</h3>
+    <p>A <strong>branch is literally a file</strong> under <code>.git/refs/heads/</code> containing a commit SHA — <code>git branch x</code> is just <code>update-ref</code> writing that file. <strong>HEAD</strong> is a <em>symbolic ref</em> (<code>ref: refs/heads/main</code>) telling Git which branch you're on; a "detached HEAD" is when it holds a raw SHA instead. <strong>Lightweight tags</strong> are refs that never move; <strong>annotated tags</strong> point to a real tag <em>object</em> carrying a tagger, date, and message. Remote-tracking refs (<code>refs/remotes/origin/main</code>) are read-only bookmarks of what the server had at last contact. The <strong>reflog</strong> (<code>.git/logs</code>) records every movement of every ref locally — your safety net for recovering "lost" commits after a bad reset or rebase.</p>
+
+    <h3>Packfiles &amp; delta compression</h3>
+    <p>Storing every file version as a full zlib blob is wasteful when versions are near-identical. So Git periodically (on <code>git gc</code>, on push, or when loose objects pile up) rolls many objects into a single <strong>packfile</strong> (<code>.pack</code>) with a companion <strong>index</strong> (<code>.idx</code>) that maps each SHA to a byte offset. Inside the pack, similar objects are <strong>delta-compressed</strong>: Git stores one version in full and the others as deltas against it, and deltas can chain. A clever twist: it stores the <em>newest</em> version intact and older versions as deltas, since you most often read recent data. This is why <code>.git</code> stays remarkably small even for huge histories.</p>
+
+    <h3>The distributed sync protocol (push / fetch / clone)</h3>
+    <p>Because no repo is authoritative, syncing two repos means <em>reconciling two object graphs</em>. Git's <strong>smart protocol</strong> does it in three moves. (1) <strong>Ref advertisement</strong>: the server lists all its refs with their SHAs and its capabilities. (2) <strong>want/have negotiation</strong>: the client sends <code>want &lt;sha&gt;</code> for tips it lacks and <code>have &lt;sha&gt;</code> for commits it already owns, so the two sides discover their <em>common ancestor</em>. (3) <strong>Packfile transfer</strong>: the server computes exactly the objects reachable from the <em>wants</em> but not the <em>haves</em>, packs them on the fly, and streams them. Push is the mirror image (<code>send-pack</code> ↔ <code>receive-pack</code>), with all-zero SHAs signaling ref creation or deletion. This content-addressed, negotiate-the-difference design is precisely what makes Git <em>distributed</em> rather than client-server.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Git is a small pile of famous data structures used exactly right. The object store is a <strong>content-addressable hash map</strong>. The history is a <strong>Merkle DAG</strong> — the same structure behind blockchains and IPFS — giving cryptographic integrity and cheap structural sharing. History traversal (<code>git log</code>, merge-base) is <strong>graph search</strong> over that DAG. Merges compute a <strong>lowest common ancestor</strong>. Storage uses <strong>delta encoding</strong>; sync uses <strong>set reconciliation</strong> via reachability.</p>
+    <table>
+      <tr><th>Structure / Algorithm</th><th>Where it's used</th><th>Complexity</th><th>Why it's chosen</th></tr>
+      <tr><td>Content-addressable hash map (SHA-1)</td><td>The object database</td><td>O(1) put/get by key</td><td>Hash = identity ⇒ dedup + tamper-evidence for free.</td></tr>
+      <tr><td>Merkle DAG</td><td>commit → tree → blob graph</td><td>O(1) to verify a subtree by its root hash</td><td>A single top hash fixes the entire tree state; structural sharing across commits.</td></tr>
+      <tr><td>DAG traversal (BFS/DFS)</td><td><code>git log</code>, reachability, sync</td><td>O(V+E)</td><td>Walk parent edges to render history or find missing objects.</td></tr>
+      <tr><td>Lowest Common Ancestor</td><td>3-way merge base</td><td>~O(V+E) over history</td><td>Finds the point two branches diverged to compute a 3-way merge.</td></tr>
+      <tr><td>Delta encoding + chains</td><td>Packfiles</td><td>O(chain length) to reconstruct</td><td>Store near-identical versions as small diffs; huge space savings.</td></tr>
+      <tr><td>zlib DEFLATE</td><td>Every stored object</td><td>O(n)</td><td>Compress content on disk (hash is on the uncompressed bytes).</td></tr>
+      <tr><td>Reachability set difference (want/have)</td><td>Push/fetch negotiation</td><td>O(objects to send)</td><td>Transfer only what the peer is missing — no central state needed.</td></tr>
+      <tr><td>2-char directory sharding</td><td><code>.git/objects/ab/cdef…</code></td><td>O(1) path</td><td>Avoid millions of files in one directory (filesystem scaling).</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>Two useful framings here. First, <strong>how you'd host Git-based services on AWS</strong>. Second — more instructive — <strong>how you'd rebuild Git's content-addressable store as a cloud service</strong>, since its object model maps almost one-to-one onto AWS primitives.</p>
+    <table>
+      <tr><th>Git concept</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Content-addressable object store</td><td><strong>Amazon S3</strong> (key = SHA-256 of content)</td><td>S3 is a giant KV store; using the content hash as the key gives the same dedup + integrity property. Enable object-level checksums.</td></tr>
+      <tr><td>Refs (mutable pointers)</td><td><strong>DynamoDB</strong> (branch → commit SHA)</td><td>Refs need atomic compare-and-swap on update (reject stale pushes); Dynamo conditional writes model "old SHA must equal X".</td></tr>
+      <tr><td>Managed Git hosting</td><td><strong>AWS CodeCommit</strong> (or self-host on EC2/ECS)</td><td>Fully managed Git repos with IAM auth; the drop-in if you don't want to run servers.</td></tr>
+      <tr><td>Packfile / large-object storage</td><td><strong>S3</strong> + <strong>S3 Glacier</strong> for cold history</td><td>Packfiles are big immutable blobs — ideal S3 objects; archive rarely-fetched packs to Glacier.</td></tr>
+      <tr><td>CDN for clone/fetch</td><td><strong>CloudFront</strong></td><td>Immutable, content-addressed objects are perfectly cacheable at the edge.</td></tr>
+      <tr><td>Async fan-out (CI, webhooks)</td><td><strong>SNS / SQS / Lambda</strong></td><td>On push, publish an event; trigger CI, mirror, and notifications without blocking the push.</td></tr>
+      <tr><td>Integrity verification job</td><td><strong>Lambda</strong> + S3 checksums</td><td>Background "git fsck"-style scrubbing: recompute hashes, compare to keys.</td></tr>
+    </table>
+    <p><strong>Deployment story to tell:</strong> "I'd store immutable objects in <strong>S3</strong> keyed by their content hash — that inherits Git's dedup and tamper-evidence directly. The <em>only</em> mutable state is refs, which I'd keep in <strong>DynamoDB</strong> with <strong>conditional writes</strong> so a push is a compare-and-swap (reject if the branch moved under me — the classic non-fast-forward rejection). Push events fan out via <strong>SNS→SQS→Lambda</strong> for CI and mirroring, and clones read cache-friendly packfiles through <strong>CloudFront</strong>. It's the exact control-plane (refs) / data-plane (objects) split Git already has."</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>The heart of Git is tiny: hash content with the <code>"&lt;type&gt; &lt;size&gt;\0"</code> header, zlib-compress it, and store it under a 2-char-sharded path. Below is a faithful, idiomatic C# rebuild of <code>hash-object -w</code> and <code>cat-file</code>, plus a commit-object writer — enough to demonstrate the content-addressable store end to end.</p>
+    <pre><span class="kw">using</span> System.IO.Compression;
+<span class="kw">using</span> System.Security.Cryptography;
+<span class="kw">using</span> System.Text;
+
+<span class="cmt">// A minimal Git-style content-addressable object database.</span>
+<span class="kw">public sealed class</span> <span class="typ">ObjectStore</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">string</span> _objectsDir;   <span class="cmt">// e.g. ".git/objects"</span>
+    <span class="kw">public</span> <span class="fn">ObjectStore</span>(<span class="typ">string</span> objectsDir) =&gt; _objectsDir = objectsDir;
+
+    <span class="cmt">// hash-object -w : store content, return its 40-char SHA-1 key.</span>
+    <span class="kw">public</span> <span class="typ">string</span> <span class="fn">Write</span>(<span class="typ">string</span> type, <span class="typ">byte</span>[] content)
+    {
+        <span class="cmt">// 1. Build the store bytes: "&lt;type&gt; &lt;size&gt;\0&lt;content&gt;"</span>
+        <span class="kw">var</span> header = <span class="typ">Encoding</span>.ASCII.<span class="fn">GetBytes</span>($<span class="str">"{type} {content.Length}\0"</span>);
+        <span class="kw">var</span> store  = <span class="kw">new byte</span>[header.Length + content.Length];
+        <span class="typ">Buffer</span>.<span class="fn">BlockCopy</span>(header, 0, store, 0, header.Length);
+        <span class="typ">Buffer</span>.<span class="fn">BlockCopy</span>(content, 0, store, header.Length, content.Length);
+
+        <span class="cmt">// 2. The KEY is SHA-1 of the UNCOMPRESSED store bytes.</span>
+        <span class="kw">var</span> hash = <span class="typ">Convert</span>.<span class="fn">ToHexString</span>(<span class="typ">SHA1</span>.<span class="fn">HashData</span>(store)).<span class="fn">ToLowerInvariant</span>();
+
+        <span class="cmt">// 3. Store path is sharded: objects/&lt;first 2&gt;/&lt;remaining 38&gt;</span>
+        <span class="kw">var</span> dir  = <span class="typ">Path</span>.<span class="fn">Combine</span>(_objectsDir, hash[..2]);
+        <span class="kw">var</span> path = <span class="typ">Path</span>.<span class="fn">Combine</span>(dir, hash[2..]);
+        <span class="typ">Directory</span>.<span class="fn">CreateDirectory</span>(dir);
+
+        <span class="cmt">// 4. zlib-DEFLATE the store bytes to disk (idempotent: same content =&gt; same file).</span>
+        <span class="kw">if</span> (!<span class="typ">File</span>.<span class="fn">Exists</span>(path))
+        {
+            <span class="kw">using var</span> fs   = <span class="typ">File</span>.<span class="fn">Create</span>(path);
+            <span class="kw">using var</span> zlib = <span class="kw">new</span> <span class="typ">ZLibStream</span>(fs, <span class="typ">CompressionLevel</span>.Optimal);
+            zlib.<span class="fn">Write</span>(store, 0, store.Length);
+        }
+        <span class="kw">return</span> hash;
+    }
+
+    <span class="cmt">// cat-file : inflate the object and split off the header.</span>
+    <span class="kw">public</span> (<span class="typ">string</span> Type, <span class="typ">byte</span>[] Content) <span class="fn">Read</span>(<span class="typ">string</span> hash)
+    {
+        <span class="kw">var</span> path = <span class="typ">Path</span>.<span class="fn">Combine</span>(_objectsDir, hash[..2], hash[2..]);
+        <span class="kw">using var</span> fs   = <span class="typ">File</span>.<span class="fn">OpenRead</span>(path);
+        <span class="kw">using var</span> zlib = <span class="kw">new</span> <span class="typ">ZLibStream</span>(fs, <span class="typ">CompressionMode</span>.Decompress);
+        <span class="kw">using var</span> ms   = <span class="kw">new</span> <span class="typ">MemoryStream</span>();
+        zlib.<span class="fn">CopyTo</span>(ms);
+        <span class="kw">var</span> bytes = ms.<span class="fn">ToArray</span>();
+
+        <span class="kw">int</span> nul   = <span class="typ">Array</span>.<span class="fn">IndexOf</span>(bytes, (<span class="typ">byte</span>)0);          <span class="cmt">// find the \0 separator</span>
+        <span class="kw">var</span> hdr   = <span class="typ">Encoding</span>.ASCII.<span class="fn">GetString</span>(bytes, 0, nul);   <span class="cmt">// "blob 16"</span>
+        <span class="kw">var</span> type  = hdr.<span class="fn">Split</span>(<span class="str">' '</span>)[0];
+        <span class="kw">var</span> body  = bytes[(nul + 1)..];
+        <span class="kw">return</span> (type, body);
+    }
+
+    <span class="cmt">// Write a commit object pointing at a tree + parent (the DAG edge).</span>
+    <span class="kw">public</span> <span class="typ">string</span> <span class="fn">CommitTree</span>(<span class="typ">string</span> treeSha, <span class="typ">string</span>? parentSha, <span class="typ">string</span> author, <span class="typ">string</span> message)
+    {
+        <span class="kw">var</span> sb = <span class="kw">new</span> <span class="typ">StringBuilder</span>();
+        sb.<span class="fn">Append</span>($<span class="str">"tree {treeSha}\n"</span>);
+        <span class="kw">if</span> (parentSha <span class="kw">is not null</span>) sb.<span class="fn">Append</span>($<span class="str">"parent {parentSha}\n"</span>);
+        sb.<span class="fn">Append</span>($<span class="str">"author {author}\n"</span>);
+        sb.<span class="fn">Append</span>($<span class="str">"committer {author}\n\n"</span>);
+        sb.<span class="fn">Append</span>(message).<span class="fn">Append</span>(<span class="str">'\n'</span>);
+        <span class="kw">return</span> <span class="fn">Write</span>(<span class="str">"commit"</span>, <span class="typ">Encoding</span>.UTF8.<span class="fn">GetBytes</span>(sb.<span class="fn">ToString</span>()));
+    }
+}</pre>
+    <p>This reproduces Git's exact hash for the same input — <code>echo -n "what is up, doc?" | git hash-object --stdin</code> and <code>Write("blob", …)</code> both yield <code>bd9dbf5aae1a3862dd1526723246b20206e5fc37</code>. Real Git adds packfiles, the index, delta compression, and the transfer protocol on top, but the content-addressable core is exactly this. Note Git is migrating from SHA-1 to <strong>SHA-256</strong> for collision resistance — swap <code>SHA1</code> for <code>SHA256</code> and the model is unchanged.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <p><strong>Snapshots vs deltas.</strong> Git conceptually stores full <em>snapshots</em> (each commit names a complete tree) — unlike older VCSs (SVN, CVS) that store per-file diffs. This makes branching, merging, and history-walking simple and fast, at the cost of apparent redundancy — which packfiles + delta compression then claw back on disk. Interviewers love this: "isn't storing a full tree per commit wasteful?" Answer: no, because unchanged blobs/trees are <em>shared by hash</em> (the DAG dedups), and packfiles delta-compress the rest.</p>
+    <p><strong>SHA-1 and collisions.</strong> Git used SHA-1, which is cryptographically broken (SHAttered, 2017). In practice Git added collision-detection and is migrating to SHA-256, but the design assumption "hash uniquely identifies content" is the load-bearing one — be ready to discuss it.</p>
+    <p><strong>Large binaries &amp; huge histories.</strong> Delta compression works great on text, poorly on large binaries; every clone gets the <em>entire</em> history. Mitigations: <strong>Git LFS</strong> (store big files out-of-band, keep a pointer in the repo), <strong>shallow clones</strong> (<code>--depth</code>), and <strong>partial/sparse clones</strong>. This is the #1 scaling pain for monorepos.</p>
+    <p><strong>Mutable refs are the only race.</strong> Objects are immutable so they never conflict; the only concurrency hazard is two people updating the same branch. Servers resolve this with a <strong>compare-and-swap on the ref</strong> — the losing push is rejected as a non-fast-forward, and the user must fetch+rebase/merge. That's the whole story behind "! [rejected] (fetch first)".</p>
+
+    <div class="qa">
+      <p class="q">Q: Does Git store diffs or full snapshots?</p>
+      <p class="a">Conceptually full snapshots — each commit points to a complete tree. Unchanged files are shared by hash (dedup), and packfiles delta-compress similar blobs on disk. So it's snapshots logically, deltas physically.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: Why is creating a branch so cheap?</p>
+      <p class="a">A branch is just a 41-byte file containing a commit SHA. Creating one writes that file; no objects are copied. That's why repos can carry thousands of branches.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: How does push send only the new commits and not the whole repo?</p>
+      <p class="a">The want/have negotiation: the server advertises its refs, the client says which SHAs it <em>wants</em> and which it already <em>has</em>; the server packs only objects reachable from the wants but not the haves.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q: What actually guarantees integrity?</p>
+      <p class="a">Content addressing plus the Merkle DAG. Every object's name is the hash of its bytes, and every parent embeds its children's hashes — so the commit hash fixes the entire tree. Any corruption changes a hash and is detected by <code>git fsck</code>.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "Git is a content-addressable object store under an immutable Merkle DAG, with a peer-to-peer sync protocol on top. Content is hashed with a <code>type size\0</code> header into a SHA-1 key, zlib-compressed, and stored sharded under <code>.git/objects</code>. Four object types — blob, tree, commit, tag — form a DAG where each node names its children by hash, so a commit hash fixes the whole tree and integrity is automatic. Refs (branches, HEAD, tags) are tiny mutable pointers into that graph; a branch is a 41-byte file. Packfiles delta-compress similar objects on disk, and push/fetch is a want/have negotiation that ships a custom packfile of exactly the missing objects — which is what makes Git distributed."</div>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>SHA-1 key = <strong>40 hex chars</strong> (160 bits); migrating to <strong>SHA-256</strong>.</li>
+      <li><strong>4</strong> object types: blob, tree, commit, tag.</li>
+      <li>Branch = <strong>41-byte file</strong> (40 hex + newline).</li>
+      <li>Object path sharded by <strong>first 2 hex chars</strong>.</li>
+      <li><code>git gc</code> packing ≈ <strong>2× smaller</strong> on disk via delta compression.</li>
+      <li>Sync ships only <strong>reachable(wants) − reachable(haves)</strong>.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li><strong>Content addressing</strong> — hash = identity ⇒ dedup + tamper-evidence for free.</li>
+      <li><strong>Merkle DAG</strong> — one top hash fixes the entire tree; structural sharing across commits.</li>
+      <li><strong>Refs vs objects</strong> — mutable pointers over an immutable store (control plane vs data plane).</li>
+      <li><strong>Packfiles &amp; deltas</strong> — snapshots logically, deltas physically.</li>
+      <li><strong>want/have sync</strong> — negotiate the difference; no central authority ⇒ truly distributed.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://git-scm.com/book/en/v2/Git-Internals-Git-Objects">Pro Git — Git Internals: Git Objects</a>: content addressing, the four object types, header format, SHA-1 hashing, zlib, <code>.git/objects</code> layout.</li>
+      <li><a href="https://git-scm.com/book/en/v2/Git-Internals-Git-References">Pro Git — Git Internals: Git References</a>: refs/heads, HEAD &amp; symbolic refs, tags, remote refs, reflog, packed-refs.</li>
+      <li><a href="https://git-scm.com/book/en/v2/Git-Internals-Packfiles">Pro Git — Git Internals: Packfiles</a>: loose vs packed objects, delta compression, delta chains, <code>git gc</code> savings.</li>
+      <li><a href="https://git-scm.com/book/en/v2/Git-Internals-Transfer-Protocols">Pro Git — Git Internals: Transfer Protocols</a>: smart protocol, ref advertisement, want/have negotiation, on-the-fly packfile generation.</li>
+      <li>Linus Torvalds — original Git design (2005), created to version-control the Linux kernel.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

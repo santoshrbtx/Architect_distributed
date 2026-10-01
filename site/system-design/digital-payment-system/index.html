@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Digital Payment System — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c;   --scenario-bg: #fff0f4;
+    --laymen: #ffd166;     --laymen-bg: #fffaeb;
+    --reqs: #f4a259;       --reqs-bg: #fff7ed;
+    --arch: #4361ee;       --arch-bg: #eef2ff;
+    --anim: #00b4d8;       --anim-bg: #eef9fc;
+    --dsa: #7048e8;        --dsa-bg: #f3effe;
+    --aws: #ff9900;        --aws-bg: #fff6e6;
+    --code-bg: #1e2430;    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%); color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.12rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); color: #7c5c00; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .87rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; }
+  .faq-item .q::before { content: "Q "; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] { transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease; transform-box: fill-box; }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+  .ledger { border-collapse: collapse; margin: 12px 0; }
+  .ledger td, .ledger th { padding: 8px 14px; border-bottom: 1px solid var(--line); font-family: "SF Mono", Consolas, monospace; font-size: .88rem; }
+  .ledger .dr { color: #b53a3a; font-weight: 700; }
+  .ledger .cr { color: #208b3a; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Digital Payment System</h1>
+    <p>How ₹1 in Mumbai becomes ₹1 in Bangalore — the machinery behind Stripe, PayPal, and UPI, and every trade-off an interviewer will ask about.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; why it's a top-5 interview question</h2>
+    <p>A digital payment system moves money between two parties — a payer and a payee — over the internet, using a bank card, bank account, or wallet. It must never lose a rupee, never double-charge, produce an audit trail that regulators can accept years later, and answer in under two seconds even when a million people are checking out at the same moment. That's the mandate behind <strong>Stripe</strong>, <strong>PayPal</strong>, <strong>Square</strong>, <strong>Razorpay</strong>, <strong>Adyen</strong>, and the giant public infrastructures like <strong>UPI</strong> (India, 20 billion txns/month), <strong>PIX</strong> (Brazil), and <strong>FedNow</strong> (US).</p>
+    <p>It's asked in interviews because it sits at the crossroads of <em>everything hard about distributed systems</em>: <strong>exactly-once semantics</strong> in the face of retries, <strong>strong consistency</strong> against a database that must never drift, <strong>regulatory compliance</strong> (PCI DSS, PSD2/SCA, RBI, GDPR), <strong>real-time fraud detection</strong> in the request path, and <strong>reconciliation</strong> with 30+ external banks whose statements arrive as flat files at 2 AM. A candidate who can explain idempotency keys, double-entry ledgers, the four-party card model, and 3DS in one flow is signalling senior-level thinking.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Money moves — but no one physically carries it</h2>
+    <p><strong>Imagine you're at a coffee shop.</strong> You want to pay ₹200. You tap your phone on the machine and a second later the barista says "done." No cash has moved. No one has run to your bank vault to fetch two hundred-rupee notes. So what actually happened?</p>
+    <p>Behind that tap, four different companies had a very fast conversation. The <strong>coffee shop's app</strong> (a "merchant") sent the request to a helper called the <strong>payment company</strong> — think of it like a translator that speaks the language of every bank. The payment company asked <strong>the shop's bank</strong> ("hey, we've got a customer paying"). The shop's bank asked <strong>the card network</strong> — Visa, Mastercard, or in India, UPI — to find <strong>your bank</strong>. Your bank checked: <em>does this person have ₹200? is this really them? does this look like fraud?</em> If yes, it says "approved." That "approved" travels all the way back — your bank → network → shop's bank → payment company → shop's till. The whole conversation takes about 1.5 seconds.</p>
+    <p><strong>But your money hasn't actually moved yet.</strong> All that happened was a promise: "I promise your account will be debited and the shop's account will be credited." The actual movement of money — called <strong>settlement</strong> — happens later that night, in a giant batch across all the day's transactions. This two-step design (promise now, move later) is what lets the system be fast <em>and</em> safe. If something goes wrong overnight, they can reverse the promise without any real money having sloshed around.</p>
+    <p><strong>Why is this hard?</strong> Because if your phone loses signal mid-tap and retries, the shop can't charge you twice. Because if a hacker tries the same card 10,000 times a minute, the system must catch them without slowing down real customers. Because at the end of every day, every rupee <em>must</em> add up — the total leaving customers' accounts must equal the total arriving in merchants' accounts, or someone (the payment company) has to eat the difference. And because governments will audit the ledger years later, so <em>nothing can ever be erased</em>. Every mistake is fixed by <em>adding a correction</em>, never by editing what happened before.</p>
+    <p><em>Tiny example:</em> Priya pays a Zomato bill of ₹350 with GPay. Her phone sends ₹350 → NPCI (the UPI network) → HDFC (Priya's bank), which asks her for a 4-digit PIN. She types it. HDFC says OK, debits her account, credits Zomato's ICICI account through NPCI. All this in ~1.2 seconds. The next morning, HDFC and ICICI's actual money moves between them via the RBI. Priya never saw any of that — she just saw "Payment successful."</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Functional and non-functional</h2>
+    <h3>Functional</h3>
+    <ul>
+      <li><strong>Authorize</strong> a payment (does the payer have funds/credit?).</li>
+      <li><strong>Capture</strong> the authorized amount (turn a hold into a real charge).</li>
+      <li><strong>Refund</strong> full or partial amounts, referencing the original charge.</li>
+      <li><strong>Payout</strong> to merchants on schedule (T+1, T+2).</li>
+      <li><strong>Dispute / chargeback</strong> lifecycle (buyer files, evidence, resolution).</li>
+      <li><strong>Multi-currency</strong>, multi-payment-method (card, UPI, ACH, wallet).</li>
+      <li><strong>Webhooks</strong> to notify merchants of state changes.</li>
+      <li><strong>Reconciliation</strong> against bank / network settlement files.</li>
+    </ul>
+    <h3>Non-functional</h3>
+    <table>
+      <tr><th>Metric</th><th>Target</th><th>Why</th></tr>
+      <tr><td>End-to-end auth latency (p95)</td><td>&lt; 2 s</td><td>Card-present drops off past 3 s; UPI SLA is 30 s but real p95 is ~1.5 s</td></tr>
+      <tr><td>Peak TPS</td><td>50k–500k</td><td>UPI ran 20 B txns in Aug 2025 = ~7,500 avg TPS, with Black-Friday-like spikes 10× that</td></tr>
+      <tr><td>Availability</td><td>99.995% (~26 min/yr)</td><td>Financial-grade; users lose trust after one outage</td></tr>
+      <tr><td>Ledger accuracy</td><td>100.0000%</td><td>Non-negotiable — off-by-one paise breaks reconciliation and lands you in a regulator's office</td></tr>
+      <tr><td>Retention</td><td>7–10 years</td><td>Regulator + tax + dispute lookback</td></tr>
+      <tr><td>Fraud model latency budget</td><td>&lt; 100 ms</td><td>Sits in the request path; can't slow auth</td></tr>
+      <tr><td>Idempotency window</td><td>≥ 24 h</td><td>Retries after client crashes or network partitions must not double-charge</td></tr>
+    </table>
+    <h3>Back-of-the-envelope</h3>
+    <p>At 50k TPS with a 400-byte ledger entry, you're writing 20 MB/s = 1.7 TB/day = <strong>620 TB/year</strong> of ledger data. That's why the ledger is on <strong>DynamoDB or Aurora</strong>, not a single Postgres box. You'll also generate ~4× that in supporting logs (fraud signals, webhook history, audit). At 500 kb of AI-model features per fraud decision, real-time features need a sub-10 ms feature store like <strong>DynamoDB Accelerator (DAX)</strong> or <strong>Redis</strong>.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>The 4-party (or 6-party) machine, top-down</h2>
+    <p>The classic <strong>4-party card model</strong> — cardholder, merchant, acquirer, issuer — is the mental model. In real systems, a fifth actor sits between the merchant and the acquirer: the <strong>PSP</strong> (Payment Service Provider like Stripe, Razorpay, Adyen) that gives you the API. And a sixth actor is the <strong>card network</strong> (Visa, Mastercard) that switches between acquirer and issuer. UPI's variant collapses the network into <strong>NPCI</strong> as the central switch, and the acquirer/issuer are simply "beneficiary bank" and "remitter bank."</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 960 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Digital payment system architecture">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/></marker>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/></marker>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/></marker>
+        </defs>
+        <style>
+          .box { fill: #1a2340; stroke: #4361ee; stroke-width: 1.5; rx: 8; }
+          .box.psp { stroke: #7048e8; }
+          .box.net { stroke: #ff9900; }
+          .box.bank{ stroke: #2dc653; }
+          .box.risk{ stroke: #f7567c; }
+          .lbl { fill: #e7ecf3; font: 700 12px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .sub { fill: #a0aec0; font: 10px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .fl  { stroke: #7fa2ff; stroke-width: 2; fill: none; }
+          .fl.settle { stroke: #f4a259; stroke-dasharray: 4 3; }
+          .fl.event  { stroke: #2dc653; }
+          .pl  { fill: #7fa2ff; font: 700 10px monospace; text-anchor: middle; }
+          .pl.settle { fill: #f4a259; }
+          .pl.event  { fill: #2dc653; }
+        </style>
+
+        <!-- Row 1: Merchant/PSP -->
+        <rect class="box"      x="20"  y="30"  width="140" height="52" rx="8"/>
+        <text class="lbl" x="90"  y="52">Merchant App</text>
+        <text class="sub" x="90"  y="70">web / mobile</text>
+
+        <rect class="box psp"  x="220" y="30"  width="160" height="52" rx="8"/>
+        <text class="lbl" x="300" y="52">Payment Gateway API</text>
+        <text class="sub" x="300" y="70">PaymentIntent · idempotency</text>
+
+        <rect class="box risk" x="430" y="30"  width="130" height="52" rx="8"/>
+        <text class="lbl" x="495" y="52">Fraud / Risk</text>
+        <text class="sub" x="495" y="70">Radar · ML score</text>
+
+        <rect class="box psp"  x="610" y="30"  width="150" height="52" rx="8"/>
+        <text class="lbl" x="685" y="52">Tokenization Vault</text>
+        <text class="sub" x="685" y="70">PCI scope isolation</text>
+
+        <rect class="box psp"  x="800" y="30"  width="130" height="52" rx="8"/>
+        <text class="lbl" x="865" y="52">3DS Server</text>
+        <text class="sub" x="865" y="70">SCA challenge</text>
+
+        <!-- Row 2: Networks -->
+        <rect class="box net"  x="220" y="170" width="160" height="60" rx="8"/>
+        <text class="lbl" x="300" y="194">Acquirer</text>
+        <text class="sub" x="300" y="210">merchant bank</text>
+        <text class="sub" x="300" y="222">FDMS · Chase Paymentech</text>
+
+        <rect class="box net"  x="410" y="170" width="150" height="60" rx="8"/>
+        <text class="lbl" x="485" y="194">Card Network / Switch</text>
+        <text class="sub" x="485" y="210">Visa · MC · Amex</text>
+        <text class="sub" x="485" y="222">NPCI (UPI) · SWIFT</text>
+
+        <rect class="box net"  x="590" y="170" width="150" height="60" rx="8"/>
+        <text class="lbl" x="665" y="194">Issuer</text>
+        <text class="sub" x="665" y="210">cardholder bank</text>
+        <text class="sub" x="665" y="222">balance check · AV</text>
+
+        <!-- Row 3: Ledger + Async -->
+        <rect class="box bank" x="20"  y="290" width="180" height="70" rx="8"/>
+        <text class="lbl" x="110" y="314">Ledger (double-entry)</text>
+        <text class="sub" x="110" y="330">append-only DR / CR</text>
+        <text class="sub" x="110" y="346">idempotency table</text>
+
+        <rect class="box"      x="230" y="290" width="150" height="70" rx="8"/>
+        <text class="lbl" x="305" y="314">Event Bus</text>
+        <text class="sub" x="305" y="330">Kafka / SNS</text>
+        <text class="sub" x="305" y="346">outbox pattern</text>
+
+        <rect class="box"      x="410" y="290" width="140" height="70" rx="8"/>
+        <text class="lbl" x="480" y="314">Webhook Delivery</text>
+        <text class="sub" x="480" y="330">exp backoff · HMAC</text>
+        <text class="sub" x="480" y="346">at-least-once</text>
+
+        <rect class="box"      x="580" y="290" width="160" height="70" rx="8"/>
+        <text class="lbl" x="660" y="314">Recon &amp; Settlement</text>
+        <text class="sub" x="660" y="330">daily bank files</text>
+        <text class="sub" x="660" y="346">BAI2 · SEPA · ISO 20022</text>
+
+        <rect class="box"      x="770" y="290" width="160" height="70" rx="8"/>
+        <text class="lbl" x="850" y="314">Analytics / Fraud Store</text>
+        <text class="sub" x="850" y="330">S3 · Redshift · features</text>
+        <text class="sub" x="850" y="346">ML retraining</text>
+
+        <!-- Row 4: Merchant + payer -->
+        <rect class="box bank" x="230" y="410" width="200" height="52" rx="8"/>
+        <text class="lbl" x="330" y="432">Merchant Payout Account</text>
+        <text class="sub" x="330" y="450">T+1 / T+2 batch</text>
+
+        <rect class="box bank" x="500" y="410" width="200" height="52" rx="8"/>
+        <text class="lbl" x="600" y="432">Cardholder Statement</text>
+        <text class="sub" x="600" y="450">daily / monthly</text>
+
+        <!-- request flow arrows -->
+        <path class="fl" d="M160,56 L220,56" marker-end="url(#a1)"/>
+        <path class="fl" d="M380,56 L430,56" marker-end="url(#a1)"/>
+        <path class="fl" d="M560,56 L610,56" marker-end="url(#a1)"/>
+        <path class="fl" d="M760,56 L800,56" marker-end="url(#a1)"/>
+
+        <path class="fl" d="M300,82 L300,170" marker-end="url(#a1)"/>
+        <text class="pl" x="335" y="130">ISO 8583 auth req</text>
+        <path class="fl" d="M380,200 L410,200" marker-end="url(#a1)"/>
+        <path class="fl" d="M560,200 L590,200" marker-end="url(#a1)"/>
+
+        <!-- response back-flow -->
+        <path class="fl" d="M665,230 C665,260 300,260 300,230" marker-end="url(#a1)"/>
+        <text class="pl" x="485" y="256">auth approved/declined (200-500 ms)</text>
+
+        <!-- ledger + outbox -->
+        <path class="fl event" d="M220,290 L110,290" marker-end="url(#a2)"/>
+        <text class="pl event" x="170" y="282">write DR/CR</text>
+        <path class="fl event" d="M200,325 L230,325" marker-end="url(#a2)"/>
+        <path class="fl event" d="M380,325 L410,325" marker-end="url(#a2)"/>
+        <path class="fl event" d="M550,325 L580,325" marker-end="url(#a2)"/>
+        <path class="fl event" d="M740,325 L770,325" marker-end="url(#a2)"/>
+
+        <!-- overnight settlement -->
+        <path class="fl settle" d="M660,360 L330,410" marker-end="url(#a3)"/>
+        <path class="fl settle" d="M660,360 L600,410" marker-end="url(#a3)"/>
+        <text class="pl settle" x="500" y="395">nightly clearing &amp; settlement</text>
+
+        <rect x="20" y="472" width="920" height="4" fill="transparent"/>
+      </svg>
+    </div>
+
+    <p>The synchronous <span style="color:#4361ee;font-weight:700">blue path</span> is what the customer waits on — must complete in under 2 seconds. The <span style="color:#208b3a;font-weight:700">green events</span> are async, fired after the ledger commits (outbox pattern) so an integration failure never blocks a payment. The <span style="color:#c07521;font-weight:700">amber dashed path</span> is <strong>settlement</strong> — the actual movement of funds — which runs overnight in batch and reconciles against files the banks push back.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>One ₹500 UPI payment, hop by hop</h2>
+    <p>Press <strong>▶ Play</strong>. Priya taps "Pay ₹500" on GPay to Zomato. Blue is the authorization path, green is the ledger commit, amber is overnight settlement, pink is a duplicate retry that must be idempotently absorbed.</p>
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" role="img">
+        <style>
+          .node { fill: #1a2340; stroke: #4361ee; stroke-width: 1.5; rx: 8; }
+          .node.psp { stroke: #7048e8; }
+          .node.net { stroke: #ff9900; }
+          .node.bank{ stroke: #2dc653; }
+          .node.mer { stroke: #f7567c; }
+          .txt { fill: #e7ecf3; font: 700 11px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .sub { fill: #a0aec0; font: 10px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .pkt { r: 9; }
+          .pkt.auth { fill: #7fa2ff; }
+          .pkt.ok   { fill: #2dc653; }
+          .pkt.dupe { fill: #f7567c; }
+          .pkt.settle { fill: #f4a259; }
+        </style>
+        <rect class="node"     x="20"  y="150" width="110" height="50" rx="8"/>
+        <text class="txt" x="75"  y="172">Priya · GPay</text>
+        <text class="sub" x="75"  y="188">₹500</text>
+
+        <rect class="node psp" x="170" y="150" width="130" height="50" rx="8"/>
+        <text class="txt" x="235" y="172">PSP / Gateway</text>
+        <text class="sub" x="235" y="188">idempotency key</text>
+
+        <rect class="node net" x="340" y="150" width="120" height="50" rx="8"/>
+        <text class="txt" x="400" y="172">NPCI Switch</text>
+        <text class="sub" x="400" y="188">routes by VPA</text>
+
+        <rect class="node bank" x="500" y="90" width="130" height="50" rx="8"/>
+        <text class="txt" x="565" y="112">HDFC · Remitter</text>
+        <text class="sub" x="565" y="128">debit ₹500 · UPI PIN</text>
+
+        <rect class="node bank" x="500" y="210" width="130" height="50" rx="8"/>
+        <text class="txt" x="565" y="232">ICICI · Beneficiary</text>
+        <text class="sub" x="565" y="248">credit ₹500</text>
+
+        <rect class="node mer" x="680" y="150" width="120" height="50" rx="8"/>
+        <text class="txt" x="740" y="172">Zomato App</text>
+        <text class="sub" x="740" y="188">shows "Success"</text>
+
+        <rect class="node psp" x="170" y="290" width="620" height="42" rx="8"/>
+        <text class="txt" x="480" y="308">Double-entry Ledger · idempotency table · outbox event</text>
+        <text class="sub" x="480" y="324">DR HDFC-Priya ₹500  ·  CR ICICI-Zomato ₹500  ·  balanced</text>
+
+        <circle class="pkt auth a-el a-hidden"   id="pk-auth"  cx="75" cy="175"/>
+        <circle class="pkt ok   a-el a-hidden"   id="pk-ok"    cx="740" cy="175"/>
+        <circle class="pkt dupe a-el a-hidden"   id="pk-dupe"  cx="75" cy="188"/>
+        <circle class="pkt settle a-el a-hidden" id="pk-set"   cx="565" cy="115"/>
+
+        <text class="sub" id="ledger-ok" x="480" y="270" fill="#2dc653" opacity="0">✓ ledger written · outbox enqueued</text>
+        <text class="sub" id="dupe-ok"   x="235" y="140" fill="#f7567c" opacity="0">retry — same key → no-op</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+    <script>
+      (function () {
+        const root = document.getElementById('anim1'); if (!root) return;
+        const $ = s => root.querySelector(s), $$ = s => root.querySelectorAll(s);
+        const label = $('.anim-step-label'), cap = $('.anim-step-caption');
+        const btnP = root.querySelector('[data-act="play"]');
+        const btnN = root.querySelector('[data-act="next"]');
+        const btnB = root.querySelector('[data-act="prev"]');
+        const btnR = root.querySelector('[data-act="reset"]');
+        function set(sel,x,y){ const e=$(sel); if(!e) return; e.setAttribute('cx',x); e.setAttribute('cy',y); e.classList.remove('a-hidden'); }
+        function hide(sel){ $(sel)?.classList.add('a-hidden'); }
+        function txt(sel,t){ const e=$(sel); if(e){ e.textContent=t; e.setAttribute('opacity','1'); } }
+        function clr(sel){ const e=$(sel); if(e){ e.setAttribute('opacity','0'); } }
+
+        const CFG = {
+          intro: 'Priya pays ₹500 to Zomato via UPI. Watch idempotency, dual-entry ledger, and overnight settlement.',
+          interval: 1900,
+          reset: (r) => {
+            ['#pk-auth','#pk-ok','#pk-dupe','#pk-set'].forEach(hide);
+            $('#pk-auth').setAttribute('cx',75);  $('#pk-auth').setAttribute('cy',175);
+            $('#pk-ok').setAttribute('cx',740);   $('#pk-ok').setAttribute('cy',175);
+            $('#pk-dupe').setAttribute('cx',75);  $('#pk-dupe').setAttribute('cy',188);
+            $('#pk-set').setAttribute('cx',565);  $('#pk-set').setAttribute('cy',115);
+            clr('#ledger-ok'); clr('#dupe-ok');
+          },
+          steps: [
+            { caption: '1. Priya taps Pay ₹500. GPay generates a fresh idempotency key and sends the request to the PSP.',
+              apply: (r,$) => set('#pk-auth', 235, 175) },
+            { caption: '2. PSP looks up the VPA "zomato@icici", enriches with fraud signals, forwards to NPCI switch.',
+              apply: (r,$) => set('#pk-auth', 400, 175) },
+            { caption: '3. NPCI routes the debit request to HDFC (Priya\'s bank). HDFC asks GPay for the UPI PIN.',
+              apply: (r,$) => set('#pk-auth', 565, 115) },
+            { caption: '4. Priya enters PIN. HDFC verifies balance, places a debit, replies "approved" to NPCI.',
+              apply: (r,$) => set('#pk-auth', 400, 175) },
+            { caption: '5. NPCI forwards the credit leg to ICICI (Zomato\'s bank). ICICI credits the merchant subledger.',
+              apply: (r,$) => set('#pk-auth', 565, 235) },
+            { caption: '6. PSP writes a balanced double-entry: DR Priya-liability ₹500, CR Zomato-payable ₹500. Idempotency-key row inserted.',
+              apply: (r,$) => txt('#ledger-ok','✓ ledger written · outbox enqueued') },
+            { caption: '7. Success flows back through PSP to GPay to Zomato — total elapsed ~1.2 seconds.',
+              apply: (r,$) => set('#pk-ok', 235, 175) },
+            { caption: '8. Zomato\'s app confirms "Payment received." Priya sees "Success."',
+              apply: (r,$) => set('#pk-ok', 740, 175) },
+            { caption: '9. Network blips — GPay retries with the SAME idempotency key. PSP finds the key, returns the original response without touching the ledger.',
+              apply: (r,$) => { set('#pk-dupe', 235, 188); txt('#dupe-ok','retry — same key → no-op'); } },
+            { caption: '10. Overnight, NPCI runs settlement: real money moves HDFC → RBI → ICICI in one net-position batch across every UPI txn that day.',
+              apply: (r,$) => set('#pk-set', 565, 235) }
+          ]
+        };
+
+        let idx=-1, playing=false, timer=null;
+        function goto(i){ if(i<0||i>=CFG.steps.length) return; CFG.reset(root); for(let k=0;k<=i;k++) CFG.steps[k].apply(root,$,$$); idx=i; label.textContent=`Step ${i+1}/${CFG.steps.length}`; cap.textContent=CFG.steps[i].caption; }
+        function reset(){ idx=-1; playing=false; if(timer){clearTimeout(timer); timer=null;} CFG.reset(root); label.textContent='Ready'; cap.textContent=CFG.intro; btnP.textContent='▶ Play'; }
+        function play(){ if(playing){ playing=false; if(timer)clearTimeout(timer); btnP.textContent='▶ Play'; return; } if(idx>=CFG.steps.length-1) reset(); playing=true; btnP.textContent='⏸ Pause'; function tick(){ if(!playing) return; if(idx+1<CFG.steps.length) goto(idx+1); if(idx<CFG.steps.length-1) timer=setTimeout(tick, CFG.interval); else { playing=false; btnP.textContent='▶ Replay'; } } timer=setTimeout(tick, 400); }
+        btnP.addEventListener('click', play);
+        btnR.addEventListener('click', reset);
+        btnN.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnP.textContent='▶ Play';} goto(idx+1); });
+        btnB.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnP.textContent='▶ Play';} goto(idx-1); });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. The four-party model (and its offspring)</h3>
+    <p>Every card payment has four roles: the <strong>cardholder</strong>, the <strong>merchant</strong>, the merchant's bank called the <strong>acquirer</strong>, and the cardholder's bank called the <strong>issuer</strong>. Between the acquirer and the issuer sits the <strong>card network</strong> — Visa or Mastercard — which is a global switch that routes ISO 8583 messages by BIN (Bank Identification Number, the first 6 digits of the card). Modern PSPs like Stripe technically sit as an <em>additional</em> layer between the merchant and the acquirer, offering one API in exchange for handling the complexity of dealing with 100+ acquirers globally. In UPI's design the network is <strong>NPCI</strong>, the acquirer/issuer are just banks, and the routing happens by <strong>VPA</strong> (<code>priya@hdfc</code>) instead of card number. The essence is unchanged: <em>the money-source institution and the money-destination institution never talk directly — they always go through a trusted switch.</em></p>
+
+    <h3>2. Idempotency: the single most important primitive</h3>
+    <p>Networks fail. Clients retry. If a POST to <code>/charges</code> for ₹500 gets retried three times because the response was lost, you must not charge ₹1500. Stripe made this a mandatory API contract: every mutating call carries an <code>Idempotency-Key</code> header (typically a UUID tied to the client's cart or session). The PSP stores <code>(key → response)</code> for at least 24 hours; a retry with the same key returns the cached response byte-for-byte, without touching the ledger. This is why Stripe advertises "no double charges" as an API-level guarantee. Internally, the idempotency table is a DynamoDB row with the key as the partition key and a strong-consistency write; even under a race between two retries, DynamoDB's conditional write makes exactly one win.</p>
+
+    <h3>3. Double-entry ledger — the accounting core</h3>
+    <p>The ledger is <strong>append-only</strong>. You never <code>UPDATE balance = balance - 500</code>. Instead you INSERT two entries — a <strong>debit</strong> from one account and a <strong>credit</strong> to another — whose sum is zero. A single ₹500 payment from Priya to Zomato looks like:</p>
+    <table class="ledger">
+      <tr><th>txn_id</th><th>account</th><th>direction</th><th>amount</th></tr>
+      <tr><td>tx_9f4a</td><td>hdfc:priya-checking</td><td class="dr">DR</td><td>500.00</td></tr>
+      <tr><td>tx_9f4a</td><td>icici:zomato-merchant</td><td class="cr">CR</td><td>500.00</td></tr>
+    </table>
+    <p>A refund is not an UPDATE — it's <em>another</em> transaction with the mirror-image legs. A balance is a <code>SUM(credits) - SUM(debits)</code>; for performance, you maintain <strong>materialized balance snapshots</strong> and replay entries after the snapshot version. This design gives you time-travel ("what was Zomato's balance at 3:47 PM yesterday?"), a fraud-proof audit trail, and mathematical reconciliation — every batch of entries must sum to zero, and if it doesn't, something is wrong before you even look at balances. It's how Uber's Ledgerstore, Airbnb's ledger, Square's Cash App, and Modern Treasury's Ledgers API all work under the hood.</p>
+
+    <h3>4. Auth vs capture vs settlement — three different clocks</h3>
+    <p>These are often conflated but are three distinct events. <strong>Authorization</strong> is a real-time yes/no from the issuer: "does this cardholder have ₹500 available and is this transaction not fraudulent?" It places a <em>hold</em> on the card but no money moves — the hold expires in 5-30 days if not captured. <strong>Capture</strong> is the merchant's declaration "I'm shipping the goods, please turn the hold into a real charge." For most e-commerce this happens instantly (auto-capture). For hotels, capture happens at check-out; for pre-orders, capture happens at ship time. <strong>Settlement</strong> is the actual money movement — nightly, in batch, between acquirer and issuer via the card network's central clearing. Merchants get paid at <strong>T+1</strong> or <strong>T+2</strong> depending on the country and risk profile. UPI is special: it settles in near-real-time via RBI's IMPS rails, which is a big reason it feels different from cards.</p>
+
+    <h3>5. 3-D Secure and Strong Customer Authentication</h3>
+    <p>Europe's PSD2 regulation and India's RBI both require <strong>SCA</strong> — the payer must prove two of "something they know / have / are." <strong>3-D Secure 2</strong> is the technical protocol: the merchant/PSP sends the authorization request enriched with device fingerprints, IP, and transaction context to the issuer, who scores the risk. Low-risk transactions get <em>frictionless flow</em> (approved silently). High-risk ones get <em>challenge flow</em> — a redirect (or in-app popup) that asks the cardholder to authenticate with a bank OTP, biometric, or app confirmation. Once complete, a signed authentication token is returned to the PSP, which appends it to the auth message. Successful 3DS shifts liability from the merchant to the issuer for chargebacks — a huge commercial reason to use it, not just a compliance one.</p>
+
+    <h3>6. Tokenization and PCI DSS scope</h3>
+    <p>Storing a raw card number (PAN) puts you in <strong>PCI DSS Level 1</strong> scope — quarterly audits, network segmentation, penetration testing, expensive. The dodge is <strong>tokenization</strong>: the moment a card enters the PSP, its PAN is replaced with an opaque token (<code>pm_1Nx…</code>), which is what your systems store. The raw PAN lives only inside a hardened <strong>vault</strong> (often an HSM-backed service in its own VPC with no outbound internet). Every subsequent operation — charge, refund, save-for-later — is done by referencing the token. This is how Stripe lets merchants "save a card for future use" without those merchants ever touching real card data.</p>
+
+    <h3>7. Fraud and risk scoring in the request path</h3>
+    <p>The fraud model sits <em>inline</em> with authorization — it must return a decision in under 100 ms so it doesn't blow the 2-second budget. It reads dozens of features: geo distance from prior use, device fingerprint, velocity (how many charges from this IP in the last minute), BIN reputation, order-value distribution, and often 3rd-party signals like address-verification. A gradient-boosted tree or a small NN scores the transaction; above a threshold it triggers 3DS, above another it declines. The feature store is <strong>Redis or DynamoDB DAX</strong> — sub-millisecond point lookups. Retraining happens offline in S3 → Redshift with feedback labels arriving 30-90 days later (chargeback horizon).</p>
+
+    <h3>8. Webhooks and the outbox pattern</h3>
+    <p>After the ledger commits, downstream systems need to know: the merchant's dashboard, the fulfillment service, analytics, receipts. You can't have the ledger-write transaction include an HTTP call — networks fail, and you'll roll back a perfectly good payment. The <strong>outbox pattern</strong> solves this: in the same DB transaction as the ledger writes, insert an event row into an <code>outbox</code> table. A separate poller reads outbox rows and publishes them to Kafka/SNS. Webhook delivery to merchants is <strong>at-least-once with exponential backoff</strong>, signed with an HMAC so merchants can verify authenticity. Merchants are expected to be idempotent on their side.</p>
+
+    <h3>9. Reconciliation — where internal reality meets external reality</h3>
+    <p>Every morning, banks and networks push settlement files: <strong>BAI2</strong> or <strong>MT940</strong> from banks, ISO 20022 messages from newer rails, or CSV from card networks. A reconciliation job parses them and matches each line against the internal ledger by <code>trace_id + amount + date</code>. Matched pairs reduce the "in-transit" clearing account to zero. Unmatched items become <strong>exceptions</strong> — a missing bank credit, a fee not booked, a chargeback the network filed but you didn't get the webhook for. Ops resolves each with a new balanced ledger entry. This is why "the ledger is append-only and self-checking" isn't a religious principle — it's what makes daily reconciliation a diff, not a data-repair project.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <table>
+      <tr><th>Component</th><th>Structure / algorithm</th><th>Why chosen</th><th>Complexity</th></tr>
+      <tr><td>Idempotency store</td><td>Hash map on <code>(idempotency_key)</code> with TTL; DynamoDB conditional PUT</td><td>Constant-time dedup; safe under concurrent retries</td><td>O(1)</td></tr>
+      <tr><td>Ledger</td><td>Append-only log; per-account <em>versioned balance snapshots</em></td><td>Immutable audit trail, O(1) balance read via snapshot + delta</td><td>Read O(Δ), Write O(1)</td></tr>
+      <tr><td>Balance snapshot rebuild</td><td>Prefix-sum over ordered entries</td><td>Reconstruct any historical balance</td><td>O(n) rebuild</td></tr>
+      <tr><td>Fraud scoring</td><td>Gradient-boosted decision trees (XGBoost) + count-min sketch for velocity</td><td>&lt;100 ms inference; approximate counts for hot keys</td><td>O(trees × depth)</td></tr>
+      <tr><td>Card routing</td><td>Trie / longest-prefix on BIN (6-digit) → issuer</td><td>Fast issuer lookup for network switch</td><td>O(6)</td></tr>
+      <tr><td>Distributed txn IDs</td><td>Snowflake or ULID</td><td>Time-sortable, unique across shards</td><td>O(1)</td></tr>
+      <tr><td>Reconciliation match</td><td>Hash-join over <code>(trace_id, amount, date)</code></td><td>Set-difference of internal vs bank statements</td><td>O(n + m)</td></tr>
+      <tr><td>Rate limiting fraud probes</td><td>Sliding-window counter in Redis</td><td>Blocks card-testing attacks</td><td>O(1)</td></tr>
+      <tr><td>Message queue</td><td>Kafka log-structured commit log</td><td>At-least-once ordering per partition</td><td>O(1) append</td></tr>
+      <tr><td>Circuit breaker to acquirer</td><td>State machine (closed/open/half-open) with EWMA error rate</td><td>Fails fast when a bank is degraded</td><td>O(1)</td></tr>
+      <tr><td>3DS challenge routing</td><td>Directed acyclic decision graph (bin → issuer → protocol version)</td><td>Route to correct 3DS server</td><td>O(1)</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <table>
+      <tr><th>Layer</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Public API</td><td>API Gateway + WAF + Shield Advanced</td><td>TLS, rate limits, DDoS shield for financial endpoints</td></tr>
+      <tr><td>Payment service (compute)</td><td>EKS on EC2 (c7i) — <em>not</em> Fargate</td><td>Fine control over kernel tuning, dedicated tenancy for PCI scope</td></tr>
+      <tr><td>Ledger primary store</td><td>Aurora PostgreSQL (Multi-AZ + read replicas) <em>or</em> DynamoDB with strong-consistency reads</td><td>Aurora for complex SQL joins in recon; DynamoDB for extreme write throughput and per-partition ACID</td></tr>
+      <tr><td>Idempotency table</td><td>DynamoDB with TTL</td><td>Conditional PUT gives exactly-one semantics under concurrent retries</td></tr>
+      <tr><td>Card vault</td><td>Isolated VPC + AWS Payment Cryptography + HSM-backed KMS</td><td>Cordoned off PCI scope; hardware-rooted key protection</td></tr>
+      <tr><td>Fraud feature store</td><td>DAX in front of DynamoDB; ElastiCache Redis for hot counters</td><td>Sub-ms feature lookups</td></tr>
+      <tr><td>Fraud model serving</td><td>SageMaker real-time endpoint or Lambda with ONNX runtime</td><td>Managed ML inference under 100 ms</td></tr>
+      <tr><td>Event bus / outbox</td><td>MSK (Kafka) or EventBridge + SQS FIFO</td><td>Ordered per-key delivery; at-least-once with dedup</td></tr>
+      <tr><td>Webhook delivery</td><td>Lambda + SQS + Step Functions (retry orchestration)</td><td>Exponential backoff, DLQ for failures</td></tr>
+      <tr><td>Reconciliation batch</td><td>AWS Glue + Athena over S3 (Parquet)</td><td>Serverless SQL over daily settlement files</td></tr>
+      <tr><td>Audit archive</td><td>S3 Object Lock (WORM) + Glacier Deep Archive</td><td>Regulator-grade immutability, 7-10 year retention</td></tr>
+      <tr><td>Secrets</td><td>Secrets Manager + KMS</td><td>Rotates credentials automatically</td></tr>
+      <tr><td>Observability</td><td>CloudWatch, X-Ray, GuardDuty, CloudTrail</td><td>Metrics, distributed tracing, threat detection, admin-plane audit</td></tr>
+    </table>
+    <p><strong>Typical deployment.</strong> Everything PCI-in-scope lives in a dedicated VPC with no internet gateway, only VPC endpoints and PrivateLink to the vault. Payment service pods on EKS talk to the ledger via a Data Access Layer that enforces double-entry writes atomically (either PostgreSQL transaction or DynamoDB TransactWriteItems). Outbox events land in MSK; a stream processor fans them to webhook delivery, analytics, and the fraud feature-store updater. Nightly, Glue crawlers ingest settlement files into S3 and Athena queries produce reconciliation reports; exceptions get filed as ledger correction entries. S3 Object Lock keeps every event around for 10 years.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — idempotent charge + double-entry ledger</h2>
+    <p>This is the core primitive of a payment API: a <code>POST /charges</code> handler that (1) dedupes by idempotency key, (2) posts a balanced pair of ledger entries in a single transaction, (3) enqueues an outbox event. Real Stripe/Razorpay do exactly this shape, just at higher fanout.</p>
+<pre><span class="cmt">// Program.cs — ASP.NET Core 8. Pseudo-repo interface omitted for brevity.</span>
+<span class="kw">using</span> Microsoft.EntityFrameworkCore;
+
+<span class="kw">public record</span> ChargeRequest(<span class="typ">string</span> IdempotencyKey, <span class="typ">string</span> PayerAccount,
+                              <span class="typ">string</span> PayeeAccount,     <span class="typ">decimal</span> Amount,
+                              <span class="typ">string</span> Currency);
+
+<span class="kw">public record</span> ChargeResponse(<span class="typ">string</span> TxnId, <span class="typ">string</span> Status, <span class="typ">decimal</span> Amount);
+
+app.MapPost(<span class="str">"/v1/charges"</span>, <span class="kw">async</span> (
+    ChargeRequest req,
+    <span class="typ">LedgerDb</span> db,
+    <span class="typ">IOutbox</span> outbox,
+    <span class="typ">HttpContext</span> ctx) =&gt;
+{
+    <span class="cmt">// 1. Idempotency check — return cached response on retry.</span>
+    <span class="kw">var</span> cached = <span class="kw">await</span> db.Idempotency.FindAsync(req.IdempotencyKey);
+    <span class="kw">if</span> (cached != <span class="kw">null</span>)
+        <span class="kw">return</span> <span class="typ">Results</span>.Ok(<span class="typ">JsonSerializer</span>.Deserialize&lt;<span class="typ">ChargeResponse</span>&gt;(cached.Response));
+
+    <span class="cmt">// 2. Guard rails.</span>
+    <span class="kw">if</span> (req.Amount &lt;= 0) <span class="kw">return</span> <span class="typ">Results</span>.BadRequest(<span class="str">"amount must be &gt; 0"</span>);
+    <span class="kw">if</span> (req.PayerAccount == req.PayeeAccount)
+        <span class="kw">return</span> <span class="typ">Results</span>.BadRequest(<span class="str">"payer == payee"</span>);
+
+    <span class="cmt">// 3. Fraud gate — non-blocking above the 100 ms budget.</span>
+    <span class="kw">var</span> risk = <span class="kw">await</span> _fraud.ScoreAsync(req, ctx.Connection.RemoteIpAddress);
+    <span class="kw">if</span> (risk.Decision == <span class="typ">RiskDecision</span>.Decline)
+        <span class="kw">return</span> <span class="typ">Results</span>.StatusCode(402);
+
+    <span class="cmt">// 4. Atomic double-entry write + outbox in ONE transaction.</span>
+    <span class="kw">await using</span> <span class="kw">var</span> tx = <span class="kw">await</span> db.Database.BeginTransactionAsync(<span class="typ">IsolationLevel</span>.Serializable);
+    <span class="kw">var</span> txnId = <span class="str">$"tx_{</span>Ulid.NewUlid()<span class="str">}"</span>;
+
+    db.Entries.AddRange(
+        <span class="kw">new</span> <span class="typ">LedgerEntry</span> { TxnId = txnId, Account = req.PayerAccount,
+                            Direction = <span class="typ">Dir</span>.Debit,  Amount = req.Amount,
+                            Currency = req.Currency, CreatedAt = <span class="typ">DateTime</span>.UtcNow },
+        <span class="kw">new</span> <span class="typ">LedgerEntry</span> { TxnId = txnId, Account = req.PayeeAccount,
+                            Direction = <span class="typ">Dir</span>.Credit, Amount = req.Amount,
+                            Currency = req.Currency, CreatedAt = <span class="typ">DateTime</span>.UtcNow }
+    );
+
+    <span class="cmt">// Outbox: same transaction as ledger, so an event is published iff the ledger commits.</span>
+    db.Outbox.Add(<span class="kw">new</span> <span class="typ">OutboxEvent</span> {
+        EventId = <span class="typ">Guid</span>.NewGuid(),
+        Type    = <span class="str">"charge.succeeded"</span>,
+        Payload = <span class="typ">JsonSerializer</span>.Serialize(<span class="kw">new</span> { txnId, req.Amount, req.Currency })
+    });
+
+    <span class="kw">var</span> response = <span class="kw">new</span> <span class="typ">ChargeResponse</span>(txnId, <span class="str">"succeeded"</span>, req.Amount);
+
+    <span class="cmt">// Persist idempotency-key → response so retries return the same result byte-for-byte.</span>
+    db.Idempotency.Add(<span class="kw">new</span> <span class="typ">IdempotencyRecord</span> {
+        Key = req.IdempotencyKey,
+        Response = <span class="typ">JsonSerializer</span>.Serialize(response),
+        ExpiresAt = <span class="typ">DateTime</span>.UtcNow.AddHours(24)
+    });
+
+    <span class="kw">await</span> db.SaveChangesAsync();
+    <span class="kw">await</span> tx.CommitAsync();
+
+    <span class="kw">return</span> <span class="typ">Results</span>.Ok(response);
+});
+</pre>
+    <p>Notes on why this is correct: (a) The idempotency check is the <em>first</em> thing — before validation, before fraud scoring — so retries are as cheap as possible. (b) The ledger uses <code>Serializable</code> isolation, which is the only level that guarantees no lost updates on concurrent writes to the same account. (c) The outbox insert lives in the same DB transaction as the ledger, so events are published if-and-only-if the ledger commits (this is the <a href="../outbox-pattern/index.html">Transactional Outbox</a> pattern). (d) The response is serialized <em>into</em> the idempotency row, so a retry returns the exact same JSON, including the same <code>txnId</code>. Real production code adds: currency conversion, tenant isolation, fee splits (interchange, PSP fee, GST), and a "charge status machine" (requires_capture → captured → refunded → disputed).</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <h3>Where it actually breaks</h3>
+    <p><strong>Hot merchant accounts</strong> — a big-box retailer during Black Friday concentrates writes on one ledger partition. Fix: shard by <code>merchant_id + hour</code> and sum sub-balances asynchronously, or use per-shard append with a periodic roll-up. <strong>Slow issuer</strong> — one bank's auth endpoint goes to 5-second latency and takes down your whole checkout. Fix: circuit breakers with per-issuer budgets, retry with a backup route, degrade gracefully to "manual review." <strong>Reconciliation drift</strong> — bank fee changes silently and your ledger drifts by paise per transaction until someone notices at month-end. Fix: daily reconciliation is non-negotiable; a tolerance of ₹0.00 with rollup diff alarms.</p>
+
+    <h3>Consistency &amp; the CAP question</h3>
+    <p>Payments are one of the few domains where <strong>you cannot trade consistency for availability</strong>. If your ledger disagrees with itself across replicas, you have created or destroyed money. Design accordingly: primary ledger on a strongly-consistent store (Aurora with sync replicas, or DynamoDB with strongly-consistent reads); the fraud store, feature store, and analytics can be eventually consistent because a stale fraud feature is only slightly worse, but a stale balance is catastrophic.</p>
+
+    <h3>Interviewer follow-ups (with crisp answers)</h3>
+    <div class="qa">
+      <p class="q">Q. How do you guarantee exactly-once payment processing?</p>
+      <p class="a">A. You don't at the network level; TCP retransmits and app-level retries are unavoidable. Instead you guarantee it at the <em>application layer</em> with an idempotency key on every mutating call and an idempotency table that has a unique constraint on the key. First write wins; retries return the cached response. The ledger itself is idempotent by virtue of the same key being written inside the same transaction.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. Why not just update a balance column?</p>
+      <p class="a">A. Because a balance is a <em>derived</em> quantity. Storing it as ground truth means a bug can silently corrupt it and you can never reconstruct the truth. Append-only entries give you a self-auditing record, mathematical invariants (sum of DR = sum of CR), and the ability to reconstruct any historical balance for disputes or regulator queries. Balance snapshots are a performance optimisation, not the source of truth.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. What's the difference between authorization and capture?</p>
+      <p class="a">A. Authorization is a real-time "yes, this cardholder has funds and this isn't obviously fraud" — it places a hold, no money moves. Capture is "please turn this hold into a real charge," which triggers the merchant getting paid in the next settlement batch. Some flows auto-capture (e-commerce), some delay it (hotels, marketplaces).</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. Why do refunds go back the same way, not the other way?</p>
+      <p class="a">A. Because the card network only knows how to route money in one direction — merchant → cardholder. A refund is technically a "negative capture" traveling the same rails: acquirer → network → issuer, credited to the same card. If the card has expired, most networks now support account-level fallback, but if not, the issuer contacts the cardholder to arrange a manual credit.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. How does UPI settle in real-time when cards can't?</p>
+      <p class="a">A. Cards inherit a batch-clearing legacy from the 1970s. UPI was designed in 2016 on top of RBI's IMPS rails, which are 24×7 real-time gross settlement. So the settlement happens synchronously as part of the transaction, not overnight. This is why UPI's chargeback timelines and fraud model differ meaningfully from card networks.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. What's a chargeback vs a refund?</p>
+      <p class="a">A. A refund is merchant-initiated ("I agree to give the money back"). A chargeback is cardholder-initiated through their issuer ("I dispute this charge as fraudulent or not-as-described"). Chargebacks bypass the merchant entirely; the network claws money back and only then invites the merchant to submit evidence. Losing rate is tracked (Visa allows up to 0.9%) — go over and you get fined or dropped.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. How do you handle a network partition mid-transaction?</p>
+      <p class="a">A. Every payment has a definite issuer response — approved, declined, or timeout. On timeout, the safe default is to reverse locally and mark the transaction "unknown; do not retry automatically." A reconciliation job the next day matches against issuer records to determine truth and posts a correcting entry. The point is: no state stays ambiguous past 24 hours; either the reconciliation confirms it or you create a compensating entry.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "A payment system moves money between a payer and a payee via a 4-party model — cardholder, merchant, acquirer, issuer — with a PSP fronting the API and a card network switching between banks. The core primitives are <em>idempotency keys</em> so retries never double-charge, an <em>append-only double-entry ledger</em> so every balance is derivable and every batch sums to zero, and separation of <em>authorization</em> (real-time hold) from <em>capture</em> and <em>settlement</em> (nightly batch or real-time in UPI). Fraud sits inline under 100 ms; 3DS shifts chargeback liability; the outbox pattern makes downstream integrations reliable; and daily reconciliation with bank files closes the loop. Everything PCI-scoped is behind a tokenization vault so the rest of the system never touches raw card numbers."</p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>UPI: <strong>20 billion txns/month</strong> (Aug 2025), ~7,500 avg TPS, peak 10× that.</li>
+      <li>Auth latency budget: <strong>&lt; 2 s end-to-end</strong>, fraud <strong>&lt; 100 ms</strong>.</li>
+      <li>Idempotency window: <strong>≥ 24 hours</strong>.</li>
+      <li>PCI DSS Level 1: <strong>&gt; 6M card txns/year</strong>.</li>
+      <li>Merchant payout: <strong>T+1 / T+2</strong> for cards; near-real-time for UPI.</li>
+      <li>Chargeback threshold: <strong>0.9%</strong> (Visa) before penalties.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li>Name the 4-party model + PSP + network explicitly on the whiteboard. Interviewers love it.</li>
+      <li>Draw the outbox pattern — it separates "ledger is truth" from "webhooks are eventually consistent."</li>
+      <li>Show a ledger table with DR + CR rows summing to zero. This is the single most senior-signal thing you can draw.</li>
+      <li>Distinguish auth / capture / settlement — they run on different clocks and different rails.</li>
+      <li>Call out reconciliation as a first-class subsystem, not an afterthought. It's what makes the system self-healing.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://docs.stripe.com/payments/payment-intents">Stripe Docs — PaymentIntents API (lifecycle, idempotency, 3DS)</a></li>
+      <li><a href="https://en.wikipedia.org/wiki/Unified_Payments_Interface">UPI — Wikipedia (NPCI switch, PSP model, transaction volumes)</a></li>
+      <li><a href="https://www.moderntreasury.com/journal/what-is-double-entry-accounting">Modern Treasury — Double-entry accounting for financial software</a></li>
+      <li><a href="https://www.npci.org.in/what-we-do/upi/product-overview">NPCI — UPI Product Overview</a></li>
+      <li><a href="https://stripe.com/docs/api/idempotent_requests">Stripe — Idempotent requests reference</a></li>
+      <li><a href="https://www.pcisecuritystandards.org/pci_security/">PCI Security Standards Council</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

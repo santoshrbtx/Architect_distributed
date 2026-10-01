@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Product of Array Except Self — Explained</title>
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --card: #ffffff;
+    --ink: #1f2733;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --kid: #ff8c42;
+    --kid-bg: #fff6ee;
+    --pro: #4361ee;
+    --pro-bg: #eef2ff;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(31,39,51,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 40px 36px;
+    box-shadow: var(--shadow);
+    margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .92; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 28px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .9rem;
+    padding: 6px 12px; border-radius: 999px; transition: .15s;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 30px; margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+  section.kid { border-left: 6px solid var(--kid); background: var(--kid-bg); }
+  section.pro { border-left: 6px solid var(--pro); background: var(--pro-bg); }
+  .badge {
+    display: inline-block; font-size: .78rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .kid .badge { background: var(--kid); color: #fff; }
+  .pro .badge { background: var(--pro); color: #fff; }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.1rem; }
+  p, li { color: var(--ink); }
+  .kid p, .kid li { font-size: 1.08rem; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .95rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--pro); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .arr { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
+  .box {
+    min-width:52px; border-radius:8px; display:flex; flex-direction:column; align-items:center;
+    font-family:"SF Mono",Consolas,monospace; font-weight:700; padding:8px 6px;
+    background:#11203a; color:#c6d0e0; border:1px solid #25324a;
+  }
+  .box.l { background:#4361ee; color:#fff; border-color:#4361ee; }
+  .box.r { background:#ff8c42; color:#241; border-color:#ff8c42; }
+  .box.res { background:#2dc653; color:#04210f; border-color:#2dc653; }
+  .box small { font-weight:600; font-size:.68rem; opacity:.85; margin-top:3px; }
+  .lbl { font-family:"SF Mono",Consolas,monospace; font-size:.85rem; color:var(--muted); margin:8px 0 2px; }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; color: #fff; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 30px;
+    box-shadow: var(--shadow);
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>✖️ Product of Array Except Self</h1>
+    <p>For each spot in a list, multiply <strong>everything except the number in that spot</strong> — and do it fast, <strong>without division</strong>, in one left-to-right pass and one right-to-left pass.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#kid">🧒 For a 10-year-old</a>
+    <a href="#pro">👨‍💻 For a veteran</a>
+    <a href="#steps">🔁 Step by step</a>
+    <a href="#real">🌍 Real-world uses</a>
+    <a href="#cheat">📌 Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+  </nav>
+
+  <section id="kid" class="card kid">
+    <span class="badge">🧒 Explain it like I'm 10</span>
+    <h2>The simple story</h2>
+    <p>Imagine <strong>4 friends</strong> sitting in a row, each holding a number card: <strong>2, 3, 4, 5</strong>. You want to give each friend a <em>new</em> card that equals <strong>all the OTHER friends' numbers multiplied together</strong> — but they're not allowed to count their own card.</p>
+    <p>The slow way: for each friend, multiply everyone else one by one. That's a lot of repeated work. Here's a cleverer trick using <strong>two walks down the row</strong>:</p>
+    <ul>
+      <li><strong>Walk left → right.</strong> Keep a running "product so far" in your head, starting at 1. Before you update it, whisper to each friend: <em>"everyone to your LEFT multiplied is ___."</em> Then fold their card into your running product and move on.</li>
+      <li><strong>Walk right → left.</strong> Reset your running product to 1. Now whisper: <em>"everyone to your RIGHT multiplied is ___,"</em> and multiply that into the number you already gave them.</li>
+    </ul>
+    <p>When both walks are done, each friend is holding <strong>(everyone on their left) × (everyone on their right)</strong> — which is everyone <em>except</em> themselves! 🎉 And you never had to divide.</p>
+    <h3>The rule a kid can follow</h3>
+    <ol>
+      <li>Give everyone a "1" to start.</li>
+      <li>Walk left to right: tell each friend the product of all cards <strong>before</strong> them.</li>
+      <li>Walk right to left: multiply in the product of all cards <strong>after</strong> them.</li>
+      <li>Done — each friend now holds the product of everyone but themselves.</li>
+    </ol>
+  </section>
+
+  <section id="pro" class="card pro">
+    <span class="badge">👨‍💻 For 15 years of IT experience</span>
+    <h2>The engineer's view</h2>
+    <p><strong>Product of Array Except Self</strong> (LeetCode <strong>#238</strong>): given <code>nums[]</code>, return <code>answer[]</code> where <code>answer[i]</code> = product of all elements except <code>nums[i]</code>. The constraints are the whole point: <strong>do it in O(n) without using the division operator</strong>, and the output array does not count toward extra space.</p>
+    <p>The trick is the <strong>prefix × suffix decomposition</strong>: for any index <code>i</code>,
+    <code>answer[i] = (∏ nums[0..i-1]) × (∏ nums[i+1..n-1])</code> — the product of everything to its left times everything to its right. Two linear sweeps compute these without ever multiplying <code>nums[i]</code> into its own result.</p>
+    <p><strong>Why avoid division?</strong> The naive "total product ÷ nums[i]" is O(n) but breaks on <strong>zeros</strong> (division by zero, and a single zero makes the formula wrong for every non-zero slot). The prefix/suffix method sidesteps that entirely and handles any number of zeros for free.</p>
+
+    <h3>Complexity</h3>
+    <table>
+      <tr><th>Approach</th><th>Time</th><th>Space (extra)</th><th>Notes</th></tr>
+      <tr><td>Brute force (nested loop)</td><td>O(n²)</td><td>O(1)</td><td>recompute each product — too slow</td></tr>
+      <tr><td>Division (total ÷ self)</td><td>O(n)</td><td>O(1)</td><td>fails on zeros; disallowed</td></tr>
+      <tr><td>Prefix + suffix arrays</td><td>O(n)</td><td>O(n)</td><td>clear but uses two helper arrays</td></tr>
+      <tr><td><strong>Prefix + suffix, in output</strong></td><td><strong>O(n)</strong></td><td><strong>O(1)*</strong></td><td>optimal; the answer array holds prefixes, a scalar holds the suffix</td></tr>
+    </table>
+    <p style="font-size:.85rem;color:var(--muted)">*O(1) extra space excluding the required output array, per the problem statement.</p>
+
+    <h3>Invariants, preconditions & edge cases</h3>
+    <ul>
+      <li><strong>Invariant after pass 1:</strong> <code>answer[i]</code> holds the product of all elements strictly left of <code>i</code> (with <code>answer[0] = 1</code>).</li>
+      <li><strong>Invariant during pass 2:</strong> a running scalar <code>right</code> holds the product of all elements strictly right of <code>i</code>; multiply it in, then update it.</li>
+      <li><strong>One zero</strong> → only that index gets a non-zero answer; every other index is 0. The algorithm handles this naturally.</li>
+      <li><strong>Two or more zeros</strong> → every answer is 0.</li>
+      <li><strong>Overflow:</strong> products can be large; LeetCode guarantees the answer fits in 32-bit <code>int</code>, but intermediate products in other contexts may need <code>long</code>.</li>
+      <li><strong>Negatives</strong> work unchanged — sign just flows through the multiplication.</li>
+    </ul>
+
+    <h3>Trade-offs & when NOT to use it</h3>
+    <ul>
+      <li><strong>vs. division:</strong> if division is allowed AND no zeros are possible, the one-liner <code>total/nums[i]</code> is simpler — but fragile. Prefer prefix/suffix as the robust default.</li>
+      <li><strong>vs. two helper arrays:</strong> functionally identical and easier to read; collapse into the output array only when space is the constraint.</li>
+      <li>Not applicable when you need <em>cumulative</em> products including self (that's a plain prefix-product scan).</li>
+    </ul>
+
+    <h3>Reference implementation (C#) — the left-to-right then right-to-left method</h3>
+    <pre><code><span class="kw">public int</span>[] <span class="fn">ProductExceptSelf</span>(<span class="kw">int</span>[] nums)
+{
+    <span class="kw">int</span> n = nums.Length;
+    <span class="kw">int</span>[] answer = <span class="kw">new int</span>[n];
+
+    <span class="cmt">// Pass 1 — LEFT TO RIGHT: answer[i] = product of everything to the LEFT of i.</span>
+    answer[<span class="str">0</span>] = <span class="str">1</span>;                          <span class="cmt">// nothing to the left of index 0</span>
+    <span class="kw">for</span> (<span class="kw">int</span> i = <span class="str">1</span>; i &lt; n; i++)
+        answer[i] = answer[i - <span class="str">1</span>] * nums[i - <span class="str">1</span>]; <span class="cmt">// carry the running left-product</span>
+
+    <span class="cmt">// Pass 2 — RIGHT TO LEFT: multiply in the product of everything to the RIGHT.</span>
+    <span class="kw">int</span> right = <span class="str">1</span>;                          <span class="cmt">// nothing to the right of the last index</span>
+    <span class="kw">for</span> (<span class="kw">int</span> i = n - <span class="str">1</span>; i &gt;= <span class="str">0</span>; i--)
+    {
+        answer[i] *= right;                  <span class="cmt">// left-product × right-product</span>
+        right *= nums[i];                    <span class="cmt">// extend running right-product</span>
+    }
+
+    <span class="kw">return</span> answer;
+}</code></pre>
+  </section>
+
+  <section id="steps" class="card">
+    <h2>🔁 How it works, step by step</h2>
+    <p>Let's run <code>nums = [2, 3, 4, 5]</code>. The expected answer is <code>[60, 40, 30, 24]</code> (e.g. answer[0] = 3·4·5 = 60).</p>
+
+    <h3>Pass 1 — left to right (fill in the LEFT products)</h3>
+    <ol class="steps">
+      <li><code>answer[0] = 1</code> (nothing is to the left of index 0).</li>
+      <li><code>answer[1] = answer[0] · nums[0] = 1 · 2 = 2</code> (just the 2 on its left).</li>
+      <li><code>answer[2] = answer[1] · nums[1] = 2 · 3 = 6</code> (2·3 on its left).</li>
+      <li><code>answer[3] = answer[2] · nums[2] = 6 · 4 = 24</code> (2·3·4 on its left).</li>
+    </ol>
+    <div class="lbl">nums:</div>
+    <div class="arr">
+      <div class="box">2<small>i=0</small></div><div class="box">3<small>i=1</small></div><div class="box">4<small>i=2</small></div><div class="box">5<small>i=3</small></div>
+    </div>
+    <div class="lbl">answer after Pass 1 (left products):</div>
+    <div class="arr">
+      <div class="box l">1<small>—</small></div><div class="box l">2<small>2</small></div><div class="box l">6<small>2·3</small></div><div class="box l">24<small>2·3·4</small></div>
+    </div>
+
+    <h3>Pass 2 — right to left (multiply in the RIGHT products)</h3>
+    <ol class="steps">
+      <li><code>right = 1</code>. i=3: <code>answer[3] = 24 · 1 = 24</code>; then <code>right = 1 · 5 = 5</code>.</li>
+      <li>i=2: <code>answer[2] = 6 · 5 = 30</code>; then <code>right = 5 · 4 = 20</code>.</li>
+      <li>i=1: <code>answer[1] = 2 · 20 = 40</code>; then <code>right = 20 · 3 = 60</code>.</li>
+      <li>i=0: <code>answer[0] = 1 · 60 = 60</code>; then <code>right = 60 · 2 = 120</code> (unused).</li>
+    </ol>
+    <div class="lbl">running "right" product folded in →</div>
+    <div class="arr">
+      <div class="box r">1<small>×right=1</small></div><div class="box r">20<small>×right=20</small></div><div class="box r">5<small>×right=5</small></div><div class="box r">1<small>×right=1</small></div>
+    </div>
+    <div class="lbl">final answer = left × right:</div>
+    <div class="arr">
+      <div class="box res">60<small>1·60</small></div><div class="box res">40<small>2·20</small></div><div class="box res">30<small>6·5</small></div><div class="box res">24<small>24·1</small></div>
+    </div>
+
+    <div class="viz">index:        0      1      2      3
+nums:         2      3      4      5
+LEFT  (pass1): 1      2      6     24      ← product of all to the LEFT
+RIGHT (pass2):60     20      5      1      ← product of all to the RIGHT
+answer=L·R:   60     40     30     24  ✓
+
+Check: answer[1] = (2) × (4·5) = 2 × 20 = 40 ✓  (3 itself never used)</div>
+  </section>
+
+  <section id="real" class="card">
+    <h2>🌍 Where the prefix/suffix pattern is used in the real world</h2>
+    <p>The specific puzzle is interview-famous, but the underlying <strong>prefix-product / prefix-sum (cumulative scan) pattern</strong> is everywhere — precompute running aggregates so each query becomes O(1) instead of O(n):</p>
+    <ul>
+      <li><strong>Prefix sums / range queries:</strong> the sum (or product) of any subarray <code>[l, r]</code> in O(1) after an O(n) precompute — the backbone of analytics dashboards, histograms, and "sum between dates" reports.</li>
+      <li><strong>Image processing — summed-area tables (integral images):</strong> the 2-D version of prefix sums lets face-detection and blur filters read the sum over any rectangle in constant time.</li>
+      <li><strong>Probability &amp; ML:</strong> "leave-one-out" products — e.g. the chance an event happens given all factors except one — use exactly this except-self decomposition; also appears in computing gradients/Jacobians without recomputation.</li>
+      <li><strong>Spreadsheets &amp; finance:</strong> running totals, cumulative returns, and "contribution of each item to the whole" columns.</li>
+      <li><strong>GPU / parallel computing:</strong> the <strong>scan (prefix-sum)</strong> primitive is a fundamental parallel building block (stream compaction, sorting, allocation) — the same left-to-right accumulation idea, parallelized.</li>
+      <li><strong>Water-trapping / stock-span style problems:</strong> many array problems precompute "max/product/sum to the left" and "…to the right," then combine — the same two-pass shape as this algorithm.</li>
+    </ul>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>📌 Cheat sheet</h2>
+    <ul>
+      <li><strong>Goal:</strong> <code>answer[i] = </code> product of all elements except <code>nums[i]</code>, in O(n), no division.</li>
+      <li><strong>Key identity:</strong> answer[i] = (product of everything LEFT of i) × (product of everything RIGHT of i).</li>
+      <li><strong>Pass 1 (L→R):</strong> <code>answer[i] = answer[i-1] * nums[i-1]</code>, with <code>answer[0]=1</code>.</li>
+      <li><strong>Pass 2 (R→L):</strong> keep scalar <code>right=1</code>; <code>answer[i] *= right; right *= nums[i];</code></li>
+      <li><strong>Space:</strong> O(1) extra — the output array holds the left products; a single variable holds the right.</li>
+      <li><strong>Why no division:</strong> robust to zeros (1 zero → only that slot non-zero; ≥2 zeros → all zero).</li>
+      <li><strong>LeetCode #238</strong> · pattern = prefix/suffix cumulative scan.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this algorithm</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this algorithm and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <footer>Generated by the <strong>explain-algo</strong> skill · open in your browser via localhost</footer>
+</div>
+  <script src="../../nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Heap / Priority Queue — Explained</title>
+<style>
+  :root {
+    --bg: #f6f8fb; --card: #ffffff; --ink: #1f2733; --muted: #5b6677; --line: #e6eaf0;
+    --kid: #ff8c42;       --kid-bg: #fff6ee;
+    --laymen: #ffd166;    --laymen-bg: #fffaeb;
+    --pro: #4361ee;       --pro-bg: #eef2ff;
+    --code-bg: #1e2430;   --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(31,39,51,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #4361ee 0%, #7048e8 100%); color: #fff; border-radius: var(--radius); padding: 40px 36px; box-shadow: var(--shadow); margin-bottom: 28px; }
+  header.hero h1 { margin: 0 0 8px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.12rem; opacity: .92; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 28px; box-shadow: var(--shadow); display: flex; gap: 8px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .88rem; padding: 6px 12px; border-radius: 999px; transition: .15s; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 30px; margin-bottom: 24px; box-shadow: var(--shadow); }
+  section.kid    { border-left: 6px solid var(--kid);    background: var(--kid-bg); }
+  section.laymen { border-left: 6px solid var(--laymen); background: var(--laymen-bg); }
+  section.pro    { border-left: 6px solid var(--pro);    background: var(--pro-bg); }
+  .badge { display: inline-block; font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; }
+  .kid .badge    { background: var(--kid);    color: #fff; }
+  .laymen .badge { background: var(--laymen); color: #7c5c00; }
+  .pro .badge    { background: var(--pro);    color: #fff; }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  .kid p, .kid li { font-size: 1.08rem; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .93rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { position: relative; padding: 10px 0 10px 46px; margin: 0; border-bottom: 1px dashed var(--line); }
+  .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 10px; width: 30px; height: 30px; border-radius: 50%; background: var(--pro); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: .9rem; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; line-height: 1.5; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 30px; box-shadow: var(--shadow); }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.03rem; }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; color: #fff; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .rw { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 10px 0; }
+  .rw h4 { margin: 0 0 4px; font-size: 1rem; color: var(--pro); }
+  .rw p  { margin: 0; color: var(--muted); font-size: .93rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>Heap &amp; Priority Queue</h1>
+    <p>The data structure behind "give me the smallest / largest / most-important thing, right now" — and where every OS, database, and scheduler leans on it.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#kid">🧒 For a 10-year-old</a>
+    <a href="#laymen">🧑‍🎓 In laymen terms</a>
+    <a href="#pro">👨‍💻 For a veteran</a>
+    <a href="#realworld">🌍 Real-world uses</a>
+    <a href="#steps">🔁 Step by step</a>
+    <a href="#cheat">📌 Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+  </nav>
+
+  <section id="kid" class="card kid">
+    <span class="badge">🧒 Explain it like I'm 10</span>
+    <h2>The line at the doctor's office</h2>
+    <p>Imagine you're at a clinic and lots of people are waiting to see the doctor. But it's not a normal line — the person who is <strong>most hurt</strong> should go first, not whoever came first. So if a boy with a broken arm walks in <em>after</em> a girl with a small cough, the boy goes ahead.</p>
+    <p>Now imagine a magical <strong>see-through pyramid</strong> of chairs. Every patient sits in a chair. The <strong>rule of the pyramid</strong> is simple: <em>the sicker patient always sits above the less sick one.</em> So at the very top chair sits the <strong>most hurt person in the whole room</strong>. The nurse doesn't have to look at everyone to find them — she just glances at the top chair. Done!</p>
+    <p>When a new patient arrives, they sit at the bottom of the pyramid. Then they compare themselves to the chair above. If they're more hurt, they trade places. They keep climbing up like that until the person above them is sicker. This takes only a few swaps — never the whole room.</p>
+    <p>When the doctor takes the top patient, the top chair is empty. So the person at the very bottom moves to the top, then <em>sinks</em> back down by comparing with their children below, always trading with the sicker child. Again, only a few steps.</p>
+    <p>That magical pyramid is called a <strong>heap</strong>. The line of patients waiting on it is called a <strong>priority queue</strong>. It's what your computer secretly uses when it has to pick "what's most important right now" — a hundred times a second.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The problem: "give me the most important thing, fast"</h2>
+    <p><strong>Sometimes you have a big pile of things and you keep needing the "best" one.</strong> Not sorted, not searched — just <em>which one is on top right now?</em> That's the problem a heap solves.</p>
+    <p>Say you have a to-do list of 1,000 tasks, each with a deadline. You keep pulling off the one with the closest deadline. If you sort the whole list every time you add or remove a task, you're doing enormous work over and over. If you scan the whole list every time to find the earliest deadline, that's also slow. A <strong>heap</strong> is a clever middle ground — it doesn't fully sort things, but it always keeps the <em>most-urgent one at the top</em>, and adding or removing anything takes only a small number of steps.</p>
+    <p>Picture it as a <strong>tree of boxes</strong> (a tree in computer-speak is just boxes connected by lines, like a family tree). The rule is: <em>every parent box holds a number smaller than the two child boxes below it</em> (this is a "min-heap" — smallest at the top). So the smallest number in the whole tree is always sitting in the top box. That's your answer, instantly.</p>
+    <p><strong>What does "adding" look like?</strong> You drop the new number at the bottom, then compare it with the box just above it. If it's smaller than the parent, they swap. Keep going up. In a tree of 1,000 boxes, this bubbling-up finishes in about <strong>10 swaps</strong> — not 1,000. That's the magic.</p>
+    <p><strong>What about removing the top?</strong> You take the top number out (that's your answer). Then you move the bottom-most number up to the empty top spot — but it's probably big, so it doesn't belong there. It <em>sinks</em> back down, at each step swapping with its <em>smaller</em> child, until it settles into a place where both children are bigger. Again, about 10 steps for 1,000 boxes.</p>
+    <p><strong>Concrete example.</strong> Say you have deadlines <code>[5, 2, 8, 1, 9]</code>. A heap arranges them so that <code>1</code> is on top, and pulling it out gives you the most urgent task in a heartbeat. Add a new deadline <code>0</code> and the heap re-arranges in a couple of swaps to put <code>0</code> on top.</p>
+    <p><strong>How fast does it feel?</strong> If your list <em>doubles in size</em>, adding or removing takes <em>only one extra step</em>. So going from 1,000 items to 1,000,000 items only changes the work from about 10 steps to about 20 steps. It's incredibly efficient.</p>
+    <p><strong>When you'd use this in real life:</strong></p>
+    <ul>
+      <li><strong>Emergency rooms</strong> — sickest patient first, not first-come-first-served.</li>
+      <li><strong>Google Maps route planning</strong> — always explore the closest unvisited intersection next (that's Dijkstra's algorithm, and a heap is the engine inside it).</li>
+      <li><strong>Your operating system</strong> — thousands of programs want CPU time; the OS keeps the highest-priority one on top of a heap.</li>
+      <li><strong>Chat notifications</strong> — a scheduled push at 9:00 AM vs. one at 3:00 PM; the heap always fires the next-due one.</li>
+    </ul>
+  </section>
+
+  <section id="pro" class="card pro">
+    <span class="badge">👨‍💻 For 15 years of IT experience</span>
+    <h2>The engineer's view</h2>
+    <p>A <strong>binary heap</strong> is a complete binary tree stored as a flat array where every parent satisfies the <em>heap property</em>: in a <strong>min-heap</strong>, <code>parent ≤ children</code>; in a <strong>max-heap</strong>, <code>parent ≥ children</code>. Because the tree is complete (every level full except possibly the last, which fills left-to-right), the array layout is dense and math-driven:</p>
+    <ul>
+      <li><code>parent(i) = (i - 1) / 2</code></li>
+      <li><code>left(i)   = 2i + 1</code></li>
+      <li><code>right(i)  = 2i + 2</code></li>
+    </ul>
+    <p>All operations are simple index arithmetic and cache-friendly — no pointers, no allocations per node. That's the reason it beats a self-balancing BST for pure "min/max, insert, remove-top" workloads even though both are O(log n).</p>
+
+    <h3>Complexity</h3>
+    <table>
+      <tr><th>Operation</th><th>Time</th><th>Notes</th></tr>
+      <tr><td><code>Peek</code> (top)</td><td><strong>O(1)</strong></td><td>Read <code>arr[0]</code></td></tr>
+      <tr><td><code>Push</code> (insert)</td><td><strong>O(log n)</strong></td><td>Append + sift-up</td></tr>
+      <tr><td><code>Pop</code> (extract-top)</td><td><strong>O(log n)</strong></td><td>Swap root ↔ last, sift-down</td></tr>
+      <tr><td><code>Heapify</code> (bulk build)</td><td><strong>O(n)</strong></td><td>Bottom-up sift-down — a surprising fact, tighter than n × log n</td></tr>
+      <tr><td><code>Decrease-key</code></td><td><strong>O(log n)</strong></td><td>Needs an index-map (indexed / addressable heap) to find the node</td></tr>
+      <tr><td><code>Delete arbitrary</code></td><td><strong>O(log n)</strong></td><td>Same as decrease-key + sift</td></tr>
+      <tr><td><code>Merge two heaps</code></td><td><strong>O(n + m)</strong></td><td>Concatenate arrays + heapify. Fibonacci &amp; leftist heaps do better</td></tr>
+      <tr><td>Space</td><td><strong>O(n)</strong></td><td>No node overhead — flat array</td></tr>
+    </table>
+
+    <h3>Key invariants</h3>
+    <ul>
+      <li><strong>Shape invariant</strong>: complete binary tree (no holes except possibly at the end of the last level). Guarantees the tree height stays ⌊log₂ n⌋.</li>
+      <li><strong>Order invariant</strong>: heap property holds along <em>every</em> parent-child edge. Not total order — siblings can be in any order.</li>
+      <li><strong>Sift-up preserves shape</strong> by inserting at the array end; <strong>sift-down preserves shape</strong> by using the last leaf to fill the removed root.</li>
+    </ul>
+
+    <h3>When NOT to use a binary heap</h3>
+    <ul>
+      <li><strong>Need ordered traversal</strong> (in-order iteration, range queries) → use a balanced BST or skip list. A heap gives you no order beyond the parent-child relationship.</li>
+      <li><strong>Need arbitrary lookup by key</strong> → a heap can't <code>find(x)</code> in less than O(n). Pair it with a hash map (indexed heap) if you need updates.</li>
+      <li><strong>Frequent merges of huge heaps</strong> → binary heap merge is O(n + m). Use a <em>pairing heap</em>, <em>leftist heap</em>, or <em>Fibonacci heap</em> for O(log n) or amortized O(1) merges.</li>
+      <li><strong>Persistent / immutable data structures</strong> → the array-based heap doesn't share structure well. Use functional heaps (skew, pairing).</li>
+    </ul>
+
+    <h3>Reference implementation (C#) — min-heap with sift-up / sift-down</h3>
+<pre><span class="cmt">// Idiomatic min-heap. .NET 6+ ships System.Collections.Generic.PriorityQueue&lt;T,TPrio&gt;
+// which is a min-heap internally — this is what it does under the hood.</span>
+<span class="kw">public class</span> <span class="typ">MinHeap</span>&lt;<span class="typ">T</span>&gt; <span class="kw">where</span> <span class="typ">T</span> : <span class="typ">IComparable</span>&lt;<span class="typ">T</span>&gt;
+{
+    <span class="kw">private readonly</span> <span class="typ">List</span>&lt;<span class="typ">T</span>&gt; _a = <span class="kw">new</span>();
+    <span class="kw">public int</span> Count =&gt; _a.Count;
+    <span class="kw">public</span> <span class="typ">T</span> Peek() =&gt; _a[<span class="str">0</span>];   <span class="cmt">// O(1)</span>
+
+    <span class="kw">public void</span> <span class="fn">Push</span>(<span class="typ">T</span> item)                    <span class="cmt">// O(log n)</span>
+    {
+        _a.Add(item);
+        <span class="fn">SiftUp</span>(_a.Count - <span class="str">1</span>);
+    }
+
+    <span class="kw">public</span> <span class="typ">T</span> <span class="fn">Pop</span>()                          <span class="cmt">// O(log n)</span>
+    {
+        <span class="kw">var</span> top = _a[<span class="str">0</span>];
+        <span class="kw">var</span> last = _a.Count - <span class="str">1</span>;
+        _a[<span class="str">0</span>] = _a[last];
+        _a.RemoveAt(last);
+        <span class="kw">if</span> (_a.Count &gt; <span class="str">0</span>) <span class="fn">SiftDown</span>(<span class="str">0</span>);
+        <span class="kw">return</span> top;
+    }
+
+    <span class="kw">private void</span> <span class="fn">SiftUp</span>(<span class="kw">int</span> i)
+    {
+        <span class="kw">while</span> (i &gt; <span class="str">0</span>)
+        {
+            <span class="kw">int</span> parent = (i - <span class="str">1</span>) &gt;&gt; <span class="str">1</span>;    <span class="cmt">// (i-1)/2</span>
+            <span class="kw">if</span> (_a[i].CompareTo(_a[parent]) &gt;= <span class="str">0</span>) <span class="kw">break</span>;
+            (_a[i], _a[parent]) = (_a[parent], _a[i]);
+            i = parent;
+        }
+    }
+
+    <span class="kw">private void</span> <span class="fn">SiftDown</span>(<span class="kw">int</span> i)
+    {
+        <span class="kw">int</span> n = _a.Count;
+        <span class="kw">while</span> (<span class="kw">true</span>)
+        {
+            <span class="kw">int</span> l = <span class="str">2</span> * i + <span class="str">1</span>, r = <span class="str">2</span> * i + <span class="str">2</span>, smallest = i;
+            <span class="kw">if</span> (l &lt; n &amp;&amp; _a[l].CompareTo(_a[smallest]) &lt; <span class="str">0</span>) smallest = l;
+            <span class="kw">if</span> (r &lt; n &amp;&amp; _a[r].CompareTo(_a[smallest]) &lt; <span class="str">0</span>) smallest = r;
+            <span class="kw">if</span> (smallest == i) <span class="kw">break</span>;
+            (_a[i], _a[smallest]) = (_a[smallest], _a[i]);
+            i = smallest;
+        }
+    }
+
+    <span class="cmt">// Bulk build in O(n) — the counter-intuitive result of Floyd's algorithm.</span>
+    <span class="kw">public static</span> <span class="typ">MinHeap</span>&lt;<span class="typ">T</span>&gt; <span class="fn">Heapify</span>(<span class="typ">IEnumerable</span>&lt;<span class="typ">T</span>&gt; items)
+    {
+        <span class="kw">var</span> h = <span class="kw">new</span> <span class="typ">MinHeap</span>&lt;<span class="typ">T</span>&gt;();
+        h._a.AddRange(items);
+        <span class="kw">for</span> (<span class="kw">int</span> i = h._a.Count / <span class="str">2</span> - <span class="str">1</span>; i &gt;= <span class="str">0</span>; i--) h.<span class="fn">SiftDown</span>(i);
+        <span class="kw">return</span> h;
+    }
+}
+
+<span class="cmt">// Usage — same shape as the BCL PriorityQueue.</span>
+<span class="kw">var</span> pq = <span class="kw">new</span> <span class="typ">PriorityQueue</span>&lt;<span class="typ">string</span>, <span class="kw">int</span>&gt;();   <span class="cmt">// (item, priority). Smallest priority pops first.</span>
+pq.Enqueue(<span class="str">"cough"</span>,   <span class="str">3</span>);
+pq.Enqueue(<span class="str">"brokenArm"</span>, <span class="str">1</span>);
+pq.Enqueue(<span class="str">"cold"</span>,    <span class="str">5</span>);
+<span class="typ">Console</span>.WriteLine(pq.Dequeue());   <span class="cmt">// → "brokenArm"</span>
+</pre>
+    <p>The .NET BCL <code>PriorityQueue&lt;TElement, TPriority&gt;</code> is a min-heap over a 4-ary tree (each node has 4 children) — same asymptotics, slightly better cache behaviour. Java uses <code>PriorityQueue&lt;T&gt;</code>, a classic binary heap. C++ ships <code>std::priority_queue</code> (max-heap by default). Python has <code>heapq</code> (min-heap over a list).</p>
+
+    <h3>Heap vs balanced BST — the honest comparison</h3>
+    <table>
+      <tr><th>Property</th><th>Binary heap</th><th>Balanced BST (RB/AVL)</th></tr>
+      <tr><td>Min/max</td><td>O(1) peek, O(log n) pop</td><td>O(log n) both</td></tr>
+      <tr><td>Insert / delete</td><td>O(log n), tiny constants (array)</td><td>O(log n), pointer-heavy</td></tr>
+      <tr><td>Ordered traversal</td><td>Not supported (O(n log n))</td><td>O(n) in-order</td></tr>
+      <tr><td>Search by key</td><td>O(n)</td><td>O(log n)</td></tr>
+      <tr><td>Memory / cache</td><td>Contiguous array, cache-friendly</td><td>Pointers, cache-miss-heavy</td></tr>
+      <tr><td>Best fit</td><td>Priority queues, top-K, schedulers</td><td>Ordered maps, range queries</td></tr>
+    </table>
+
+    <h3>Variants worth knowing</h3>
+    <ul>
+      <li><strong>d-ary heap</strong> — each node has <em>d</em> children. Faster decrease-key (shorter tree) at the cost of slower sift-down. Dijkstra with d=4 wins in practice.</li>
+      <li><strong>Fibonacci heap</strong> — amortized O(1) insert &amp; decrease-key, O(log n) pop. Theoretically wins Dijkstra to O(E + V log V); in practice huge constants.</li>
+      <li><strong>Leftist / skew heap</strong> — O(log n) merge. Used where meld operations dominate (event simulation).</li>
+      <li><strong>Pairing heap</strong> — practical Fibonacci alternative; used by GCC's LEDA, Boost.</li>
+      <li><strong>Indexed heap</strong> — heap + hash map from key → array index, enabling O(log n) update-priority. Every Dijkstra implementation uses one.</li>
+    </ul>
+  </section>
+
+  <section id="realworld" class="card">
+    <h2>🌍 Where a heap is quietly running in real systems</h2>
+    <p>The heap is one of those data structures that shows up <em>everywhere</em> in production once you know where to look. Here are twelve real systems where a heap is doing load-bearing work right now.</p>
+
+    <div class="rw">
+      <h4>1. Dijkstra &amp; A* — Google Maps, GPS, network routing</h4>
+      <p>Every shortest-path algorithm on a graph with non-negative edges uses a min-heap keyed on tentative distance. The heap pops the closest unsettled vertex; without it, you'd scan V nodes per step and take O(V²) instead of O((V + E) log V). Every navigation app, every OSPF/IS-IS router, and every game AI pathfinder ships with one.</p>
+    </div>
+    <div class="rw">
+      <h4>2. OS process schedulers — Linux CFS, Windows priority scheduler</h4>
+      <p>Linux's Completely Fair Scheduler kept a red-black tree keyed on <em>vruntime</em> (a virtual run-time); the newer EEVDF scheduler is a related priority structure. Windows and macOS run per-priority ready queues, but for <em>timer-based</em> deadlines both use a min-heap: fire the earliest-due timer next. Every timer callback you set in Node.js, JavaScript's <code>setTimeout</code>, .NET's <code>Task.Delay</code>, or the Linux kernel's <code>hrtimer</code> lands in one.</p>
+    </div>
+    <div class="rw">
+      <h4>3. Node.js / libuv event loop timers</h4>
+      <p>libuv (the C library under Node.js) stores pending timers in a min-heap keyed on absolute expiry time. On each loop iteration it peeks the top; if it's due, run its callback; if not, sleep until then. This is why Node can juggle 100,000 concurrent timers without any thread — one heap pop per tick.</p>
+    </div>
+    <div class="rw">
+      <h4>4. Redis sorted sets (ZSET) — leaderboards, delayed queues</h4>
+      <p>Redis's ZSET is a hybrid — a skiplist for ordered range queries plus a hash for O(1) lookup — but the <em>consumers</em> of ZSETs are heap-like: <code>ZPOPMIN</code>, <code>BZPOPMIN</code>, delayed job queues (Sidekiq, Bull, Celery) all model "next-due task" as heap semantics on top of ZSETs.</p>
+    </div>
+    <div class="rw">
+      <h4>5. Top-K trending, top-K queries in databases</h4>
+      <p>Twitter's trending, YouTube's top-N videos, and every "top 10 selling products" dashboard uses a min-heap of size K sweeping over N items: for each item, if it beats the smallest in the heap, replace and re-sift. That's O(N log K) instead of the O(N log N) of full sorting.</p>
+    </div>
+    <div class="rw">
+      <h4>6. K-way merge — LSM-tree databases (RocksDB, Cassandra, LevelDB)</h4>
+      <p>LSM engines write immutable sorted files (SSTables) and later merge them. Merging K sorted streams needs a min-heap of size K keyed on the head of each stream — pop the smallest, advance that stream, push its next head. This is the beating heart of every write-heavy database.</p>
+    </div>
+    <div class="rw">
+      <h4>7. Kafka log-compaction &amp; time-index scans</h4>
+      <p>Kafka's log compactor walks segments and, when merging by key, uses heap-based K-way merge. Its <code>TimeIndex</code> lookup for "give me the offset at timestamp T" traverses index files with a similar priority-queue pattern.</p>
+    </div>
+    <div class="rw">
+      <h4>8. Huffman coding — gzip, JPEG, MP3, HTTP/2 HPACK</h4>
+      <p>Building the Huffman tree that assigns short codes to frequent symbols greedily merges the two lowest-frequency nodes — a textbook min-heap use case. Every file compressed with gzip and every HTTP/2 header encoded with HPACK went through this at some point.</p>
+    </div>
+    <div class="rw">
+      <h4>9. Load balancers — least-outstanding-requests</h4>
+      <p>NGINX, Envoy, and the AWS ALB's "Least Outstanding Requests" algorithm keeps a min-heap of backend targets keyed on in-flight request count, popping the least-busy target for each new request. On updates (a response finishes), the heap re-sifts. See <a href="../../system-design/load-balancer/index.html">Load Balancer</a>.</p>
+    </div>
+    <div class="rw">
+      <h4>10. JVM Garbage Collector — G1, ZGC region selection</h4>
+      <p>Java's G1 collector picks which heap regions to collect next based on estimated collection cost/benefit — stored in a priority queue so the highest-yield region gets collected first. The GC heap of a JVM literally uses a heap data structure to manage the JVM heap memory.</p>
+    </div>
+    <div class="rw">
+      <h4>11. Discrete-event simulation — network simulators, game engines</h4>
+      <p>ns-3, OMNeT++, Unity's physics scheduler, MMO tick queues — anything that models "future events with timestamps" pops the next-earliest event from a min-heap, applies it, possibly schedules more events, and loops. Without a heap, every step would be O(n) instead of O(log n).</p>
+    </div>
+    <div class="rw">
+      <h4>12. OS memory allocator free-lists (buddy allocator)</h4>
+      <p>Some kernel/glibc allocators keep freed blocks in priority queues keyed on size to find the best-fit quickly. The Linux kernel's buddy allocator uses per-order lists rather than a single heap, but the intent is the same.</p>
+    </div>
+
+    <p><em>The pattern to remember:</em> whenever the answer to "what's next?" depends on a priority (deadline, distance, cost, size, freshness) and the set of candidates keeps changing, a heap is almost certainly the right tool.</p>
+  </section>
+
+  <section id="steps" class="card">
+    <h2>🔁 How it works, step by step</h2>
+    <p>Let's build a min-heap by inserting <code>[5, 3, 8, 1, 9, 2]</code> one at a time, then popping the minimum.</p>
+
+    <div class="viz">Start with an empty array (also drawn as a tree — index 0 is the root):
+
+  index:  0   1   2   3   4   5
+  array:  ·   ·   ·   ·   ·   ·
+
+Push 5:                  [5]                     tree:  5
+
+Push 3:  append at end → [5, 3]                  tree:      5
+                                                           /
+                                                          3
+  sift-up: 3 &lt; 5 → swap → [3, 5]                          3
+                                                           \
+                                                            5
+
+Push 8:  append        → [3, 5, 8]               tree:      3
+                                                          / \
+                                                         5   8
+  sift-up: 8 &gt; 3 → done.
+
+Push 1:  append        → [3, 5, 8, 1]            tree:      3
+                                                          / \
+                                                         5   8
+                                                        /
+                                                       1
+  sift-up: 1 &lt; 5 → swap → [3, 1, 8, 5]                    3
+                                                          / \
+                                                         1   8
+                                                        /
+                                                       5
+  sift-up: 1 &lt; 3 → swap → [1, 3, 8, 5]                    1
+                                                          / \
+                                                         3   8
+                                                        /
+                                                       5
+
+Push 9:  append        → [1, 3, 8, 5, 9]         9 &gt; 3 → stop.
+
+Push 2:  append        → [1, 3, 8, 5, 9, 2]
+  sift-up: 2 &lt; 8 → swap → [1, 3, 2, 5, 9, 8]
+  sift-up: 2 &gt; 1 → stop.                                 1
+                                                        / \
+                                                       3   2
+                                                      / \  /
+                                                     5  9 8
+
+Peek() → 1              (top of array, O(1))
+
+Pop():
+  1. take root = 1
+  2. move last element (8) to root → [8, 3, 2, 5, 9]
+  3. sift-down: 8's children are 3 and 2 → smallest is 2 → swap → [2, 3, 8, 5, 9]
+  4. 8's children now are (empty) → stop.
+
+Result: min was 1, heap is [2, 3, 8, 5, 9], top is 2.</div>
+
+    <ol class="steps">
+      <li><strong>Storage.</strong> Use a plain array. The parent of index <code>i</code> is <code>(i-1)/2</code>; the children are <code>2i+1</code> and <code>2i+2</code>. No pointers, no allocations per node.</li>
+      <li><strong>Push.</strong> Append the new value at the end of the array (the next empty slot in level-order). This preserves the shape.</li>
+      <li><strong>Sift-up.</strong> Compare with parent; if smaller (min-heap), swap. Repeat until parent is smaller or you reach index 0. At most ⌊log₂ n⌋ swaps.</li>
+      <li><strong>Peek.</strong> Return <code>array[0]</code>. Constant time.</li>
+      <li><strong>Pop.</strong> Save <code>array[0]</code> as the answer. Overwrite <code>array[0]</code> with the last element, then shrink the array by one. Shape preserved.</li>
+      <li><strong>Sift-down.</strong> From the root, look at both children; pick the smaller child; if it's smaller than the current node, swap. Repeat until both children are ≥ current, or the node has no children.</li>
+      <li><strong>Bulk-build (heapify).</strong> Start from the last internal node <code>n/2 - 1</code> and call <code>SiftDown</code> going backward to index 0. Total work is O(n), not O(n log n), because most nodes are near the bottom and sift a very short distance.</li>
+    </ol>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>📌 Cheat sheet</h2>
+    <p class="pitch"><strong>One-line description:</strong> a <em>heap</em> is a nearly-complete binary tree stored in an array where the parent always beats its children on some priority — giving you O(1) access to the "best" element and O(log n) insert/remove.</p>
+    <h3>Remember this</h3>
+    <ul>
+      <li><strong>Peek = O(1)</strong>, <strong>Push / Pop = O(log n)</strong>, <strong>Heapify = O(n)</strong>.</li>
+      <li>Array layout: <code>parent = (i-1)/2</code>, <code>left = 2i+1</code>, <code>right = 2i+2</code>.</li>
+      <li>Two invariants: <strong>shape</strong> (complete tree) + <strong>order</strong> (heap property along every edge).</li>
+      <li>Sift-up on insert, sift-down on remove. Both just swap toward the correct level.</li>
+      <li>Use it for: priority queues, top-K, K-way merge, event simulation, schedulers.</li>
+      <li>Don't use it for: ordered traversal, range queries, or lookup by key — no heap can help there.</li>
+      <li>Real code: <code>PriorityQueue&lt;T, TPrio&gt;</code> in .NET, <code>heapq</code> in Python, <code>PriorityQueue&lt;T&gt;</code> in Java, <code>std::priority_queue</code> in C++.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this algorithm</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this algorithm and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <footer>Generated by the <strong>explain-algo</strong> skill · open in your browser via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

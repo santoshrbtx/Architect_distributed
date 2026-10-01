@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Greedy Algorithm — Explained</title>
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --card: #ffffff;
+    --ink: #1f2733;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --kid: #ff8c42;
+    --kid-bg: #fff6ee;
+    --pro: #4361ee;
+    --pro-bg: #eef2ff;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(31,39,51,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 40px 36px;
+    box-shadow: var(--shadow);
+    margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .92; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 28px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .9rem;
+    padding: 6px 12px; border-radius: 999px; transition: .15s;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 30px; margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+  section.kid { border-left: 6px solid var(--kid); background: var(--kid-bg); }
+  section.pro { border-left: 6px solid var(--pro); background: var(--pro-bg); }
+  .badge {
+    display: inline-block; font-size: .78rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .kid .badge { background: var(--kid); color: #fff; }
+  .pro .badge { background: var(--pro); color: #fff; }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.1rem; }
+  p, li { color: var(--ink); }
+  .kid p, .kid li { font-size: 1.08rem; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .95rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--pro); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .callout {
+    background: #fff3cd; border-left: 5px solid #ffca2c; border-radius: 10px;
+    padding: 14px 18px; margin: 16px 0; color: #5c4a00;
+  }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 30px;
+    box-shadow: var(--shadow);
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>Greedy Algorithm</h1>
+    <p>Always grab the best-looking choice <em>right now</em>, and hope those local wins add up to the overall best answer.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#kid">🧒 For a 10-year-old</a>
+    <a href="#pro">👨‍💻 For a veteran</a>
+    <a href="#steps">🔁 Step by step</a>
+    <a href="#cheat">📌 Cheat sheet</a>
+  </nav>
+
+  <section id="kid" class="card kid">
+    <span class="badge">🧒 Explain it like I'm 10</span>
+    <h2>The simple story</h2>
+    <p>Imagine you have a piggy bank to break open, and you want to give your friend <strong>₹63</strong> using the <strong>fewest</strong> coins. You have coins of ₹20, ₹10, ₹5, and ₹1.</p>
+    <p>A "greedy" person doesn't think too hard about the future. They just say:</p>
+    <p><em>"What's the biggest coin I can grab right now that still fits?"</em> — and they grab it. Then they ask the same question again, and again, until they reach ₹63.</p>
+    <ul>
+      <li>Grab a ₹20 → you've given 20. (Need 43 more)</li>
+      <li>Grab another ₹20 → now 40. (Need 23 more)</li>
+      <li>Grab another ₹20 → now 60. (Need 3 more)</li>
+      <li>₹20 is too big now, so grab ₹1, ₹1, ₹1 → now 63. Done! 🎉</li>
+    </ul>
+    <p>That's <strong>6 coins</strong>, and you never had to undo or rethink a choice. <strong>Greedy = grab the biggest helpful thing every time, and never look back.</strong></p>
+    <p>⚠️ But be careful! Sometimes grabbing the biggest thing first leads you to a worse answer. A greedy kid grabbing the biggest slice of pizza first might end up with less <em>total</em> pizza if the slices are tricky sizes. Greedy is fast and easy, but it's not <em>always</em> the smartest.</p>
+  </section>
+
+  <section id="pro" class="card pro">
+    <span class="badge">👨‍💻 For 15 years of IT experience</span>
+    <h2>The engineer's view</h2>
+    <p>A <strong>greedy algorithm</strong> is an algorithmic <em>paradigm</em> (not a single algorithm) that builds a solution incrementally, at each step committing to the choice that looks locally optimal under a fixed selection heuristic, and never revisiting that choice (no backtracking). It produces a globally optimal result <strong>only</strong> when the problem exhibits two structural properties:</p>
+    <ul>
+      <li><strong>Greedy-choice property:</strong> a globally optimal solution can be reached by making locally optimal choices — the future decision space never needs a choice already discarded.</li>
+      <li><strong>Optimal substructure:</strong> an optimal solution to the problem contains optimal solutions to its subproblems (shared with DP).</li>
+    </ul>
+    <p>When the greedy-choice property does <em>not</em> hold, greedy yields a heuristic/approximate answer — sometimes with a provable approximation ratio (e.g., set cover ≈ ln n).</p>
+
+    <h3>Where it shows up in real systems</h3>
+    <ul>
+      <li><strong>Dijkstra / Prim / Kruskal</strong> — shortest paths and minimum spanning trees (routing, network design).</li>
+      <li><strong>Huffman coding</strong> — optimal prefix-free compression (ZIP, JPEG, MP3 entropy stage).</li>
+      <li><strong>Interval scheduling / activity selection</strong> — CPU job scheduling, meeting-room allocation, bandwidth reservation.</li>
+      <li><strong>Load balancers & caches</strong> — heuristics like "send to least-loaded node now"; LRU-style eviction.</li>
+      <li><strong>Fractional knapsack</strong> — optimal via greedy (unlike 0/1 knapsack, which needs DP).</li>
+    </ul>
+
+    <h3>Complexity</h3>
+    <p>There is no single complexity — it's dominated by the selection step. The canonical pattern is "sort, then one linear pass":</p>
+    <table>
+      <tr><th>Phase</th><th>Cost</th><th>Note</th></tr>
+      <tr><td>Sort by greedy key</td><td>O(n log n)</td><td>most common bottleneck</td></tr>
+      <tr><td>Single greedy pass</td><td>O(n)</td><td>one decision per element</td></tr>
+      <tr><td>With a priority queue</td><td>O(n log n)</td><td>e.g. Dijkstra/Huffman, n extract-min ops</td></tr>
+      <tr><td>Space</td><td>O(1) – O(n)</td><td>O(1) if in-place; O(n) if a heap/result set is kept</td></tr>
+    </table>
+    <p>Contrast with dynamic programming, which explores/combines subproblems (often O(n·W) or O(n²)). Greedy is faster precisely because it commits without exploring alternatives.</p>
+
+    <h3>Edge cases & traps</h3>
+    <ul>
+      <li><strong>0/1 Knapsack:</strong> greedy by value/weight ratio is wrong — items are indivisible, so you can get stuck. Needs DP.</li>
+      <li><strong>Coin change with arbitrary denominations:</strong> greedy fails for sets like {1, 3, 4} making 6 → greedy gives 4+1+1 (3 coins) but optimal is 3+3 (2 coins). It only works for "canonical" systems (e.g. standard currency).</li>
+      <li><strong>Negative edge weights:</strong> Dijkstra's greedy assumption breaks; use Bellman-Ford.</li>
+      <li><strong>Proof obligation:</strong> never ship a greedy solution to an optimization problem without an exchange-argument or matroid proof that the greedy choice is safe.</li>
+    </ul>
+
+    <h3>Reference implementation — Activity Selection (provably optimal greedy)</h3>
+    <p>Pick the maximum number of non-overlapping activities. The safe greedy choice: always take the activity that <em>finishes earliest</em>, because it leaves the most room for the rest.</p>
+    <pre><span class="kw">def</span> <span class="fn">max_activities</span>(activities):
+    <span class="cmt"># activities: list of (start, finish) tuples</span>
+    <span class="cmt"># Greedy key: sort by finish time ascending — the heart of the algorithm.</span>
+    activities.sort(key=<span class="kw">lambda</span> a: a[<span class="str">1</span>])
+
+    selected = []
+    last_finish = <span class="kw">float</span>(<span class="str">'-inf'</span>)
+
+    <span class="kw">for</span> start, finish <span class="kw">in</span> activities:
+        <span class="cmt"># Greedy choice: take it iff it doesn't overlap what we've kept.</span>
+        <span class="kw">if</span> start &gt;= last_finish:
+            selected.append((start, finish))
+            last_finish = finish      <span class="cmt"># commit, never reconsider</span>
+
+    <span class="kw">return</span> selected
+
+<span class="cmt"># O(n log n) for the sort, O(n) for the pass → O(n log n) total, O(n) space.</span></pre>
+    <div class="callout"><strong>Why it's provably optimal:</strong> exchange argument — if any optimal solution doesn't start with the earliest-finishing activity, you can swap that activity in without reducing the count. Hence the greedy choice is always "safe."</div>
+  </section>
+
+  <section id="steps" class="card">
+    <h2>🔁 How it works, step by step</h2>
+    <p>Walking the activity-selection example on these 5 meetings (start–finish):
+    <code>A(1–4) B(3–5) C(0–6) D(5–7) E(5–9) F(8–9)</code></p>
+    <ol class="steps">
+      <li><strong>Sort by finish time:</strong> A(1–4), B(3–5), C(0–6), D(5–7), E(5–9), F(8–9).</li>
+      <li><strong>Take A(1–4)</strong> — earliest finish. <code>last_finish = 4</code>.</li>
+      <li><strong>B(3–5)?</strong> starts at 3 &lt; 4 → overlaps. <strong>Skip.</strong></li>
+      <li><strong>C(0–6)?</strong> starts at 0 &lt; 4 → overlaps. <strong>Skip.</strong></li>
+      <li><strong>Take D(5–7)</strong> — starts at 5 ≥ 4. <code>last_finish = 7</code>.</li>
+      <li><strong>E(5–9)?</strong> starts at 5 &lt; 7 → overlaps. <strong>Skip.</strong></li>
+      <li><strong>Take F(8–9)</strong> — starts at 8 ≥ 7. <code>last_finish = 9</code>. Result: <strong>{A, D, F} = 3 meetings.</strong></li>
+    </ol>
+    <div class="viz">Timeline (each block = the chosen non-overlapping meeting):
+
+ time: 0   1   2   3   4   5   6   7   8   9
+ A:        [========]
+ D:                        [========]
+ F:                                    [====]
+              chosen ✔        chosen ✔     chosen ✔
+
+ Greedy never backtracks — once a meeting is picked, it stays picked.</div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>📌 Cheat sheet</h2>
+    <ul>
+      <li><strong>Idea:</strong> at each step take the locally best option; never undo.</li>
+      <li><strong>Use when:</strong> problem has <em>greedy-choice property</em> + <em>optimal substructure</em>.</li>
+      <li><strong>Typical shape:</strong> sort by a clever key → single linear pass → O(n log n).</li>
+      <li><strong>Wins:</strong> Dijkstra, Prim, Kruskal, Huffman, activity selection, fractional knapsack.</li>
+      <li><strong>Fails:</strong> 0/1 knapsack, arbitrary-coin change, graphs with negative edges → use DP / Bellman-Ford.</li>
+      <li><strong>Golden rule:</strong> greedy is fast and simple, but <em>prove the greedy choice is safe</em> before trusting it for optimization.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>explain-algo</strong> skill · open in your browser via localhost</footer>
+</div>
+  <script src="../../nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agent Design Patterns — AI Study Hub</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --laymen: #f4a259;
+    --laymen-bg: #fff7ed;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --cot: #2dc653;
+    --cot-bg: #ecfaef;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #2dc653 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.15rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.1rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.cot      { border-left: 6px solid var(--cot);      background: var(--cot-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); }
+  .arch .badge     { background: var(--arch); }
+  .cot .badge      { background: var(--cot); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.14rem; }
+  h4 { margin: 14px 0 6px; font-size: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .87rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .role { color: #f7cf6b; font-weight: 700; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .pattern {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 22px 26px; margin: 18px 0;
+    box-shadow: 0 2px 10px rgba(27,34,48,.05);
+    border-left: 5px solid var(--arch);
+  }
+  .pattern.p-react   { border-left-color: #4361ee; }
+  .pattern.p-hitl    { border-left-color: #f7567c; }
+  .pattern.p-cot     { border-left-color: #2dc653; }
+  .pattern.p-tot     { border-left-color: #7048e8; }
+  .pattern.p-plan    { border-left-color: #00b4d8; }
+  .pattern.p-reflect { border-left-color: #ff9900; }
+  .pattern.p-router  { border-left-color: #f4a259; }
+  .pattern.p-multi   { border-left-color: #f7567c; }
+  .pattern.p-rag     { border-left-color: #4361ee; }
+  .pattern.p-tool    { border-left-color: #00b4d8; }
+  .pattern.p-self    { border-left-color: #7048e8; }
+  .pattern .tag {
+    display: inline-block; font-size: .7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 2px 8px; border-radius: 6px; margin-right: 6px;
+    background: #eef1f6; color: var(--muted);
+  }
+  .pattern .tag.hot { background: #fff0f4; color: #f7567c; }
+  .pattern .tag.new { background: #f3effe; color: #7048e8; }
+  .pattern .tag.core { background: #eef2ff; color: #4361ee; }
+  .pattern .layman {
+    background: #fff7ed; border-left: 3px solid var(--laymen);
+    padding: 10px 14px; border-radius: 8px; margin: 12px 0;
+    font-size: .96rem;
+  }
+  .pattern .layman strong { color: #b96b1c; }
+  .pattern h3 { margin-top: 0; }
+  .flow {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: #f0f4ff; padding: 12px 14px; border-radius: 10px; margin: 12px 0;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .84rem;
+  }
+  .flow .step {
+    background: #fff; border: 1px solid #cbd5f5;
+    padding: 5px 11px; border-radius: 8px; color: #1b2230; font-weight: 600;
+  }
+  .flow .arr { color: #4361ee; font-weight: 700; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+  .two-col > div { border-radius: 12px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); }
+  .two-col .h { font-weight: 700; margin-bottom: 6px; }
+  .box.pros { border-left: 4px solid var(--accent); background: rgba(45,198,83,.08); }
+  .box.cons { border-left: 4px solid var(--scenario); background: rgba(247,86,124,.08); }
+  .callout {
+    padding: 12px 16px; border-radius: 10px; margin: 12px 0;
+    background: rgba(67,97,238,.06); border-left: 4px solid var(--arch);
+  }
+  .callout.warn { background: rgba(247,86,124,.08); border-left-color: var(--scenario); }
+  .callout.good { background: rgba(45,198,83,.10); border-left-color: var(--accent); }
+  footer {
+    text-align: center; color: var(--muted); font-size: .85rem; margin-top: 26px;
+  }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">AI · Agent Design Patterns</div>
+    <h1>Patterns for Building LLM Agents</h1>
+    <p>A tour of the eleven patterns that show up in every production agent stack — ReAct, Chain-of-Thought, Human-in-the-Loop, Reflexion, Plan-and-Execute, Router/Handoff, Multi-Agent, RAG, Tool Use, Self-Consistency, Tree-of-Thoughts — each with a plain-English "what is this really doing?" analogy so you can pick the right one in an interview or design review.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#what-is-agent">🤖 What is an agent?</a>
+    <a href="#cot">🧩 Chain of Thought</a>
+    <a href="#react">🔁 ReAct</a>
+    <a href="#hitl">🧑‍⚖️ HITL</a>
+    <a href="#reflect">🪞 Reflexion</a>
+    <a href="#plan">🗺️ Plan-and-Execute</a>
+    <a href="#tot">🌳 Tree of Thoughts</a>
+    <a href="#self">🧮 Self-Consistency</a>
+    <a href="#tool">🛠️ Tool Use</a>
+    <a href="#rag">📚 RAG</a>
+    <a href="#router">🚦 Router / Handoff</a>
+    <a href="#multi">👥 Multi-Agent</a>
+    <a href="#compare">⚖️ Compare</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+  </nav>
+
+  <section id="what-is-agent" class="card scenario">
+    <span class="badge">🎯 The setup</span>
+    <h2>What actually makes a program "an agent"?</h2>
+    <p>An <strong>agent</strong> is an LLM wrapped in a loop that (1) can decide what to do next, (2) can call tools to affect the outside world, and (3) can observe the result and adjust. Take away the loop and you just have "call the model once." Take away tools and you have a chatbot. Take away the ability to observe results and you have a script that hallucinates its outputs.</p>
+    <p>Every pattern below is a recipe for that loop: what the LLM should be <em>thinking about</em> at each step (reasoning), <em>who</em> is allowed to act (the model, a human, another agent), <em>how many</em> paths are explored (one, N, a tree), and <em>where</em> the knowledge comes from (weights, retrieval, or a delegated specialist).</p>
+    <div class="callout">
+      <strong>Mental model.</strong> Pick a pattern the same way you pick a data structure: first understand the shape of the problem (deterministic vs open-ended, one-shot vs multi-step, cheap vs high-stakes), then pick the pattern whose trade-offs match. Composing patterns is normal — a production agent is usually ReAct + RAG + HITL + a Router, not one pattern in isolation.</p>
+    </div>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 The whole page in one paragraph</span>
+    <h2>An agent is a very literal assistant with a small toolbelt</h2>
+    <p>Picture a new intern who is <em>brilliant at reading and writing</em> but has never worked in your office. To make them useful, you have to teach them a few habits:</p>
+    <ul>
+      <li><strong>Think out loud</strong> before answering hard questions — that's <strong>Chain of Thought</strong>.</li>
+      <li><strong>Try, look at what happened, try again</strong> instead of guessing in one shot — that's <strong>ReAct</strong>.</li>
+      <li><strong>Ask a grown-up before doing anything scary</strong> (sending money, deleting files) — that's <strong>Human-in-the-Loop</strong>.</li>
+      <li><strong>Grade your own work and redo the bad parts</strong> — that's <strong>Reflexion</strong>.</li>
+      <li><strong>Write a plan first, then follow it</strong> — that's <strong>Plan-and-Execute</strong>.</li>
+      <li><strong>Explore a few possible paths and pick the best</strong> — that's <strong>Tree of Thoughts</strong>.</li>
+      <li><strong>Ask three interns the same question and go with the majority</strong> — that's <strong>Self-Consistency</strong>.</li>
+      <li><strong>Give them a phone and a calculator</strong> — that's <strong>Tool Use / Function Calling</strong>.</li>
+      <li><strong>Let them look things up in the company wiki</strong> — that's <strong>RAG</strong>.</li>
+      <li><strong>Have a receptionist decide which specialist to call</strong> — that's a <strong>Router / Handoff</strong>.</li>
+      <li><strong>A whole team of interns coordinating</strong> — that's <strong>Multi-Agent</strong>.</li>
+    </ul>
+    <p>The rest of this page is those bullets, one section each, with a diagram of the loop, the trade-offs, and when to reach for it.</p>
+  </section>
+
+  <!-- ================= CHAIN OF THOUGHT ================= -->
+  <section id="cot" class="card cot">
+    <span class="badge">🧩 Foundational reasoning technique</span>
+    <h2>Chain of Thought (CoT) — how it works</h2>
+    <p><strong>Origin:</strong> Wei et al. (Google, 2022), <em>Chain-of-Thought Prompting Elicits Reasoning in Large Language Models</em>. On GSM8K math, adding six words — <em>"Let's think step by step"</em> — lifted PaLM-540B from ~18% to ~57% accuracy. That single result kicked off the entire modern reasoning-agent field.</p>
+
+    <div class="pattern p-cot">
+      <h3>The core idea in one line</h3>
+      <p>Instead of asking the model to jump to the answer, ask it to <strong>write down the intermediate steps</strong>, one by one, and only then commit to the final answer. Because LLMs generate token-by-token, every step it writes becomes context for the next step — so the reasoning literally happens on the page.</p>
+      <div class="layman">
+        <strong>Layman:</strong> If I asked you "what's 23 × 47?" out loud, you'd probably fumble. If I said "show your work," you'd write <code>23 × 47 = 23 × 40 + 23 × 7 = 920 + 161 = 1081</code>. CoT is the exact same trick — the model gets more right when it's <em>allowed</em> to write intermediate work, because each written step becomes an anchor for the next one.
+      </div>
+
+      <h4>Two flavors</h4>
+      <table>
+        <thead><tr><th>Flavor</th><th>What you write</th><th>When to use</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Zero-shot CoT</strong></td>
+            <td>Just append <em>"Let's think step by step."</em> to the question.</td>
+            <td>Quick, no examples handy, model is big enough (&gt;60B).</td>
+          </tr>
+          <tr>
+            <td><strong>Few-shot CoT</strong></td>
+            <td>Give 2–8 example (question, reasoning, answer) triples before the real question.</td>
+            <td>Higher accuracy, more control over the reasoning format, works on smaller models too.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>Under the hood — why writing helps</h4>
+      <p>An LLM predicts the next token by attending to <em>every previous token</em>. When the model writes "step 1: I need to find the total revenue first," those tokens are now available as context for step 2. Without CoT, all the intermediate computation has to happen inside the fixed number of transformer layers between "read prompt" and "emit answer" — and there just aren't enough layers to do multi-step arithmetic in one forward pass. CoT turns <em>depth</em> (number of transformer layers) into <em>width</em> (number of output tokens), and the model has plenty of the latter.</p>
+
+      <div class="flow">
+        <span class="step">Question</span><span class="arr">→</span>
+        <span class="step">"Step 1: …"</span><span class="arr">→</span>
+        <span class="step">"Step 2: …"</span><span class="arr">→</span>
+        <span class="step">"Step 3: …"</span><span class="arr">→</span>
+        <span class="step">"Therefore, the answer is X"</span>
+      </div>
+
+      <h4>Example — CoT prompt vs direct prompt</h4>
+<pre><span class="cmt">// ❌ DIRECT (often wrong on multi-step problems)</span>
+<span class="role">user:</span> A train leaves at 3:15 pm going 60 mph. Another leaves at 4:00 pm from the
+      same station going 75 mph in the same direction. When does the second catch up?
+<span class="role">assistant:</span> 6:00 pm.   <span class="cmt">← usually wrong</span>
+
+<span class="cmt">// ✅ CHAIN OF THOUGHT (right most of the time)</span>
+<span class="role">user:</span> Same question. <span class="str">Think step by step.</span>
+<span class="role">assistant:</span> Step 1: By 4:00 pm the first train has travelled 45 min × 60 mph = 45 miles.
+           Step 2: The second train closes the gap at 75 - 60 = 15 mph.
+           Step 3: Time to close 45 miles at 15 mph = 45 / 15 = 3 hours.
+           Step 4: 4:00 pm + 3 h = <span class="str">7:00 pm</span>.
+           Answer: <span class="str">7:00 pm</span>.</pre>
+
+      <div class="two-col">
+        <div class="box pros">
+          <div class="h">✅ When to use CoT</div>
+          <ul>
+            <li>Math, logic puzzles, multi-hop reasoning.</li>
+            <li>Any task where the answer isn't a direct lookup.</li>
+            <li>When you want the model's reasoning to <em>audit</em> — you can inspect the steps.</li>
+          </ul>
+        </div>
+        <div class="box cons">
+          <div class="h">⚠️ When CoT hurts</div>
+          <ul>
+            <li>Small models (&lt;10B params) — CoT can make them <em>worse</em>, they hallucinate steps.</li>
+            <li>Trivia and fact recall — writing steps doesn't help, just adds tokens.</li>
+            <li>Latency-critical paths — you pay for every reasoning token.</li>
+          </ul>
+        </div>
+      </div>
+      <p><em>Modern note (2024–2026):</em> "reasoning models" like OpenAI o1/o3 and Claude with extended thinking build CoT <em>into the model</em> — they run internal chain-of-thought before emitting the visible answer, so you don't have to ask for it. For classic chat models, you still ask.</p>
+    </div>
+  </section>
+
+  <!-- ================= REACT ================= -->
+  <section id="react" class="card arch">
+    <span class="badge">🔁 Loop pattern</span>
+    <h2>ReAct — Reason + Act</h2>
+    <p><strong>Origin:</strong> Yao et al. (Princeton + Google, 2022), <em>ReAct: Synergizing Reasoning and Acting in Language Models</em>. The paper that turned CoT from "think in a straight line" into "think, do, observe, think again."</p>
+
+    <div class="pattern p-react">
+      <h3>The core idea</h3>
+      <p>Loop through three token types: <strong>Thought</strong> (reasoning), <strong>Action</strong> (call a tool), <strong>Observation</strong> (what the tool returned). Repeat until the model emits a "Final Answer." The <em>Thought</em> steps are CoT. The <em>Action</em> steps make it an agent.</p>
+      <div class="layman">
+        <strong>Layman:</strong> Imagine solving a mystery. You <em>think</em> about a suspect, <em>ask</em> them a question, <em>hear</em> their answer, then <em>think</em> again about the next suspect based on what you just learned. ReAct is Sherlock Holmes for LLMs — reason, act, observe, repeat.
+      </div>
+
+      <div class="flow">
+        <span class="step">User question</span><span class="arr">→</span>
+        <span class="step">Thought</span><span class="arr">→</span>
+        <span class="step">Action(tool)</span><span class="arr">→</span>
+        <span class="step">Observation</span><span class="arr">→</span>
+        <span class="step">Thought</span><span class="arr">→</span>
+        <span class="step">…</span><span class="arr">→</span>
+        <span class="step">Final Answer</span>
+      </div>
+
+      <h4>Example trace — "Who is older, the CEO of OpenAI or the CEO of Anthropic?"</h4>
+<pre><span class="role">Thought:</span> I need the birth years of Sam Altman and Dario Amodei.
+<span class="role">Action:</span>  web_search("Sam Altman date of birth")
+<span class="role">Obs:</span>     "April 22, 1985"
+<span class="role">Thought:</span> Altman = 1985. Now the other one.
+<span class="role">Action:</span>  web_search("Dario Amodei date of birth")
+<span class="role">Obs:</span>     "1983"
+<span class="role">Thought:</span> Amodei is 1983, Altman 1985. 1983 &lt; 1985 → Amodei is older.
+<span class="role">Final:</span>   Dario Amodei is older than Sam Altman.</pre>
+
+      <div class="two-col">
+        <div class="box pros">
+          <div class="h">✅ Why ReAct wins</div>
+          <ul>
+            <li>Reasoning grounds the action ("<em>why</em> am I calling this tool?").</li>
+            <li>Observations correct hallucinated intermediate facts — the model can't lie about tool output it can see.</li>
+            <li>The trace is fully auditable — you know exactly which tools ran and why.</li>
+          </ul>
+        </div>
+        <div class="box cons">
+          <div class="h">⚠️ Watch out for</div>
+          <ul>
+            <li>Loop-forever risk — always cap max iterations (typically 5–15).</li>
+            <li>Token cost grows linearly with steps.</li>
+            <li>A single bad Thought can send the whole trace off-course — pair with Reflexion for critical tasks.</li>
+          </ul>
+        </div>
+      </div>
+      <p><em>Every mainstream agent framework — LangChain agents, AutoGen, CrewAI, LangGraph — implements ReAct under the hood. When someone says "an LLM agent," they usually mean ReAct.</em></p>
+    </div>
+  </section>
+
+  <!-- ================= HITL ================= -->
+  <section id="hitl" class="card scenario">
+    <span class="badge">🧑‍⚖️ Safety pattern</span>
+    <h2>Human-in-the-Loop (HITL)</h2>
+
+    <div class="pattern p-hitl">
+      <h3>The core idea</h3>
+      <p>The agent runs autonomously <em>up to a boundary</em>. Before crossing it — sending an email, executing a trade, deleting a resource, merging a PR — the agent <strong>pauses and asks a human to approve, reject, or edit</strong> the proposed action. The human's response becomes another observation that resumes the loop.</p>
+      <div class="layman">
+        <strong>Layman:</strong> A rookie surgeon can prep and diagnose all day, but they don't get to <em>cut</em> without the attending physician nodding first. HITL is "you drive, but I hold the veto." Anywhere the cost of a wrong action is much higher than the cost of a 30-second pause, you want HITL.
+      </div>
+
+      <div class="flow">
+        <span class="step">Agent proposes action</span><span class="arr">→</span>
+        <span class="step">🛑 Pause</span><span class="arr">→</span>
+        <span class="step">Human: approve / edit / reject</span><span class="arr">→</span>
+        <span class="step">Agent resumes with decision</span>
+      </div>
+
+      <h4>Three levels of human oversight</h4>
+      <table>
+        <thead><tr><th>Level</th><th>What the human does</th><th>Typical use</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Human-in-the-loop</strong></td>
+            <td>Approves every risky action before it happens.</td>
+            <td>Payments, sending emails on behalf of a user, prod DB writes, publishing content.</td>
+          </tr>
+          <tr>
+            <td><strong>Human-on-the-loop</strong></td>
+            <td>Watches a live dashboard, can pause / roll back but doesn't gate each step.</td>
+            <td>Trading bots, moderation queues, automated support agents.</td>
+          </tr>
+          <tr>
+            <td><strong>Human-out-of-the-loop</strong></td>
+            <td>Only reviews after-the-fact via logs and metrics.</td>
+            <td>Recommendation systems, ad auctions, spam filters.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>Implementation shape</h4>
+<pre><span class="cmt">// Pseudo-code: agent asks for approval before a "write" tool</span>
+<span class="kw">async</span> <span class="fn">runAgent</span>(question) {
+  <span class="kw">while</span> (!done) {
+    <span class="kw">const</span> action = <span class="kw">await</span> <span class="fn">plan</span>(state);
+    <span class="kw">if</span> (action.risk === <span class="str">"high"</span>) {
+      <span class="kw">const</span> decision = <span class="kw">await</span> <span class="fn">askHuman</span>(action);   <span class="cmt">// blocks until human clicks</span>
+      <span class="kw">if</span> (decision.rejected) { state.log(<span class="str">"user rejected"</span>); <span class="kw">continue</span>; }
+      action = decision.edited || action;
+    }
+    <span class="kw">const</span> obs = <span class="kw">await</span> <span class="fn">execute</span>(action);
+    state.append(action, obs);
+  }
+}</pre>
+
+      <div class="callout warn">
+        <strong>Common failure:</strong> "approval fatigue." If every trivial action asks for approval, the human learns to click "yes" without reading. Reserve HITL for actions whose <em>blast radius</em> justifies the pause — money, data loss, external comms, privacy.
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= REFLEXION ================= -->
+  <section id="reflect" class="card aws">
+    <span class="badge">🪞 Self-critique pattern</span>
+    <h2>Reflexion — grade your own work, then redo it</h2>
+    <p><strong>Origin:</strong> Shinn et al. (Northeastern, 2023), <em>Reflexion: Language Agents with Verbal Reinforcement Learning</em>. Beat GPT-4 by 11 points on HumanEval by adding one habit: after a failed attempt, write a paragraph of self-criticism, then try again with that criticism as context.</p>
+
+    <div class="pattern p-reflect">
+      <h3>The core idea</h3>
+      <p>Two-role loop: an <strong>actor</strong> attempts the task, an <strong>evaluator</strong> (either a test suite, another LLM, or the same LLM in a different role) grades the result. If it fails, a <strong>self-reflection</strong> step writes down <em>what went wrong and what to try differently</em>, and the actor runs again with that reflection appended to its prompt.</p>
+      <div class="layman">
+        <strong>Layman:</strong> You submit an essay. The teacher says "your third paragraph doesn't support your thesis." You now write in the margin — <em>"remember: every paragraph must tie back to the thesis"</em> — and rewrite. That margin note is the reflection. Next time, you don't repeat the same mistake because the note is right there in your notebook.
+      </div>
+
+      <div class="flow">
+        <span class="step">Attempt</span><span class="arr">→</span>
+        <span class="step">Evaluate</span><span class="arr">→</span>
+        <span class="step">Pass?</span><span class="arr">→</span>
+        <span class="step">Reflect (write critique)</span><span class="arr">→</span>
+        <span class="step">Retry with critique</span>
+      </div>
+
+      <div class="two-col">
+        <div class="box pros">
+          <div class="h">✅ When Reflexion shines</div>
+          <ul>
+            <li>Code generation with a runnable test suite — the evaluator is objective.</li>
+            <li>Math and logic — wrong answers are provably wrong.</li>
+            <li>Any task where you can score attempts numerically.</li>
+          </ul>
+        </div>
+        <div class="box cons">
+          <div class="h">⚠️ Doesn't help when</div>
+          <ul>
+            <li>The evaluator is the same weak LLM that made the mistake — no new signal.</li>
+            <li>Task is subjective (creative writing) — reflection can drift.</li>
+            <li>Budget is tight — every retry is another full inference.</li>
+          </ul>
+        </div>
+      </div>
+      <p><em>Reflexion pairs beautifully with ReAct — ReAct handles the outer act/observe loop, Reflexion handles the meta-loop of "did the whole trace succeed, and if not, what should I remember for next time?"</em></p>
+    </div>
+  </section>
+
+  <!-- ================= PLAN AND EXECUTE ================= -->
+  <section id="plan" class="card anim-sec">
+    <span class="badge">🗺️ Planning pattern</span>
+    <h2>Plan-and-Execute (a.k.a. Planner/Executor)</h2>
+    <p><strong>Origin:</strong> BabyAGI (2023), LangChain "plan-and-execute" agent, Wang et al. (2023) <em>Plan-and-Solve Prompting</em>. Emerged from frustration with ReAct's step-by-step drift on long tasks — the agent kept forgetting the big picture.</p>
+
+    <div class="pattern p-plan">
+      <h3>The core idea</h3>
+      <p>Split the agent into <strong>two roles</strong>. A <em>planner</em> (usually a bigger, slower model) reads the goal and produces a <strong>full task list</strong> up front. An <em>executor</em> (often a cheaper, faster model) picks each task off the list and runs it — usually with a mini ReAct loop of its own. The planner can be called again mid-run to re-plan if the world changed.</p>
+      <div class="layman">
+        <strong>Layman:</strong> Imagine planning a wedding versus reacting to whatever the caterer just texted. Plan-and-Execute is the wedding planner writing the whole timeline on Monday, then the assistants ticking boxes Tuesday through Saturday. ReAct alone is more like "figure out lunch when it's noon" — fine for short trips, bad for weddings.
+      </div>
+
+      <div class="flow">
+        <span class="step">Goal</span><span class="arr">→</span>
+        <span class="step">Planner (LLM-Big)</span><span class="arr">→</span>
+        <span class="step">[Task 1, Task 2, Task 3, …]</span><span class="arr">→</span>
+        <span class="step">Executor (LLM-Small) on each task</span><span class="arr">→</span>
+        <span class="step">Re-plan if stuck</span>
+      </div>
+
+      <h4>Why it works</h4>
+      <ul>
+        <li><strong>Latency:</strong> big planner runs once, cheap executor runs many times.</li>
+        <li><strong>Focus:</strong> executor sees only "task 4 of 12" instead of the whole conversation, so it doesn't lose the plot.</li>
+        <li><strong>Auditability:</strong> the plan is a document — you can inspect and edit it before running.</li>
+      </ul>
+      <p><em>Modern flavors:</em> <strong>LLMCompiler</strong> (Kim et al. 2023) has the planner emit a DAG so independent tasks run in parallel. <strong>ReWOO</strong> (Xu et al. 2023) has the planner emit tasks with placeholders that get filled in as tools return — cutting tool-call round-trips.</p>
+    </div>
+  </section>
+
+  <!-- ================= TREE OF THOUGHTS ================= -->
+  <section id="tot" class="card dsa">
+    <span class="badge">🌳 Search-based reasoning</span>
+    <h2>Tree of Thoughts (ToT)</h2>
+    <p><strong>Origin:</strong> Yao et al. (Princeton + DeepMind, 2023), <em>Tree of Thoughts: Deliberate Problem Solving with LLMs</em>. On Game of 24, GPT-4 with CoT scored 4%. With ToT it scored 74%.</p>
+
+    <div class="pattern p-tot">
+      <h3>The core idea</h3>
+      <p>Chain-of-Thought is a <em>path</em> — one linear sequence of reasoning steps. Tree-of-Thoughts is <em>search</em> — at each step, the agent generates <strong>multiple candidate next steps</strong>, scores them (with the same or a different LLM as evaluator), keeps the promising ones, prunes the rest, and expands the best. It's classic BFS/DFS with the LLM as both the successor function and the heuristic.</p>
+      <div class="layman">
+        <strong>Layman:</strong> Chess. You don't just play the first move that pops into your head — you consider three candidate moves, imagine what happens next for each, and pick the branch that looks best. ToT is teaching the LLM to think a few moves ahead instead of blurting out its gut answer.
+      </div>
+
+      <div class="flow">
+        <span class="step">Problem</span><span class="arr">→</span>
+        <span class="step">Generate k next-steps</span><span class="arr">→</span>
+        <span class="step">Score each</span><span class="arr">→</span>
+        <span class="step">Keep top-m</span><span class="arr">→</span>
+        <span class="step">Expand each</span><span class="arr">→</span>
+        <span class="step">Repeat</span>
+      </div>
+
+      <div class="two-col">
+        <div class="box pros">
+          <div class="h">✅ When ToT is worth the cost</div>
+          <ul>
+            <li>Puzzles with a clear "is this branch dead" signal (Sudoku, 24, crosswords).</li>
+            <li>Planning under constraints with pruning heuristics available.</li>
+            <li>When ~10× more compute is acceptable for &gt;3× accuracy.</li>
+          </ul>
+        </div>
+        <div class="box cons">
+          <div class="h">⚠️ Skip ToT when</div>
+          <ul>
+            <li>No good scoring function — you can't tell branches apart.</li>
+            <li>Search space is small enough that a single CoT already works.</li>
+            <li>Real-time task — the branching factor blows the latency budget.</li>
+          </ul>
+        </div>
+      </div>
+      <p><em>Graph-of-Thoughts (Besta et al. 2023) generalises ToT to a DAG — branches can merge when they arrive at the same intermediate state, useful for problems with overlapping subproblems (very DP-flavored).</em></p>
+    </div>
+  </section>
+
+  <!-- ================= SELF-CONSISTENCY ================= -->
+  <section id="self" class="card cot">
+    <span class="badge">🧮 Voting pattern</span>
+    <h2>Self-Consistency</h2>
+    <p><strong>Origin:</strong> Wang et al. (Google, 2022), <em>Self-Consistency Improves Chain of Thought Reasoning</em>. Added +17 points on GSM8K on top of CoT alone — for the cost of running the model 5–40 times.</p>
+
+    <div class="pattern p-self">
+      <h3>The core idea</h3>
+      <p>Run the same CoT prompt <strong>N times at a non-zero temperature</strong> so the reasoning paths diverge. Different paths often reach the same answer, so <strong>majority-vote the final answers</strong> (not the reasoning). If 7 out of 10 paths say "$1,081," you trust "$1,081" more than any single path.</p>
+      <div class="layman">
+        <strong>Layman:</strong> Ask ten friends the same tricky math question independently. If seven of them say 1,081 — even though each of them took a slightly different route to get there — you're much more sure the answer is 1,081. The variety in the routes is a <em>feature</em>: if all ten paths agree on the answer despite going different ways, it's probably really the answer.
+      </div>
+
+      <div class="flow">
+        <span class="step">CoT prompt × N</span><span class="arr">→</span>
+        <span class="step">N different reasoning paths</span><span class="arr">→</span>
+        <span class="step">N final answers</span><span class="arr">→</span>
+        <span class="step">Majority vote</span><span class="arr">→</span>
+        <span class="step">Winner</span>
+      </div>
+
+      <p><em>Cost model:</em> N× inference. Typical N is 5–10 in production, 20–40 in benchmark papers. For very high-stakes single decisions (drug dose calc, medical triage summary), even N=40 can be cheaper than a wrong answer.</p>
+    </div>
+  </section>
+
+  <!-- ================= TOOL USE ================= -->
+  <section id="tool" class="card anim-sec">
+    <span class="badge">🛠️ Foundational agent capability</span>
+    <h2>Tool Use / Function Calling</h2>
+    <p><strong>Origin:</strong> Toolformer (Schick et al., Meta, 2023), then productised as OpenAI function calling (June 2023) and Anthropic tool use (May 2024). It's the mechanism that turns "text generator" into "does things in the world."</p>
+
+    <div class="pattern p-tool">
+      <h3>The core idea</h3>
+      <p>You describe the available tools as JSON schemas (name, description, input parameters). The LLM, when it decides a tool is needed, emits a <strong>structured tool call</strong> (JSON with tool name + arguments) instead of natural-language prose. Your runtime executes the tool, feeds the result back as an <em>observation</em>, and the LLM continues.</p>
+      <div class="layman">
+        <strong>Layman:</strong> The LLM by itself is like a very smart person locked in a windowless room — it can only <em>talk</em>. Tools are the door: give it a calculator, a search bar, a database read, an email sender. Now it can affect the world instead of just describing it. The <em>list of tools</em> is what defines what your agent can and can't do — treat it like a security perimeter.
+      </div>
+
+<pre><span class="cmt">// A tool the LLM can call</span>
+{
+  "name": <span class="str">"get_weather"</span>,
+  "description": <span class="str">"Return current weather for a city"</span>,
+  "input_schema": {
+    "type": <span class="str">"object"</span>,
+    "properties": { "city": { "type": <span class="str">"string"</span> } },
+    "required": [<span class="str">"city"</span>]
+  }
+}
+
+<span class="cmt">// What the LLM emits when it decides to use it</span>
+{ "tool": <span class="str">"get_weather"</span>, "input": { "city": <span class="str">"Bengaluru"</span> } }</pre>
+
+      <div class="callout warn">
+        <strong>Least privilege matters.</strong> A tool schema is a promise: whatever the LLM can request, your runtime <em>will</em> execute. Never expose a "run shell command" tool without HITL. Never give a customer-facing agent write access to a table it doesn't need. The blast radius of prompt injection is exactly the set of tools you exposed.
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= RAG ================= -->
+  <section id="rag" class="card arch">
+    <span class="badge">📚 Knowledge pattern</span>
+    <h2>RAG — Retrieval Augmented Generation</h2>
+    <p><strong>Origin:</strong> Lewis et al. (Facebook AI, 2020), <em>Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</em>. The default answer to "how do I make the LLM know about my company's private data without fine-tuning?"</p>
+
+    <div class="pattern p-rag">
+      <h3>The core idea</h3>
+      <p>Before answering, <strong>retrieve</strong> the k most relevant passages from a knowledge base (a vector store, keyword index, or hybrid), <strong>stuff them into the prompt</strong> as context, and ask the model to answer <em>using those passages</em>. The model's weights don't know your data — the prompt does, for this one turn.</p>
+      <div class="layman">
+        <strong>Layman:</strong> Take a very smart friend who's never seen your company. To answer "what's our refund policy?" they'd guess. RAG is you shoving a photocopy of the relevant policy page under their nose <em>right before</em> they answer. They don't need to memorize the manual — they just need it in front of them at the moment they speak.
+      </div>
+
+      <div class="flow">
+        <span class="step">Question</span><span class="arr">→</span>
+        <span class="step">Embed</span><span class="arr">→</span>
+        <span class="step">Vector search top-k</span><span class="arr">→</span>
+        <span class="step">Stuff into prompt</span><span class="arr">→</span>
+        <span class="step">LLM answers using context</span>
+      </div>
+
+      <p><em>RAG is often the "R" step of a larger ReAct loop</em> — the agent calls a <code>knowledge_base_search</code> tool the way it might call any other tool. This lets the agent decide <strong>when</strong> to retrieve and <strong>what</strong> to retrieve, rather than always retrieving upfront.</p>
+    </div>
+  </section>
+
+  <!-- ================= ROUTER ================= -->
+  <section id="router" class="card laymen">
+    <span class="badge">🚦 Orchestration pattern</span>
+    <h2>Router / Handoff</h2>
+
+    <div class="pattern p-router">
+      <h3>The core idea</h3>
+      <p>A small, cheap "router" LLM (or classifier) looks at each incoming request and decides <strong>which specialist agent</strong> should handle it. The specialists are usually different in one or more of: prompt, tools, model size, fine-tune, or safety profile.</p>
+      <div class="layman">
+        <strong>Layman:</strong> Reception at a big clinic. You walk in with a broken wrist — the receptionist doesn't try to set the bone, they send you to orthopedics. Walk in with the flu, you go to general medicine. The router doesn't do the work; it decides <em>who</em> should do the work.
+      </div>
+
+      <div class="flow">
+        <span class="step">Request</span><span class="arr">→</span>
+        <span class="step">Router LLM</span><span class="arr">→</span>
+        <span class="step">"This is a billing question"</span><span class="arr">→</span>
+        <span class="step">Handoff to BillingAgent</span>
+      </div>
+
+      <p><em>OpenAI's Swarm and Agents SDK, LangGraph's supervisor pattern, and CrewAI's manager-agent all implement this. It's usually the first step of scaling a single agent that got too many tools crammed into one system prompt.</em></p>
+    </div>
+  </section>
+
+  <!-- ================= MULTI-AGENT ================= -->
+  <section id="multi" class="card scenario">
+    <span class="badge">👥 Team pattern</span>
+    <h2>Multi-Agent Collaboration</h2>
+    <p><strong>Origin:</strong> AutoGen (Microsoft, 2023), CrewAI, MetaGPT, ChatDev. The generalisation of Router + Planner: multiple agents with distinct roles pass messages to each other until the task is done.</p>
+
+    <div class="pattern p-multi">
+      <h3>The core idea</h3>
+      <p>Assign each agent a <strong>role</strong> (product manager, engineer, tester, security reviewer), give each its own system prompt and tool set, and let them <strong>talk to each other</strong> under an orchestrator or in a group-chat pattern. The orchestrator either explicitly picks the next speaker (supervisor) or lets agents route based on their own outputs (event-driven).</p>
+      <div class="layman">
+        <strong>Layman:</strong> A software team. The PM writes the spec, the engineer implements, the tester finds bugs, the reviewer catches security issues, the PM signs off. Each is bad at the others' jobs and great at their own. Multi-agent LLM systems just do this at machine speed, in a slack channel of prompts.
+      </div>
+
+      <div class="two-col">
+        <div class="box pros">
+          <div class="h">✅ Why it can help</div>
+          <ul>
+            <li>Role-specialised prompts outperform "one giant prompt does everything."</li>
+            <li>Adversarial pairs (writer + critic) catch mistakes a single agent misses.</li>
+            <li>Parallelism — independent sub-tasks can run in parallel workers.</li>
+          </ul>
+        </div>
+        <div class="box cons">
+          <div class="h">⚠️ Watch out for</div>
+          <ul>
+            <li>Chatter explosion — agents can loop forever congratulating each other. Cap message counts hard.</li>
+            <li>Compounding hallucination — one agent's confident wrong answer becomes another's premise.</li>
+            <li>Cost — N agents means N× tokens per turn.</li>
+          </ul>
+        </div>
+      </div>
+      <p><em>Rule of thumb:</em> start with one agent + tools. Only split into a multi-agent system when a single-prompt version <strong>is measurably failing</strong>, and each new agent has a role that genuinely couldn't fit in the original prompt without confusing it.</p>
+    </div>
+  </section>
+
+  <!-- ================= COMPARISON ================= -->
+  <section id="compare" class="card dsa">
+    <span class="badge">⚖️ Side-by-side</span>
+    <h2>Picking the right pattern</h2>
+    <table>
+      <thead><tr><th>Pattern</th><th>Reach for it when</th><th>Watch out for</th><th>Compose well with</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>CoT</strong></td>
+          <td>Multi-step reasoning, math, logic.</td>
+          <td>Trivia (adds noise), small models (hallucinates steps).</td>
+          <td>Everything — CoT is the base substrate.</td>
+        </tr>
+        <tr>
+          <td><strong>ReAct</strong></td>
+          <td>Any agent that needs tools + reasoning.</td>
+          <td>Runaway loops — always cap iterations.</td>
+          <td>RAG, Tool Use, HITL, Reflexion.</td>
+        </tr>
+        <tr>
+          <td><strong>HITL</strong></td>
+          <td>High-blast-radius actions (money, prod writes, external comms).</td>
+          <td>Approval fatigue — reserve for actions that truly need it.</td>
+          <td>ReAct, Multi-Agent, Router.</td>
+        </tr>
+        <tr>
+          <td><strong>Reflexion</strong></td>
+          <td>Objective evaluator exists (tests, math, checkers).</td>
+          <td>Subjective tasks — reflection can drift.</td>
+          <td>ReAct (as an outer loop).</td>
+        </tr>
+        <tr>
+          <td><strong>Plan-and-Execute</strong></td>
+          <td>Long, multi-phase tasks where drift is a risk.</td>
+          <td>Rigid plans in changing environments — allow re-planning.</td>
+          <td>ReAct (as the executor inner loop).</td>
+        </tr>
+        <tr>
+          <td><strong>Tree of Thoughts</strong></td>
+          <td>Puzzle-like problems with a scoring signal.</td>
+          <td>Cost — often 10× a CoT run.</td>
+          <td>Self-Consistency (per branch).</td>
+        </tr>
+        <tr>
+          <td><strong>Self-Consistency</strong></td>
+          <td>High-stakes single decisions.</td>
+          <td>N× cost; degenerates if all paths are wrong the same way.</td>
+          <td>CoT, ToT.</td>
+        </tr>
+        <tr>
+          <td><strong>Tool Use</strong></td>
+          <td>Any agent that must interact with the world.</td>
+          <td>Least-privilege discipline; injection blast radius.</td>
+          <td>ReAct, RAG, HITL.</td>
+        </tr>
+        <tr>
+          <td><strong>RAG</strong></td>
+          <td>Private / fresh / large knowledge bases.</td>
+          <td>Retrieval quality is a whole subsystem — poor retrieval → confidently wrong answers.</td>
+          <td>ReAct, Tool Use.</td>
+        </tr>
+        <tr>
+          <td><strong>Router / Handoff</strong></td>
+          <td>Distinct request types with distinct needs.</td>
+          <td>Mis-classification silently sends users to the wrong specialist.</td>
+          <td>Multi-Agent.</td>
+        </tr>
+        <tr>
+          <td><strong>Multi-Agent</strong></td>
+          <td>A single prompt is measurably failing at role coverage.</td>
+          <td>Loop chatter; compounding errors; N× cost.</td>
+          <td>Router, HITL, Plan-and-Execute.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ================= CHEAT SHEET ================= -->
+  <section id="cheat" class="card aws">
+    <span class="badge">🗣️ Interview cheat sheet</span>
+    <h2>One-liners you can quote out loud</h2>
+    <ul>
+      <li><strong>Chain of Thought</strong> — "ask the model to write its steps, so each step becomes context for the next; depth becomes width."</li>
+      <li><strong>ReAct</strong> — "Thought → Action → Observation, in a loop, until Final Answer. It's CoT plus tool calls."</li>
+      <li><strong>HITL</strong> — "the agent pauses before high-blast-radius actions and waits for a human's approve/edit/reject."</li>
+      <li><strong>Reflexion</strong> — "attempt → evaluate → write a critique → retry with the critique in context."</li>
+      <li><strong>Plan-and-Execute</strong> — "a big-model planner writes the task list once, a small-model executor runs each task."</li>
+      <li><strong>Tree of Thoughts</strong> — "CoT is a path, ToT is a search — branch, score, prune, expand."</li>
+      <li><strong>Self-Consistency</strong> — "run CoT N times at temp&gt;0 and majority-vote the answers."</li>
+      <li><strong>Tool Use</strong> — "LLM emits a structured JSON call instead of prose; runtime executes and feeds the result back."</li>
+      <li><strong>RAG</strong> — "retrieve top-k passages, stuff them into the prompt, answer grounded in them."</li>
+      <li><strong>Router</strong> — "small classifier LLM decides which specialist agent handles the request."</li>
+      <li><strong>Multi-Agent</strong> — "role-specialised agents (PM, engineer, tester) message each other under an orchestrator."</li>
+    </ul>
+    <div class="callout good">
+      <strong>Design-review tip.</strong> In an interview, describe the agent as "ReAct at its core, RAG for company data, HITL on money-moving tools, Reflexion on the code-writing sub-task, and a router in front so we don't cram every intent into one prompt." That sentence names five patterns and shows you compose them — which is what real production agents look like.
+    </div>
+  </section>
+
+  <footer>AI · Agent Design Patterns · self-contained static page · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

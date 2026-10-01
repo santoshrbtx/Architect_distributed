@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dynamic Programming — Explained</title>
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --card: #ffffff;
+    --ink: #1f2733;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --kid: #ff8c42;
+    --kid-bg: #fff6ee;
+    --pro: #4361ee;
+    --pro-bg: #eef2ff;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(31,39,51,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 40px 36px;
+    box-shadow: var(--shadow);
+    margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .92; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 28px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .9rem;
+    padding: 6px 12px; border-radius: 999px; transition: .15s;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 30px; margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+  section.kid { border-left: 6px solid var(--kid); background: var(--kid-bg); }
+  section.pro { border-left: 6px solid var(--pro); background: var(--pro-bg); }
+  .badge {
+    display: inline-block; font-size: .78rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .kid .badge { background: var(--kid); color: #fff; }
+  .pro .badge { background: var(--pro); color: #fff; }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.1rem; }
+  h4 { margin: 16px 0 6px; font-size: 1rem; color: var(--pro); }
+  p, li { color: var(--ink); }
+  .kid p, .kid li { font-size: 1.08rem; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .95rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--pro); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+    font-size: .88rem; line-height: 1.5;
+  }
+  .callout {
+    background: #fff9db; border-left: 4px solid #f7c948;
+    border-radius: 10px; padding: 12px 18px; margin: 14px 0;
+    font-size: .95rem;
+  }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 30px;
+    box-shadow: var(--shadow);
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; color: #fff; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>Dynamic Programming</h1>
+    <p>Remember answers to small problems so you never solve the same one twice — the technique that turns exponential-time brute force into polynomial-time solutions.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#kid">🧒 For a 10-year-old</a>
+    <a href="#pro">👨‍💻 For a veteran</a>
+    <a href="#steps">🔁 Step by step</a>
+    <a href="#archetypes">🗂️ LeetCode archetypes</a>
+    <a href="#recipe">🍳 Interview recipe</a>
+    <a href="#cheat">📌 Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+  </nav>
+
+  <section id="kid" class="card kid">
+    <span class="badge">🧒 Explain it like I'm 10</span>
+    <h2>The simple story</h2>
+
+    <p>Imagine your teacher asks: "How many ways can you climb a staircase with 10 steps, if each time you can hop <strong>1 step</strong> or <strong>2 steps</strong>?"</p>
+
+    <p>You could try to list every possible way — 1+1+1+1+1+1+1+1+1+1, then 2+1+1+1+…, then 1+2+1+1+… — but that gets crazy fast. There are <em>89</em> ways to climb 10 steps! Nobody wants to count them all.</p>
+
+    <p>So here's the trick. Ask a simpler question first:</p>
+
+    <ul>
+      <li>To climb <strong>1 step</strong>, there's <strong>1</strong> way (just hop 1).</li>
+      <li>To climb <strong>2 steps</strong>, there are <strong>2</strong> ways (1+1, or 2).</li>
+      <li>To climb <strong>3 steps</strong>: your <em>last</em> hop was either a 1-step (so before that, you had climbed 2 steps → 2 ways) or a 2-step (so before that, you had climbed 1 step → 1 way). Total: <strong>2 + 1 = 3</strong> ways.</li>
+      <li>To climb <strong>4 steps</strong>: last hop was 1 (so 3 steps before → 3 ways) or 2 (so 2 steps before → 2 ways). Total: <strong>3 + 2 = 5</strong>.</li>
+    </ul>
+
+    <p>See the pattern? To get the answer for step <em>N</em>, you just need the answers for step <em>N−1</em> and step <em>N−2</em>. So you <strong>write each answer down in a notebook</strong> and reuse it. Once you've done step 10, you have all the answers 1 through 10 in your notebook. No question ever gets solved twice.</p>
+
+    <p><strong>That's dynamic programming</strong> — you break a big problem into smaller versions of the same problem, and you write down the small answers so you never do the same work twice. It's a bit like being smart with a homework helper: if your friend has already solved question 5, you don't solve it again — you just ask them.</p>
+
+    <h3>Two ways to fill your notebook</h3>
+    <ol>
+      <li><strong>Top-down:</strong> Start with "how many ways to climb 10?" When you need "how many ways to climb 8?", check your notebook. Not there? Solve it now, write it down. This is called <em>memoization</em>.</li>
+      <li><strong>Bottom-up:</strong> Start at step 1, then step 2, then step 3, filling in each answer in order until you reach step 10. This is called <em>tabulation</em> — you fill a whole table.</li>
+    </ol>
+
+    <p>Both work. Both are dynamic programming. And both turn a problem that would take <em>forever</em> into one you can solve in seconds.</p>
+  </section>
+
+  <section id="pro" class="card pro">
+    <span class="badge">👨‍💻 For 15 years of IT experience</span>
+    <h2>The engineer's view</h2>
+
+    <p><strong>Dynamic programming (DP)</strong> is an algorithmic technique that solves optimization or counting problems by decomposing them into overlapping subproblems, storing each subproblem's result once, and reusing it. It applies when two properties hold: <strong>optimal substructure</strong> (an optimal solution can be composed from optimal solutions to subproblems) and <strong>overlapping subproblems</strong> (the naive recursion revisits the same subproblem many times). Without overlap you use divide-and-conquer; without optimal substructure you likely need backtracking or a different paradigm.</p>
+
+    <p>You'll find DP behind sequence alignment (bioinformatics — <code>diff</code>, BLAST), speech recognition (Viterbi decoding on HMMs), text layout (Knuth-Plass line breaking in TeX), routing (Bellman-Ford, Floyd-Warshall), compilers (optimal parenthesization, register allocation on trees), operations research (knapsack, scheduling), and finance (option pricing lattices). On LeetCode it's one of the most common topics — Amazon, Google, Microsoft, and Meta interviewers reach for it constantly because it tests whether you can spot structure, define state precisely, and code it correctly.</p>
+
+    <h3>The two implementations, one idea</h3>
+    <p>DP has two operational styles that produce identical asymptotic behavior:</p>
+    <ul>
+      <li><strong>Memoization (top-down):</strong> write the natural recursion, then cache each call. Lazy — you only compute states you actually need. Uses recursion stack; can hit stack overflow on deep chains.</li>
+      <li><strong>Tabulation (bottom-up):</strong> iterate over states in a topological order that respects dependencies, filling a table. Eager — computes every state in the table. No recursion stack; easier to space-optimize because dependencies are visible.</li>
+    </ul>
+
+    <h3>Time & space complexity</h3>
+    <table>
+      <tr><th>Aspect</th><th>Formula</th><th>Reasoning</th></tr>
+      <tr><td>Time</td><td>O(states × transition cost)</td><td>Every state solved once; the cost per state is whatever work its recurrence does.</td></tr>
+      <tr><td>Space (naive)</td><td>O(states)</td><td>The DP table.</td></tr>
+      <tr><td>Space (rolling)</td><td>O(one dimension)</td><td>When state <em>i</em> depends only on state <em>i−1</em> (or fixed offsets), you keep just those rows.</td></tr>
+      <tr><td>Memoization stack</td><td>O(recursion depth)</td><td>Often the longest chain in the state graph — matters for large inputs.</td></tr>
+    </table>
+    <p>Concretely: Fibonacci is O(n) time / O(1) space with rolling variables (vs. O(2ⁿ) brute force). Edit distance is O(m·n) time / O(min(m,n)) space with rolling rows. 0/1 Knapsack is O(n·W) — pseudo-polynomial, since W is numeric not asymptotic.</p>
+
+    <h3>Recognition triggers — "is this a DP problem?"</h3>
+    <p>Look for these signals:</p>
+    <ul>
+      <li>Words like <strong>maximum</strong>, <strong>minimum</strong>, <strong>longest</strong>, <strong>shortest</strong>, <strong>number of ways</strong>, <strong>can I reach</strong> — optimization or counting.</li>
+      <li>Sequential input where a decision at position <em>i</em> depends on decisions before <em>i</em> (strings, arrays, grids).</li>
+      <li>You can describe the answer with a recursive definition, and that recursion has <em>repeated subproblems</em>.</li>
+      <li>Greedy fails (you found a counterexample), backtracking is too slow, and the constraint sizes suggest polynomial (typically n, m ≤ a few thousand for O(n·m); ≤ a few million for O(n)).</li>
+      <li>You keep saying "at each position I can either… or…" — that's the choice that becomes the transition.</li>
+    </ul>
+
+    <h3>Key invariants, preconditions, edge cases</h3>
+    <ul>
+      <li><strong>State must be sufficient:</strong> two paths with the same state must have interchangeable futures. If not, add another dimension (a common bug).</li>
+      <li><strong>Base cases are load-bearing:</strong> get them wrong and everything downstream is wrong. Enumerate them explicitly (empty string, index 0, target=0…).</li>
+      <li><strong>Transitions must terminate:</strong> the state graph must be a DAG, and every state must eventually reach base cases.</li>
+      <li><strong>Watch integer overflow</strong> on counting problems (<em>number of ways</em> grows fast) — mod as required, or use <code>long</code>.</li>
+      <li><strong>1-based vs. 0-based indexing</strong> is a source of off-by-one bugs; pick one and be consistent, often with a "phantom" row/column for the empty case.</li>
+    </ul>
+
+    <h3>When NOT to use DP</h3>
+    <ul>
+      <li>Greedy suffices and is provably optimal (interval scheduling, Huffman coding, MST) — DP would be over-engineering.</li>
+      <li>The state space is too large (curse of dimensionality); consider approximation, meet-in-the-middle, or algorithmic redesign.</li>
+      <li>No overlapping subproblems — plain divide-and-conquer is enough (merge sort, quickselect).</li>
+      <li>Search problems with pruning where the branching factor is small — backtracking often wins with less code.</li>
+    </ul>
+
+    <h3>Reference implementation — Fibonacci, three ways (C#)</h3>
+    <p>All three compute the same function; they illustrate the progression from brute force → memoization → tabulation → space-optimized tabulation.</p>
+    <pre><span class="cmt">// (1) Brute force recursion — exponential, revisits the same fib(k) many times.</span>
+<span class="kw">public static long</span> <span class="fn">FibNaive</span>(<span class="typ">int</span> n) =&gt;
+    n &lt;= 1 ? n : <span class="fn">FibNaive</span>(n - 1) + <span class="fn">FibNaive</span>(n - 2);   <span class="cmt">// O(2^n) time, O(n) stack</span>
+
+<span class="cmt">// (2) Top-down DP: memoize the recursion. Each state is computed at most once.</span>
+<span class="kw">public static long</span> <span class="fn">FibMemo</span>(<span class="typ">int</span> n)
+{
+    <span class="kw">var</span> memo = <span class="kw">new long</span>?[n + 1];
+    <span class="kw">long</span> <span class="fn">F</span>(<span class="typ">int</span> k)
+    {
+        <span class="kw">if</span> (k &lt;= 1) <span class="kw">return</span> k;
+        <span class="kw">if</span> (memo[k] <span class="kw">is not null</span>) <span class="kw">return</span> memo[k]!.Value;
+        <span class="kw">return</span> (memo[k] = <span class="fn">F</span>(k - 1) + <span class="fn">F</span>(k - 2))!.Value;
+    }
+    <span class="kw">return</span> <span class="fn">F</span>(n);                                          <span class="cmt">// O(n) time, O(n) space + stack</span>
+}
+
+<span class="cmt">// (3) Bottom-up DP: tabulation. Fill dp[0..n] in order.</span>
+<span class="kw">public static long</span> <span class="fn">FibTab</span>(<span class="typ">int</span> n)
+{
+    <span class="kw">if</span> (n &lt;= 1) <span class="kw">return</span> n;
+    <span class="kw">var</span> dp = <span class="kw">new long</span>[n + 1];
+    dp[0] = 0; dp[1] = 1;
+    <span class="kw">for</span> (<span class="kw">int</span> i = 2; i &lt;= n; i++) dp[i] = dp[i - 1] + dp[i - 2];
+    <span class="kw">return</span> dp[n];                                       <span class="cmt">// O(n) time, O(n) space</span>
+}
+
+<span class="cmt">// (4) Space-optimized: dp[i] only needs the last two values → keep 2 variables.</span>
+<span class="kw">public static long</span> <span class="fn">FibRolling</span>(<span class="typ">int</span> n)
+{
+    <span class="kw">if</span> (n &lt;= 1) <span class="kw">return</span> n;
+    <span class="kw">long</span> prev2 = 0, prev1 = 1;
+    <span class="kw">for</span> (<span class="kw">int</span> i = 2; i &lt;= n; i++)
+    {
+        <span class="kw">long</span> cur = prev1 + prev2;
+        prev2 = prev1; prev1 = cur;
+    }
+    <span class="kw">return</span> prev1;                                       <span class="cmt">// O(n) time, O(1) space</span>
+}</pre>
+
+    <p>The mechanical progression <em>brute force → memoize → tabulate → space-optimize</em> is exactly how you should attack a new DP problem under interview pressure: get the recursion right first, then optimize.</p>
+  </section>
+
+  <section id="steps" class="card">
+    <h2>🔁 How it works, step by step — Climbing Stairs (LeetCode 70)</h2>
+
+    <p>Problem: You're climbing a staircase of <strong>n = 5</strong> steps. Each move is either <strong>1</strong> or <strong>2</strong> steps. How many distinct ways can you reach the top? Let's trace bottom-up DP.</p>
+
+    <ol class="steps">
+      <li><strong>Define the state.</strong> Let <code>dp[i]</code> = the number of distinct ways to reach step <em>i</em>. The answer we want is <code>dp[5]</code>.</li>
+      <li><strong>Write the transition.</strong> To arrive at step <em>i</em>, your last move was either a 1-step (so you came from step <em>i−1</em>) or a 2-step (from step <em>i−2</em>). So <code>dp[i] = dp[i-1] + dp[i-2]</code>.</li>
+      <li><strong>Set the base cases.</strong> <code>dp[0] = 1</code> (one way to be at the start — don't move) and <code>dp[1] = 1</code> (one way: take a single 1-step).</li>
+      <li><strong>Fill the table left to right.</strong>
+        <div class="viz">i =        0    1    2    3    4    5
+dp[i] =    1    1    ?    ?    ?    ?     ← start with base cases
+
+dp[2] = dp[1] + dp[0] = 1 + 1 = 2
+i =        0    1    2    3    4    5
+dp[i] =    1    1    2    ?    ?    ?
+
+dp[3] = dp[2] + dp[1] = 2 + 1 = 3
+dp[i] =    1    1    2    3    ?    ?
+
+dp[4] = dp[3] + dp[2] = 3 + 2 = 5
+dp[i] =    1    1    2    3    5    ?
+
+dp[5] = dp[4] + dp[3] = 5 + 3 = 8
+dp[i] =    1    1    2    3    5    8   ← answer: dp[5] = 8</div>
+      </li>
+      <li><strong>Read off the answer.</strong> <code>dp[5] = 8</code>. There are 8 distinct ways to climb 5 stairs. And notice the sequence 1, 1, 2, 3, 5, 8 — that's <em>Fibonacci</em>. This problem is Fibonacci in disguise, which is why almost every DP tutorial starts here.</li>
+      <li><strong>Optimize space.</strong> Because <code>dp[i]</code> only ever reads <code>dp[i-1]</code> and <code>dp[i-2]</code>, you don't need the full array — just two rolling variables. O(n) time, O(1) space.</li>
+    </ol>
+
+    <div class="callout">
+      <strong>The DP formula in five moves:</strong> (1) Define state → (2) write transition/recurrence → (3) set base cases → (4) decide iteration order → (5) return the answer state. Master these five and you have a scaffold that works on every DP problem you'll ever see.
+    </div>
+  </section>
+
+  <section id="archetypes" class="card">
+    <h2>🗂️ The LeetCode DP archetypes</h2>
+    <p>Most DP interview problems fall into one of about eight archetypes. Recognize the pattern and you already know the state shape. Here's the cheat map — problem → state → transition, with the canonical LeetCode number.</p>
+
+    <h3>1. Linear DP — 1D state, "at position i, what's the best…?"</h3>
+    <table>
+      <tr><th>Problem (LC)</th><th>State</th><th>Transition</th></tr>
+      <tr><td>Climbing Stairs (70)</td><td><code>dp[i]</code> = ways to reach step i</td><td><code>dp[i] = dp[i-1] + dp[i-2]</code></td></tr>
+      <tr><td>House Robber (198)</td><td><code>dp[i]</code> = max loot up to house i</td><td><code>dp[i] = max(dp[i-1], dp[i-2] + nums[i])</code></td></tr>
+      <tr><td>Maximum Subarray / Kadane (53)</td><td><code>dp[i]</code> = max subarray sum ending at i</td><td><code>dp[i] = max(nums[i], dp[i-1] + nums[i])</code></td></tr>
+      <tr><td>Word Break (139)</td><td><code>dp[i]</code> = can s[0..i) be segmented?</td><td><code>dp[i] = ∃ j &lt; i: dp[j] &amp;&amp; s[j..i) ∈ dict</code></td></tr>
+    </table>
+
+    <h3>2. Choose / skip — buying, robbing, taking</h3>
+    <table>
+      <tr><th>Problem (LC)</th><th>State</th><th>Transition</th></tr>
+      <tr><td>0/1 Knapsack</td><td><code>dp[i][w]</code> = max value using first i items with capacity w</td><td><code>max(dp[i-1][w], dp[i-1][w-wt[i]] + val[i])</code></td></tr>
+      <tr><td>Partition Equal Subset Sum (416)</td><td><code>dp[i][s]</code> = can we hit sum s using first i?</td><td><code>dp[i-1][s] || dp[i-1][s-nums[i]]</code></td></tr>
+      <tr><td>Target Sum (494)</td><td>Reduces to subset-sum counting</td><td>Same shape, count instead of boolean</td></tr>
+    </table>
+
+    <h3>3. Unbounded knapsack — reuse items freely</h3>
+    <table>
+      <tr><th>Problem (LC)</th><th>State</th><th>Transition</th></tr>
+      <tr><td>Coin Change (322)</td><td><code>dp[a]</code> = min coins to make amount a</td><td><code>dp[a] = min(dp[a - c] + 1)</code> over coins c</td></tr>
+      <tr><td>Coin Change II (518)</td><td><code>dp[a]</code> = number of ways to make a</td><td><code>dp[a] += dp[a - c]</code>, coins in outer loop</td></tr>
+      <tr><td>Perfect Squares (279)</td><td><code>dp[n]</code> = min squares summing to n</td><td><code>dp[n] = min(dp[n - k²]) + 1</code></td></tr>
+    </table>
+
+    <h3>4. Two-pointer / two-sequence DP — 2D state on strings/arrays</h3>
+    <table>
+      <tr><th>Problem (LC)</th><th>State</th><th>Transition</th></tr>
+      <tr><td>Longest Common Subsequence (1143)</td><td><code>dp[i][j]</code> = LCS of a[..i), b[..j)</td><td><code>a[i-1]==b[j-1]? dp[i-1][j-1]+1 : max(dp[i-1][j], dp[i][j-1])</code></td></tr>
+      <tr><td>Edit Distance (72)</td><td><code>dp[i][j]</code> = min edits from a[..i) to b[..j)</td><td><code>equal? dp[i-1][j-1] : 1 + min(insert, delete, replace)</code></td></tr>
+      <tr><td>Distinct Subsequences (115)</td><td><code>dp[i][j]</code> = # ways a[..i) has t[..j) as subsequence</td><td>match: <code>dp[i-1][j-1] + dp[i-1][j]</code>; else <code>dp[i-1][j]</code></td></tr>
+      <tr><td>Regular Expression Match (10)</td><td><code>dp[i][j]</code> = does s[..i) match p[..j)?</td><td>Handle <code>.</code> and <code>*</code> explicitly</td></tr>
+    </table>
+
+    <h3>5. Longest Increasing Subsequence (LIS) family</h3>
+    <table>
+      <tr><th>Problem (LC)</th><th>State</th><th>Transition</th></tr>
+      <tr><td>Longest Increasing Subsequence (300)</td><td><code>dp[i]</code> = LIS ending at i</td><td><code>dp[i] = 1 + max(dp[j] : j &lt; i, nums[j] &lt; nums[i])</code>. O(n²), or O(n log n) via patience sort.</td></tr>
+      <tr><td>Longest Continuous Increasing Subsequence (674)</td><td>Simpler 1D DP</td><td><code>dp[i] = nums[i]&gt;nums[i-1]? dp[i-1]+1 : 1</code></td></tr>
+      <tr><td>Russian Doll Envelopes (354)</td><td>2D LIS after sorting</td><td>Sort by width, LIS on heights</td></tr>
+    </table>
+
+    <h3>6. Interval / range DP — <code>dp[i][j]</code> = best on subrange [i..j]</h3>
+    <table>
+      <tr><th>Problem (LC)</th><th>State</th><th>Transition</th></tr>
+      <tr><td>Longest Palindromic Subsequence (516)</td><td><code>dp[i][j]</code> = LPS of s[i..j]</td><td><code>s[i]==s[j]? dp[i+1][j-1]+2 : max(dp[i+1][j], dp[i][j-1])</code></td></tr>
+      <tr><td>Matrix Chain / Burst Balloons (312)</td><td><code>dp[i][j]</code> = max coins bursting in (i, j)</td><td>Try each k as the LAST burst: <code>max(dp[i][k] + dp[k][j] + gain(i,k,j))</code></td></tr>
+      <tr><td>Palindrome Partitioning II (132)</td><td>2D "is palindrome" table + 1D min-cuts</td><td>Precompute palindromicity, then linear DP</td></tr>
+    </table>
+
+    <h3>7. Grid / matrix DP</h3>
+    <table>
+      <tr><th>Problem (LC)</th><th>State</th><th>Transition</th></tr>
+      <tr><td>Unique Paths (62)</td><td><code>dp[i][j]</code> = ways to reach cell (i,j)</td><td><code>dp[i][j] = dp[i-1][j] + dp[i][j-1]</code></td></tr>
+      <tr><td>Minimum Path Sum (64)</td><td><code>dp[i][j]</code> = min sum to reach (i,j)</td><td><code>dp[i][j] = grid[i][j] + min(dp[i-1][j], dp[i][j-1])</code></td></tr>
+      <tr><td>Maximal Square (221)</td><td><code>dp[i][j]</code> = side length of largest all-1 square ending at (i,j)</td><td>if 1: <code>1 + min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])</code></td></tr>
+      <tr><td>Dungeon Game (174)</td><td>Bottom-right → top-left DP</td><td>Reverse iteration; state = min HP needed</td></tr>
+    </table>
+
+    <h3>8. State-machine DP — "at position i in state S, best…?"</h3>
+    <table>
+      <tr><th>Problem (LC)</th><th>State</th><th>Transition</th></tr>
+      <tr><td>Best Time to Buy/Sell Stock II (122)</td><td><code>dp[i][held]</code> — 0=no stock, 1=holding</td><td>Buy, sell, or rest transitions between states</td></tr>
+      <tr><td>Buy/Sell with Cooldown (309)</td><td>3 states: held / sold / rest</td><td>Explicit transitions per day</td></tr>
+      <tr><td>Buy/Sell with K Transactions (188)</td><td><code>dp[i][k][held]</code></td><td>Add a "transactions used" dimension</td></tr>
+      <tr><td>Paint House (256)</td><td><code>dp[i][c]</code> = min cost through house i with color c</td><td>Sum with min of the other two colors at i-1</td></tr>
+    </table>
+
+    <h3>Bonus: bitmask DP (subset states) and tree DP</h3>
+    <p><strong>Bitmask DP</strong> encodes a set-of-things-used as bits in an integer, e.g. Traveling Salesman on small n (LC 943 "Shortest Superstring") — <code>dp[mask][i]</code> = best route visiting the set <em>mask</em> ending at city <em>i</em>. O(n²·2ⁿ), feasible up to n ≈ 20. <strong>Tree DP</strong> runs DP on subtrees during a DFS — e.g. House Robber III (LC 337) where each node returns <code>(rob, notRob)</code>. Same recurrence idea, just indexed by tree nodes instead of an array.</p>
+  </section>
+
+  <section id="recipe" class="card">
+    <h2>🍳 A systematic recipe for a new DP problem in an interview</h2>
+
+    <p>DP is the algorithmic topic where <em>having a checklist</em> matters most. Panic solves nothing; the recipe below solves almost everything.</p>
+
+    <ol class="steps">
+      <li><strong>Confirm it's DP.</strong> Look for the triggers — optimize / count / decision problem, choices at each position, greedy doesn't work, backtracking is too slow. If yes, proceed. If no, don't force DP.</li>
+      <li><strong>Write the brute-force recursion first.</strong> Answer "what choices do I have at each step?" — take/skip, use/don't use, extend/start-over. Turn those choices into recursive calls. Ignore efficiency, just get correctness.</li>
+      <li><strong>Identify the state.</strong> Look at your recursion's arguments. Which ones actually vary and matter for the future? That set of arguments is your state. Everything else is a base case or a constant.</li>
+      <li><strong>Check for overlap.</strong> Trace a small example. Are you making the <em>same</em> recursive call from different paths? If yes, you have overlapping subproblems ⇒ DP will help. If no, DP won't help.</li>
+      <li><strong>Add memoization.</strong> Convert the recursion by caching results in a dictionary or array keyed on state. This is often enough to pass — get here first, optimize second.</li>
+      <li><strong>Convert to tabulation if needed.</strong> Rewrite as an iterative table fill. This eliminates recursion overhead, avoids stack overflow, and makes space optimization obvious.</li>
+      <li><strong>Space-optimize.</strong> Look at the transition: does <code>dp[i]</code> only reference <code>dp[i-1]</code> or a fixed window? Then keep just those rows (rolling array) or a couple of variables.</li>
+      <li><strong>Verify base cases and boundaries.</strong> Empty input, single element, target = 0, index = 0. This is where 80% of bugs live.</li>
+      <li><strong>Verbally state the recurrence to your interviewer</strong> before coding. If you can say "let <code>dp[i]</code> mean X, then <code>dp[i] = …</code>" clearly, you've done the hard part.</li>
+    </ol>
+
+    <div class="callout">
+      <strong>The interview trick:</strong> if you're stuck, ask "at position <em>i</em>, what are my options?" Write them as a max/min/sum over recursive calls. That's the recurrence — 90% of DP problems reveal themselves once you list the choices.
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>📌 Cheat sheet</h2>
+    <ul>
+      <li><strong>What DP is:</strong> solve a problem by combining answers to overlapping subproblems, cached to avoid recomputation.</li>
+      <li><strong>When it applies:</strong> optimal substructure + overlapping subproblems. Triggers: max/min/longest/shortest/# ways/can-reach.</li>
+      <li><strong>Two flavors:</strong> memoization (top-down, recursion + cache) vs tabulation (bottom-up, iterative table). Same complexity, different mechanics.</li>
+      <li><strong>Complexity:</strong> Time = states × transition cost. Space = O(states), often reducible to O(one dimension) with rolling arrays.</li>
+      <li><strong>The five-step formula:</strong> define state → write transition → base cases → iteration order → return answer state.</li>
+      <li><strong>Eight LeetCode archetypes:</strong> linear, choose/skip, unbounded knapsack, two-sequence, LIS, interval, grid, state-machine (+ bitmask + tree DP).</li>
+      <li><strong>Recognition heuristic:</strong> if you keep saying "at position i, I can either… or…" and greedy fails, it's DP.</li>
+      <li><strong>Watch out for:</strong> wrong base cases, insufficient state, integer overflow on counting, off-by-one on empty prefixes, and forcing DP where greedy is optimal.</li>
+      <li><strong>Interview move:</strong> brute force → memoize → tabulate → space-optimize. Get correctness before efficiency.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this algorithm</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this algorithm and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <footer>Generated by the <strong>explain-algo</strong> skill · open in your browser via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

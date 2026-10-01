@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Consensus: Raft & Paxos — Distributed Systems</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c; --scenario-bg: #fff0f4;
+    --reqs: #f4a259; --reqs-bg: #fff7ed;
+    --arch: #4361ee; --arch-bg: #eef2ff;
+    --dsa: #7048e8; --dsa-bg: #f3effe;
+    --aws: #ff9900; --aws-bg: #fff6e6;
+    --code-bg: #1e2430; --code-ink: #e7ecf3; --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08); --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { position: relative; padding: 10px 0 10px 46px; margin: 0; border-bottom: 1px dashed var(--line); }
+  .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 10px; width: 30px; height: 30px; border-radius: 50%; background: var(--arch); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: .9rem; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Distributed Systems · Interview Prep</div>
+    <h1>Consensus: Raft & Paxos</h1>
+    <p>How a cluster of unreliable machines agrees on one value — leader election, log replication, and majority quorums. The engine inside etcd, ZooKeeper, Kafka, and Spanner.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 The problem</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Goals</a>
+    <a href="#arch">🏗️ Raft</a>
+    <a href="#deep">🔍 Election & logs</a>
+    <a href="#dsa">🧮 Paxos & quorums</a>
+    <a href="#aws">☁️ AWS mapping</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Follow-ups</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>Getting unreliable machines to agree on one truth</h2>
+    <p>Consensus is the problem of getting a group of machines to <strong>agree on a single value</strong> — the next command in a replicated log, who the current leader is, whether a lock is held — even though machines crash, restart, and messages are delayed or lost. It's the beating heart of every reliable distributed system: it's how <strong>etcd</strong> and <strong>ZooKeeper</strong> store the source-of-truth config that Kubernetes and Kafka depend on, how <strong>CockroachDB</strong> and <strong>Spanner</strong> keep replicas of your data identical, and how <a href="../two-phase-commit/index.html">distributed commit</a> escapes 2PC's blocking flaw by replicating the coordinator.</p>
+    <p>Interviewers love consensus because it forces you to reason about the hardest part of distributed systems: <em>failure without a global clock</em>. The FLP impossibility result proved that in a fully asynchronous network you cannot guarantee consensus if even one node can fail — so practical algorithms (Paxos, Raft) sidestep it with <strong>randomized timeouts</strong> and the assumption of eventual synchrony. If you can explain how a cluster elects a leader and commits a log entry with a majority, you've demonstrated the core competency.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Five friends trying to pick a restaurant on WhatsApp</h2>
+    <p>Picture five friends on a WhatsApp group deciding where to eat tonight. Everyone types at once, everyone has opinions, and — worst of all — some phones are on airplane mode, some people are stuck in traffic, and one friend's battery just died. And yet the group needs to <strong>land on exactly one restaurant</strong>. Not two. Not "maybe Pizza Hut or maybe KFC." One place, everyone shows up there. That is the essence of the problem computers face when a group of servers has to agree on something.</p>
+    <p>The clever trick used by real systems is: <strong>elect a captain</strong>. One friend — usually whoever spoke up first — becomes the captain for tonight. From now on, only the captain proposes restaurants. Anyone else who has an idea whispers it to the captain, and the captain broadcasts it to the group. This stops the chaos of everyone shouting at once.</p>
+    <p>When the captain suggests "let's do Pizza Hut," they don't just declare it. They wait until <strong>more than half the group</strong> replies "yes, sounds good." Three yeses out of five is enough. Once they hit that majority, it's <strong>locked in</strong> — even if the two silent friends were on airplane mode, they'll see the decision the moment their phones reconnect, and they must go along with it. This "more than half" rule is why the group survives even when a couple of phones are dead.</p>
+    <p>What if the captain's own battery dies? The group waits a few seconds — no captain message means "he's gone" — and then they hold a quick vote for a new captain. Whoever most people vote for takes over. That's how systems like the one behind <strong>Google Docs</strong>, or the config store powering <strong>Kubernetes</strong>, keep working even when servers randomly crash. There is always <strong>one captain, majority approval, and instant re-election</strong> when the captain vanishes.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 What a consensus algorithm must guarantee</span>
+    <h2>The safety and liveness properties</h2>
+    <table>
+      <tr><th>Property</th><th>Meaning</th></tr>
+      <tr><td><strong>Agreement (safety)</strong></td><td>No two correct nodes decide different values. If node A applies command X as the 5th log entry, no node ever applies a different 5th entry.</td></tr>
+      <tr><td><strong>Validity / Integrity</strong></td><td>The value decided was actually proposed by some node — no values invented out of thin air.</td></tr>
+      <tr><td><strong>Termination (liveness)</strong></td><td>Every correct node eventually decides — as long as a majority is up and can communicate.</td></tr>
+      <tr><td><strong>Fault tolerance</strong></td><td>Tolerates <code>f</code> crash failures with <code>2f + 1</code> nodes (a majority must survive). Byzantine variants tolerate <code>f</code> malicious nodes with <code>3f + 1</code>.</td></tr>
+    </table>
+    <p>The magic number is the <strong>majority quorum</strong>. A 5-node cluster survives 2 failures (needs 3 to agree); a 3-node cluster survives 1. If it can't reach a majority, a correct system <strong>halts rather than returning a wrong answer</strong> — "it will never return an incorrect result." That's the consistency-over-availability (CP) posture from the <a href="../cap-theorem/index.html">CAP theorem</a>.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ Raft — consensus you can actually understand</span>
+    <h2>Raft: leader-based replicated log</h2>
+    <p>Raft was designed for one goal Paxos famously lacked: <strong>understandability</strong>. It's "equivalent to Paxos in fault-tolerance and performance" but decomposes the problem into three digestible subproblems — <strong>leader election</strong>, <strong>log replication</strong>, and <strong>safety</strong>. Every server is in one of three states: <strong>Follower</strong>, <strong>Candidate</strong>, or <strong>Leader</strong>. Time is divided into <strong>terms</strong> — monotonically increasing integers that act as a logical clock; each term has at most one leader.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <defs>
+          <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#7aa2f7"/></marker>
+        </defs>
+        <!-- states -->
+        <rect x="60" y="120" width="150" height="60" rx="12" fill="#1b2940" stroke="#7f8aa0"/>
+        <text x="135" y="150" fill="#e7ecf3" font-size="15" text-anchor="middle">Follower</text>
+        <text x="135" y="168" fill="#9aa7bd" font-size="10" text-anchor="middle">passive; resets timer on heartbeat</text>
+        <rect x="290" y="120" width="150" height="60" rx="12" fill="#2a2410" stroke="#ffd166"/>
+        <text x="365" y="150" fill="#ffd166" font-size="15" text-anchor="middle">Candidate</text>
+        <text x="365" y="168" fill="#9aa7bd" font-size="10" text-anchor="middle">timed out; requests votes</text>
+        <rect x="520" y="120" width="150" height="60" rx="12" fill="#132a1c" stroke="#2dc653"/>
+        <text x="595" y="150" fill="#2dc653" font-size="15" text-anchor="middle">Leader</text>
+        <text x="595" y="168" fill="#9aa7bd" font-size="10" text-anchor="middle">sends heartbeats + entries</text>
+        <!-- arrows -->
+        <line x1="210" y1="140" x2="288" y2="140" stroke="#7aa2f7" stroke-width="2" marker-end="url(#ar)"/>
+        <text x="248" y="130" fill="#7aa2f7" font-size="9" text-anchor="middle">timeout</text>
+        <line x1="440" y1="140" x2="518" y2="140" stroke="#7aa2f7" stroke-width="2" marker-end="url(#ar)"/>
+        <text x="479" y="130" fill="#7aa2f7" font-size="9" text-anchor="middle">wins majority</text>
+        <path d="M365 180 Q365 250 135 250 Q135 210 135 182" fill="none" stroke="#7aa2f7" stroke-width="2" marker-end="url(#ar)"/>
+        <text x="250" y="245" fill="#7aa2f7" font-size="9">higher term seen → step down</text>
+        <path d="M595 180 Q595 260 135 260 Q135 250 135 250" fill="none" stroke="#7aa2f7" stroke-width="2" marker-end="url(#ar)"/>
+        <text x="470" y="278" fill="#7aa2f7" font-size="9">discovers higher term → follower</text>
+      </svg>
+      <div class="legend"><span><span class="dot" style="background:#7aa2f7"></span>state transitions</span></div>
+    </div>
+    <h3>Leader election</h3>
+    <p>Followers expect periodic <strong>heartbeats</strong> from the leader. If a follower hears nothing before its <strong>randomized election timeout</strong> (e.g. 150–300 ms) fires, it becomes a Candidate, increments the term, votes for itself, and sends <code>RequestVote</code> RPCs to all peers. A server grants its vote at most once per term, and only to a candidate whose log is at least as up-to-date as its own. If the candidate collects votes from a <strong>majority</strong>, it becomes Leader and immediately sends heartbeats to suppress other elections. The randomized timeouts make split votes rare and self-correcting — that's Raft's elegant trick against FLP.</p>
+    <h3>Log replication</h3>
+    <p>All client writes go to the leader. It appends the command to its log and sends <code>AppendEntries</code> RPCs to followers. Once a <strong>majority</strong> has persisted the entry, the leader marks it <strong>committed</strong>, applies it to its state machine, and returns success to the client; followers apply it too as they learn the commit index. Because a leader only commits entries from its <em>current</em> term (and only after a majority has them), Raft guarantees the committed prefix of every log is identical everywhere — "no other state machine will ever apply a different nth command."</p>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Deep-dive: why it's safe</h2>
+    <h3>Terms are a logical clock</h3>
+    <p>Every RPC carries the sender's term. If a node ever sees a term higher than its own, it immediately reverts to Follower and adopts that term. This single rule cleanly resolves stale leaders: a leader that was network-partitioned and comes back with an old term is instantly demoted the moment it sees a newer one, preventing two active leaders (split-brain) from both committing.</p>
+    <h3>The commit rule and log matching</h3>
+    <p>An entry is committed only when stored on a majority of servers. The <strong>Log Matching Property</strong> guarantees that if two logs contain an entry with the same index and term, the logs are identical in all preceding entries. The leader forces followers to reconcile by walking back until logs agree, then overwriting the follower's conflicting suffix. This is how a follower that missed entries (or has stale ones from a dead leader) gets repaired.</p>
+    <h3>The partition scenario (the interview favorite)</h3>
+    <p>Split a 5-node cluster into a 3-node side and a 2-node side. The 3-node side has a majority: it can elect a leader and keep committing. The 2-node side <em>cannot</em> form a majority — its leader (if it had one) steps down and it stops accepting writes. When the partition heals, the minority side sees the higher term, reverts to followers, and its state machine catches up from the leader's log. No divergence, no data loss for committed entries — availability was sacrificed on the minority side (CP).</p>
+    <div class="viz">5 nodes, partition 3 | 2:
+
+  [ N1  N2  N3 ]  ← majority (3) → elects leader, COMMITS ✓
+        ‖ partition ‖
+  [ N4  N5 ]      ← minority (2) → no quorum, STALLS ✗
+
+heal → N4,N5 see higher term → become followers → catch up from log</div>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 Paxos, quorums & the math</span>
+    <h2>Paxos, and the theory underneath</h2>
+    <p><strong>Paxos</strong> (Lamport, 1998) is the original crash-fault-tolerant consensus algorithm and is provably correct, but notoriously hard to understand and to implement completely — real systems use <strong>Multi-Paxos</strong> to amortize the cost across a stream of values. Its single-decree form runs two phases with roles Proposer, Acceptor, Learner:</p>
+    <table>
+      <tr><th>Phase</th><th>Paxos step</th><th>Purpose</th></tr>
+      <tr><td>1a/1b <em>(Prepare/Promise)</em></td><td>Proposer picks a ballot number <code>n</code>, asks acceptors to promise not to accept anything lower; they reply with any value already accepted.</td><td>Establish leadership for ballot <code>n</code> and learn prior values.</td></tr>
+      <tr><td>2a/2b <em>(Accept/Accepted)</em></td><td>Proposer sends <code>accept(n, v)</code>; acceptors accept if they haven't promised a higher ballot.</td><td>A value chosen by a majority is permanent.</td></tr>
+    </table>
+    <p>Raft is essentially a Multi-Paxos with a strong leader and a more restrictive log structure, chosen precisely to be teachable. Both rely on the same foundational idea: <strong>any two majorities of a set overlap in at least one member</strong>. That overlapping node "remembers" the previously chosen value, which is what makes it impossible for two different values to both win.</p>
+    <h3>The quorum math</h3>
+    <table>
+      <tr><th>Cluster size N</th><th>Majority quorum</th><th>Failures tolerated (f)</th></tr>
+      <tr><td>3</td><td>2</td><td>1</td></tr>
+      <tr><td>5</td><td>3</td><td>2</td></tr>
+      <tr><td>7</td><td>4</td><td>3</td></tr>
+    </table>
+    <p>Formula: with <code>N = 2f + 1</code> nodes you tolerate <code>f</code> crash faults. Odd cluster sizes are preferred because going from 3→4 nodes still only tolerates 1 failure but needs a larger quorum (more latency), so you get worse availability for the cost. <strong>Byzantine</strong> consensus (PBFT, and blockchain protocols) tolerates <em>malicious</em> nodes and needs <code>N = 3f + 1</code>.</p>
+    <table>
+      <tr><th>Operation</th><th>Cost</th></tr>
+      <tr><td>Commit one entry (steady state, leader known)</td><td>1 round-trip to a majority — O(N) messages</td></tr>
+      <tr><td>Leader election</td><td>1 election round + randomized backoff on split vote</td></tr>
+      <tr><td>Read (linearizable)</td><td>Leader lease or a quorum round-trip to confirm still-leader</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS mapping</span>
+    <h2>Consensus inside the AWS stack</h2>
+    <p>You rarely run Raft yourself on AWS — you consume services that embed it, or you run a coordination store on compute.</p>
+    <table>
+      <tr><th>Need</th><th>AWS service</th><th>Consensus role</th></tr>
+      <tr><td>Cluster coordination / config / leader election</td><td>Amazon EKS (etcd control plane) / self-managed etcd or ZooKeeper on EC2</td><td>etcd uses Raft; ZooKeeper uses Zab (a Raft-like atomic broadcast).</td></tr>
+      <tr><td>Managed Kafka metadata</td><td>Amazon MSK</td><td>KRaft (Kafka's Raft) or ZooKeeper elects controllers &amp; tracks in-sync replicas.</td></tr>
+      <tr><td>Strongly-consistent distributed SQL</td><td>Amazon Aurora / Aurora DSQL, or CockroachDB on EC2/EKS</td><td>Replicate data via consensus / quorum log to survive AZ loss.</td></tr>
+      <tr><td>Highly-available leader/lock without running Raft</td><td>DynamoDB conditional writes / S3 conditional puts</td><td>Offload the consensus to a managed store used as a lock/fence.</td></tr>
+    </table>
+    <p>Deployment lesson: place the odd-numbered members across <strong>3 Availability Zones</strong> so any single-AZ outage leaves a majority alive. A 3-node etcd/ZooKeeper ensemble spanning 3 AZs is the canonical HA control-plane shape.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — Raft leader election core</h2>
+    <p>This captures the heart of Raft election: term handling, the "grant vote at most once per term to an up-to-date log" rule, and stepping down on a higher term. It's deliberately trimmed to the logic an interviewer wants to see, not a production RPC stack.</p>
+    <pre><span class="kw">enum</span> <span class="typ">Role</span> { Follower, Candidate, Leader }
+
+<span class="kw">sealed class</span> <span class="typ">RaftNode</span>
+{
+    <span class="kw">public long</span> CurrentTerm;
+    <span class="kw">public int</span>? VotedFor;          <span class="cmt">// candidate id we voted for THIS term (once)</span>
+    <span class="kw">public</span> <span class="typ">Role</span> Role = <span class="typ">Role</span>.Follower;
+    <span class="kw">public readonly int</span> Id;
+    <span class="kw">public</span> <span class="typ">List</span>&lt;<span class="typ">LogEntry</span>&gt; Log = <span class="kw">new</span>();
+
+    <span class="cmt">// --- Handle an incoming RequestVote RPC from a candidate ---</span>
+    <span class="kw">public</span> <span class="typ">VoteReply</span> <span class="fn">OnRequestVote</span>(<span class="typ">VoteRequest</span> req)
+    {
+        <span class="cmt">// Rule 1: a newer term always wins — adopt it and step down.</span>
+        <span class="kw">if</span> (req.Term &gt; CurrentTerm)
+        {
+            CurrentTerm = req.Term;
+            VotedFor    = <span class="kw">null</span>;
+            Role        = <span class="typ">Role</span>.Follower;
+        }
+
+        <span class="cmt">// Reject stale-term candidates outright.</span>
+        <span class="kw">if</span> (req.Term &lt; CurrentTerm)
+            <span class="kw">return new</span> <span class="typ">VoteReply</span>(CurrentTerm, granted: <span class="kw">false</span>);
+
+        <span class="cmt">// Grant only if we haven't voted this term AND the candidate's log is</span>
+        <span class="cmt">// at least as up-to-date as ours (compare last term, then last index).</span>
+        <span class="kw">bool</span> free   = VotedFor is <span class="kw">null</span> || VotedFor == req.CandidateId;
+        <span class="kw">bool</span> upToDate = <span class="fn">CandidateLogIsCurrent</span>(req.LastLogTerm, req.LastLogIndex);
+
+        <span class="kw">if</span> (free &amp;&amp; upToDate)
+        {
+            VotedFor = req.CandidateId;              <span class="cmt">// one vote per term</span>
+            <span class="kw">return new</span> <span class="typ">VoteReply</span>(CurrentTerm, granted: <span class="kw">true</span>);
+        }
+        <span class="kw">return new</span> <span class="typ">VoteReply</span>(CurrentTerm, granted: <span class="kw">false</span>);
+    }
+
+    <span class="cmt">// Candidate wins iff it collects votes from a MAJORITY of the cluster.</span>
+    <span class="kw">public bool</span> <span class="fn">HasQuorum</span>(<span class="kw">int</span> votes, <span class="kw">int</span> clusterSize) =&gt; votes &gt; clusterSize / <span class="str">2</span>;
+
+    <span class="kw">bool</span> <span class="fn">CandidateLogIsCurrent</span>(<span class="kw">long</span> lastTerm, <span class="kw">int</span> lastIdx)
+    {
+        <span class="kw">var</span> myLastTerm = Log.Count &gt; <span class="str">0</span> ? Log[^<span class="str">1</span>].Term : <span class="str">0</span>;
+        <span class="kw">if</span> (lastTerm != myLastTerm) <span class="kw">return</span> lastTerm &gt; myLastTerm;
+        <span class="kw">return</span> lastIdx &gt;= Log.Count;          <span class="cmt">// same term ⇒ longer/equal log wins</span>
+    }
+}</pre>
+    <p>In production you'd never hand-roll this: use a battle-tested library/service — <strong>etcd</strong> or <strong>Consul</strong> (Raft) for coordination, <strong>ZooKeeper</strong> (Zab), or in .NET the <strong>dotNext.Net.Cluster</strong> Raft implementation. The value of writing it out is being able to explain term handling and the vote rule under interview pressure.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks & likely follow-ups</h2>
+    <div class="qa"><p class="q">"Why is Raft preferred over Paxos?"</p><p class="a">Same fault tolerance and performance, but far more understandable and implementable. Raft has a strong single leader and a clean log structure; basic Paxos is subtle and Multi-Paxos leaves many implementation details unspecified, which historically led to buggy implementations.</p></div>
+    <div class="qa"><p class="q">"How many nodes should a cluster have?"</p><p class="a">An odd number — typically 3 or 5 — spread across AZs. N = 2f+1 tolerates f crashes. Odd is better because 4 nodes tolerate the same 1 failure as 3 but need a bigger quorum, hurting latency and availability.</p></div>
+    <div class="qa"><p class="q">"What's the throughput bottleneck?"</p><p class="a">The leader — all writes funnel through it, and every commit needs a majority round-trip (bounded by the slowest node in the quorum). Scale by sharding into many Raft groups (one per key range), as CockroachDB/Spanner do, rather than one giant group.</p></div>
+    <div class="qa"><p class="q">"What about FLP impossibility?"</p><p class="a">FLP says no deterministic consensus is guaranteed to terminate in a fully async network with one faulty node. Raft/Paxos remain safe always, and achieve liveness by assuming partial synchrony plus randomized timeouts — they can theoretically livelock on repeated split votes, but randomization makes that vanishingly unlikely.</p></div>
+    <div class="qa"><p class="q">"How do you do a linearizable read?"</p><p class="a">Don't read from a follower blindly (it may be stale). Either route reads through the leader with a lease, or have the leader confirm it's still leader via a quorum heartbeat before answering (ReadIndex). Otherwise you can read stale data from a deposed leader.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "Consensus makes a cluster agree on one value despite crashes and message loss — it's how etcd, ZooKeeper, Kafka, and Spanner stay consistent. Raft, the understandable version of Paxos, splits it into leader election, log replication, and safety. Time is divided into terms with one leader each; a follower whose heartbeat times out becomes a candidate, wins if a majority votes for it, then replicates log entries and commits them once a majority persists them. With 2f+1 nodes you tolerate f failures; the minority side of a partition stalls rather than diverging — that's the CP choice."</div>
+    <ul>
+      <li><strong>Three states:</strong> Follower → Candidate → Leader. <strong>Terms</strong> are the logical clock; higher term always wins → step down.</li>
+      <li><strong>Election:</strong> randomized timeout → request votes → majority ⇒ leader → heartbeats suppress others.</li>
+      <li><strong>Commit rule:</strong> entry committed once a majority stores it; then applied to state machine.</li>
+      <li><strong>N = 2f + 1</strong> for crash faults; <strong>3f + 1</strong> for Byzantine. Use odd sizes across 3 AZs.</li>
+      <li><strong>Raft vs Paxos:</strong> same guarantees, Raft wins on understandability &amp; correct implementations.</li>
+      <li><strong>Scale</strong> by sharding into many Raft groups; the leader is the throughput bottleneck.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://raft.github.io/">The Raft Consensus Algorithm — raft.github.io</a></li>
+      <li><a href="https://raft.github.io/raft.pdf">Ongaro &amp; Ousterhout — "In Search of an Understandable Consensus Algorithm (Raft)"</a></li>
+      <li><a href="https://lamport.azurewebsites.net/pubs/paxos-simple.pdf">Lamport — "Paxos Made Simple"</a></li>
+      <li><a href="https://en.wikipedia.org/wiki/Consensus_(computer_science)">Consensus (computer science) — Wikipedia</a></li>
+      <li><a href="https://en.wikipedia.org/wiki/Paxos_(computer_science)">Paxos — Wikipedia</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bloom Filter — Explained</title>
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --card: #ffffff;
+    --ink: #1f2733;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --kid: #ff8c42;
+    --kid-bg: #fff6ee;
+    --pro: #4361ee;
+    --pro-bg: #eef2ff;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(31,39,51,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 40px 36px;
+    box-shadow: var(--shadow);
+    margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .92; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 28px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .9rem;
+    padding: 6px 12px; border-radius: 999px; transition: .15s;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 30px; margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+  section.kid { border-left: 6px solid var(--kid); background: var(--kid-bg); }
+  section.pro { border-left: 6px solid var(--pro); background: var(--pro-bg); }
+  .badge {
+    display: inline-block; font-size: .78rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .kid .badge { background: var(--kid); color: #fff; }
+  .pro .badge { background: var(--pro); color: #fff; }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.1rem; }
+  p, li { color: var(--ink); }
+  .kid p, .kid li { font-size: 1.08rem; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .95rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--pro); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .bits { display:flex; gap:6px; flex-wrap:wrap; margin:14px 0; }
+  .bit {
+    width:42px; height:42px; border-radius:8px; display:grid; place-items:center;
+    font-family:"SF Mono",Consolas,monospace; font-weight:700; position:relative;
+    background:#11203a; color:#7f8aa0; border:1px solid #25324a;
+  }
+  .bit.on { background:#2dc653; color:#04210f; border-color:#2dc653; }
+  .bit .idx { position:absolute; top:-18px; font-size:.7rem; color:var(--muted); font-weight:600; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 30px;
+    box-shadow: var(--shadow);
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; color: #fff; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>🌸 Bloom Filter</h1>
+    <p>A tiny, super-fast memory that can say <strong>"definitely not here"</strong> or <strong>"probably here"</strong> — and never the other way around.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#kid">🧒 For a 10-year-old</a>
+    <a href="#pro">👨‍💻 For a veteran</a>
+    <a href="#steps">🔁 Step by step</a>
+    <a href="#real">🌍 Real-world uses</a>
+    <a href="#cheat">📌 Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+  </nav>
+
+  <section id="kid" class="card kid">
+    <span class="badge">🧒 Explain it like I'm 10</span>
+    <h2>The simple story</h2>
+    <p>Imagine you have a <strong>huge box of toys</strong> — thousands of them. A friend keeps asking, <em>"Do you have THIS exact toy?"</em> Digging through the whole box every single time would take forever.</p>
+    <p>So you make a clever little trick. You put a row of <strong>light switches</strong> on the wall — all switched OFF to start. Every time you put a toy in the box, you look at the toy's name and follow a fixed rule to pick a few switches to flip ON (say "the 2nd, the 5th, and the 9th").</p>
+    <p>Now when your friend asks about a toy, you don't dig in the box. You just check the switches that toy's name points to:</p>
+    <ul>
+      <li>If <strong>any</strong> of those switches is still OFF → you say <strong>"Nope, definitely don't have it!"</strong> — and you're 100% right, no digging needed. 🎉</li>
+      <li>If <strong>all</strong> of them are ON → you say <strong>"I probably have it,"</strong> and only THEN do you dig to make sure.</li>
+    </ul>
+    <p>Why only "probably"? Because two different toys might happen to flip some of the same switches. So the switches being ON could be a lucky coincidence. The wall of switches is <strong>tiny and super fast</strong>, and it saves you from digging through the giant box almost every time someone asks about a toy you don't have.</p>
+    <h3>The rule a kid can follow</h3>
+    <ol>
+      <li>Start with all switches OFF.</li>
+      <li><strong>Add a toy:</strong> use its name to pick a few switches, flip them ON.</li>
+      <li><strong>Asked about a toy:</strong> check its switches. Any one OFF → "No!" All ON → "Maybe — go check the box."</li>
+    </ol>
+  </section>
+
+  <section id="pro" class="card pro">
+    <span class="badge">👨‍💻 For 15 years of IT experience</span>
+    <h2>The engineer's view</h2>
+    <p>A <strong>Bloom filter</strong> is a space-efficient <em>probabilistic</em> set membership data structure. It answers "is element <code>x</code> in the set?" with two possible answers: <strong>"definitely not"</strong> or <strong>"possibly yes."</strong> It allows <strong>false positives</strong> but <strong>never false negatives</strong>. It stores no elements themselves — only a bit array — so it cannot enumerate or delete members (in the classic form), and it trades a small, tunable error rate for enormous memory savings.</p>
+    <p>It consists of an <strong>m-bit array</strong> (all zero initially) and <strong>k independent hash functions</strong>, each mapping an element uniformly to <code>[0, m)</code>. <strong>Insert:</strong> set the k bits at the hashed positions to 1. <strong>Query:</strong> if <em>all</em> k bits are 1 → "possibly present"; if <em>any</em> is 0 → "definitely absent."</p>
+
+    <h3>Complexity</h3>
+    <table>
+      <tr><th>Operation</th><th>Time</th><th>Space</th><th>Notes</th></tr>
+      <tr><td>Insert</td><td>O(k)</td><td rowspan="2">O(m) bits total</td><td>k = number of hash functions (a small constant)</td></tr>
+      <tr><td>Query (contains)</td><td>O(k)</td><td>independent of n (number of items)</td></tr>
+      <tr><td>Delete</td><td>—</td><td>—</td><td>Not supported in the classic form (use a Counting Bloom filter)</td></tr>
+    </table>
+    <p><strong>Memory:</strong> roughly <code>m ≈ -(n · ln p) / (ln 2)²</code> bits for n items at false-positive rate p, and the optimal <code>k = (m/n) · ln 2</code>. In practice that's about <strong>9.6 bits per element for 1% FP</strong>, and <strong>~14.4 bits/element for 0.1%</strong> — independent of how big each element actually is. A set of 1 billion URLs at 1% FP needs only ~1.2&nbsp;GB, versus storing the URLs themselves which would be hundreds of GB.</p>
+
+    <h3>Invariants, preconditions & edge cases</h3>
+    <ul>
+      <li><strong>No false negatives — ever.</strong> If query says "absent," it is truly absent. This is the property the whole design rests on.</li>
+      <li><strong>False positives rise as the filter fills.</strong> Size <code>m</code> and <code>k</code> must be chosen up front for the expected <code>n</code>; exceeding <code>n</code> degrades p sharply.</li>
+      <li><strong>No deletion</strong> in the standard form (clearing bits could create false negatives for other elements). Use a <strong>Counting Bloom filter</strong> (counters instead of bits) if you must delete, at higher memory cost.</li>
+      <li><strong>Hash quality matters.</strong> k truly-independent hashes are emulated cheaply with <em>double hashing</em>: <code>g_i(x) = h1(x) + i·h2(x)</code>.</li>
+      <li><strong>Not enumerable</strong> — you cannot list the members; it only answers membership probabilistically.</li>
+    </ul>
+
+    <h3>Trade-offs vs. alternatives & when NOT to use it</h3>
+    <ul>
+      <li><strong>vs. HashSet:</strong> a hash set is exact and supports deletion, but stores the full elements (huge memory) — use it when the set fits comfortably in RAM and you need exactness/enumeration.</li>
+      <li><strong>vs. Cuckoo filter:</strong> cuckoo filters support deletion and often better space at low FP rates — prefer when deletes are required.</li>
+      <li><strong>Don't use a Bloom filter when:</strong> you need exact answers, must delete frequently (without a counting variant), need to enumerate members, or the set is small enough that a plain hash set is simpler.</li>
+      <li>Best when: the set is huge, memory is precious, and a <strong>cheap "definitely not" answer lets you skip an expensive lookup</strong> (disk/network/DB).</li>
+    </ul>
+
+    <h3>Reference implementation (C#)</h3>
+    <pre><code><span class="kw">using</span> System;
+<span class="kw">using</span> System.Collections;
+
+<span class="cmt">/// A classic Bloom filter: add + probabilistic membership test.</span>
+<span class="kw">public class</span> <span class="typ">BloomFilter</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">BitArray</span> _bits;   <span class="cmt">// the m-bit array</span>
+    <span class="kw">private readonly int</span> _m;            <span class="cmt">// number of bits</span>
+    <span class="kw">private readonly int</span> _k;            <span class="cmt">// number of hash functions</span>
+
+    <span class="cmt">// n = expected item count, p = desired false-positive probability.</span>
+    <span class="kw">public</span> <span class="fn">BloomFilter</span>(<span class="kw">int</span> n, <span class="kw">double</span> p)
+    {
+        _m = (<span class="kw">int</span>)<span class="typ">Math</span>.<span class="fn">Ceiling</span>(-(n * <span class="typ">Math</span>.<span class="fn">Log</span>(p)) / (<span class="typ">Math</span>.<span class="fn">Log</span>(<span class="str">2</span>) * <span class="typ">Math</span>.<span class="fn">Log</span>(<span class="str">2</span>)));
+        _k = <span class="typ">Math</span>.<span class="fn">Max</span>(<span class="str">1</span>, (<span class="kw">int</span>)<span class="typ">Math</span>.<span class="fn">Round</span>((<span class="kw">double</span>)_m / n * <span class="typ">Math</span>.<span class="fn">Log</span>(<span class="str">2</span>)));
+        _bits = <span class="kw">new</span> <span class="typ">BitArray</span>(_m);
+    }
+
+    <span class="cmt">// Two base hashes → k positions via double hashing: h1 + i*h2.</span>
+    <span class="kw">private</span> (<span class="kw">int</span> h1, <span class="kw">int</span> h2) <span class="fn">Hashes</span>(<span class="kw">string</span> item)
+    {
+        <span class="kw">int</span> h1 = item.<span class="fn">GetHashCode</span>();
+        <span class="kw">int</span> h2 = <span class="fn">Fnv1a</span>(item);
+        <span class="kw">return</span> (h1 & <span class="str">0x7fffffff</span>, h2 & <span class="str">0x7fffffff</span>); <span class="cmt">// keep non-negative</span>
+    }
+
+    <span class="kw">public void</span> <span class="fn">Add</span>(<span class="kw">string</span> item)
+    {
+        <span class="kw">var</span> (h1, h2) = <span class="fn">Hashes</span>(item);
+        <span class="kw">for</span> (<span class="kw">int</span> i = <span class="str">0</span>; i &lt; _k; i++)
+            _bits[((h1 + i * h2) & <span class="str">0x7fffffff</span>) % _m] = <span class="kw">true</span>;
+    }
+
+    <span class="cmt">// false  => DEFINITELY not present.  true => PROBABLY present.</span>
+    <span class="kw">public bool</span> <span class="fn">MightContain</span>(<span class="kw">string</span> item)
+    {
+        <span class="kw">var</span> (h1, h2) = <span class="fn">Hashes</span>(item);
+        <span class="kw">for</span> (<span class="kw">int</span> i = <span class="str">0</span>; i &lt; _k; i++)
+            <span class="kw">if</span> (!_bits[((h1 + i * h2) & <span class="str">0x7fffffff</span>) % _m])
+                <span class="kw">return false</span>;          <span class="cmt">// any 0 bit ⇒ certainly absent</span>
+        <span class="kw">return true</span>;                   <span class="cmt">// all 1s ⇒ possibly present</span>
+    }
+
+    <span class="kw">private static int</span> <span class="fn">Fnv1a</span>(<span class="kw">string</span> s)
+    {
+        <span class="kw">uint</span> hash = <span class="str">2166136261</span>;
+        <span class="kw">foreach</span> (<span class="kw">char</span> c <span class="kw">in</span> s) { hash ^= c; hash *= <span class="str">16777619</span>; }
+        <span class="kw">return</span> (<span class="kw">int</span>)hash;
+    }
+}</code></pre>
+  </section>
+
+  <section id="steps" class="card">
+    <h2>🔁 How it works, step by step</h2>
+    <p>Let's use a tiny filter with <strong>m = 10 bits</strong> and <strong>k = 3 hash functions</strong>. We add <code>"cat"</code> and <code>"dog"</code>, then query <code>"cow"</code> and <code>"dog"</code>.</p>
+
+    <ol class="steps">
+      <li><strong>Start empty.</strong> All 10 bits are 0.</li>
+      <li><strong>Add "cat".</strong> The 3 hashes give positions <code>1, 4, 7</code>. Flip those bits to 1.</li>
+      <li><strong>Add "dog".</strong> The 3 hashes give positions <code>4, 6, 9</code>. Flip those to 1 (position 4 was already on — fine).</li>
+      <li><strong>Query "cow".</strong> Its hashes give <code>2, 4, 7</code>. Check them: bit 2 is <strong>0</strong> → stop → <strong>"DEFINITELY NOT present."</strong> No false negative possible.</li>
+      <li><strong>Query "dog".</strong> Its hashes give <code>4, 6, 9</code> — all <strong>1</strong> → <strong>"PROBABLY present."</strong> (Here it's truly present.)</li>
+    </ol>
+
+    <p>Bit array after adding <code>"cat"</code> (1,4,7) and <code>"dog"</code> (4,6,9):</p>
+    <div class="bits">
+      <div class="bit"><span class="idx">0</span>0</div>
+      <div class="bit on"><span class="idx">1</span>1</div>
+      <div class="bit"><span class="idx">2</span>0</div>
+      <div class="bit"><span class="idx">3</span>0</div>
+      <div class="bit on"><span class="idx">4</span>1</div>
+      <div class="bit"><span class="idx">5</span>0</div>
+      <div class="bit on"><span class="idx">6</span>1</div>
+      <div class="bit on"><span class="idx">7</span>1</div>
+      <div class="bit"><span class="idx">8</span>0</div>
+      <div class="bit on"><span class="idx">9</span>1</div>
+    </div>
+    <div class="viz">"cow" → positions 2,4,7 → bit[2]=0  ⇒ DEFINITELY NOT in set ✗ (skip the expensive lookup)
+"dog" → positions 4,6,9 → all = 1   ⇒ PROBABLY in set ✓ (now do the real lookup to confirm)
+
+Why "probably"? If some other word had happened to flip 4, 6 and 9,
+"dog" would look present even if it weren't → that's a FALSE POSITIVE.
+But a "not present" answer is ALWAYS true → NO FALSE NEGATIVES.</div>
+  </section>
+
+  <section id="real" class="card">
+    <h2>🌍 Where Bloom filters are used in the real world</h2>
+    <p>The pattern is always the same: <strong>a "definitely not" answer lets you skip an expensive operation</strong> (a disk read, a network call, a database hit). The filter lives in cheap RAM and filters out the easy "no" cases.</p>
+    <ul>
+      <li><strong>Databases (LSM-trees) — Cassandra, RocksDB, LevelDB, HBase, Bigtable:</strong> each on-disk SSTable carries a Bloom filter of its keys. Before a costly disk seek, the engine asks the filter "could this key be here?" — a "no" skips the disk read entirely. This is the textbook production use.</li>
+      <li><strong>URL Shortener / web crawlers:</strong> "have we already generated this short code / crawled this URL?" A Bloom filter answers in O(1) from memory and avoids hitting the database for the overwhelmingly common "never seen it" case. (See the URL-shortener system-design page.)</li>
+      <li><strong>CDNs &amp; caches (e.g. Akamai, Redis-adjacent layers):</strong> the "one-hit-wonder" problem — only cache an object on its <em>second</em> request. A Bloom filter tracks "have we seen this URL before?" so single-access objects never pollute the cache.</li>
+      <li><strong>Chrome Safe Browsing (historically):</strong> the browser kept a local Bloom filter of malicious URLs. Most sites are safe → filter says "not malicious" instantly; only on a "maybe" does it make the expensive server check.</li>
+      <li><strong>Bitcoin / SPV wallets (BIP 37):</strong> lightweight clients used Bloom filters to ask peers only for transactions relevant to their addresses without revealing exactly which addresses.</li>
+      <li><strong>Spam / duplicate detection &amp; recommendation:</strong> "has this user already seen this article/ad?" — filter out already-shown items cheaply at huge scale.</li>
+      <li><strong>Networking:</strong> packet routing/forwarding tables and distributed cache coordination (e.g. summary cache for proxy cooperation).</li>
+    </ul>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>📌 Cheat sheet</h2>
+    <ul>
+      <li><strong>What:</strong> probabilistic set membership — "definitely not" or "probably yes."</li>
+      <li><strong>Guarantee:</strong> NO false negatives; false positives are possible and tunable.</li>
+      <li><strong>How:</strong> m-bit array + k hash functions. Insert = set k bits. Query = all k bits set?</li>
+      <li><strong>Cost:</strong> O(k) insert &amp; query; ~9.6 bits/element for 1% FP — independent of element size.</li>
+      <li><strong>Tuning:</strong> <code>m ≈ -(n·ln p)/(ln2)²</code>, optimal <code>k = (m/n)·ln2</code>.</li>
+      <li><strong>Can't:</strong> delete (use Counting Bloom filter), enumerate members, give exact answers.</li>
+      <li><strong>Use when:</strong> a cheap "no" lets you skip a costly disk/network/DB lookup at scale.</li>
+      <li><strong>Star use case:</strong> LSM-tree databases skipping disk reads; crawlers/URL shorteners skipping "seen it?" DB hits.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this algorithm</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this algorithm and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <footer>Generated by the <strong>explain-algo</strong> skill · open in your browser via localhost</footer>
+</div>
+  <script src="../../nav.js"></script>
+</body>
+</html>

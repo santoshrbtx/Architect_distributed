@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Amazon Shopping — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c; --scenario-bg: #fff0f4;
+    --laymen: #f4a259; --laymen-bg: #fff7ed;
+    --reqs: #f4a259; --reqs-bg: #fff7ed;
+    --arch: #4361ee; --arch-bg: #eef2ff;
+    --anim: #00b4d8; --anim-bg: #eef9fc;
+    --dsa: #7048e8; --dsa-bg: #f3effe;
+    --aws: #ff9900; --aws-bg: #fff6e6;
+    --code-bg: #1e2430; --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08); --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #232f3e 0%, #ff9900 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box; }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .25; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>🛒 Amazon Shopping — E-commerce at Global Scale</h1>
+    <p>How a marketplace serving 300M+ customers, 12M+ third-party sellers, and hundreds of millions of orders keeps the "Buy Now" button working — even on Prime Day.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>Designing a marketplace that never says "sold out to the wrong person"</h2>
+    <p>Amazon.com is a <strong>global marketplace with more than 300 million active customer accounts, ~200 million Prime members, and around 2 billion visits every month</strong>. It hosts a catalog of hundreds of millions of products from Amazon itself and roughly <strong>~40% of sales come from ~2M third-party sellers</strong>. On Prime Day peaks, the checkout path handles <strong>tens of thousands of orders per minute</strong> while the browse path handles <strong>millions of requests per second</strong> against the product catalog and search. Any interview scenario labeled "design Amazon", "design an e-commerce platform", or "design a marketplace" is really asking you to justify how you'd hold this whole system up.</p>
+    <p>The interesting part isn't the shopping cart — it's the <strong>correctness under contention</strong>. Two customers click "Buy" on the last iPhone at the same moment. Only one may win. The order must be atomic across inventory, payment, and shipping, and if payment fails after the inventory hold, the hold must release. Prices change during a sale, so the price shown at checkout must match what's charged. Sellers upload millions of products a day; those must appear in search within seconds. The system must be <strong>eventually consistent for browsing</strong> (some cache lag is fine) but <strong>strongly consistent for money, inventory, and orders</strong>. This is why it's a favorite Amazon-and-adjacent interview: it tests everything — microservices, caching, sharding, event-driven flows, CAP trade-offs, and payments.</p>
+    <p>The real Amazon architecture is a case study in <strong>service-oriented decomposition</strong>: hundreds of independently owned services (catalog, cart, order, inventory, pricing, promotions, search, recommendations, fulfillment, payments, reviews, and dozens more), <strong>polyglot persistence</strong> (DynamoDB for cart and session state, relational for orders, S3 for images, Elasticsearch/OpenSearch for search, Redis for hot caches), and an <strong>event backbone</strong> (Kafka / Kinesis / SQS) that keeps everything eventually in sync. The rest of this page walks through it exactly like you'd whiteboard it in an interview.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Think of the world's biggest shopping mall — but invisible</h2>
+    <p>Imagine <strong>the world's largest department store, plus a flea market where anyone can rent a stall, plus a courier company, plus a warehouse the size of a small city — all glued together</strong>. That's what Amazon is. You walk in with your phone, wander through millions of aisles, drop things into a basket, hand over your credit card, and a few days later a box appears at your door. Behind that simple experience is a small army of workers, each doing one specialized job.</p>
+    <p>Here's the story of one order. You type "wireless headphones" into a search box. A <strong>search worker</strong> (imagine a librarian who's read every book in the store) hands you a list of matches, sorted by what they think you'll like. You tap one — the <strong>catalog worker</strong> pulls the product page from a giant filing cabinet (a database), and a <strong>photo worker</strong> serves the images from a nearby locker close to your city so they load fast. You tap "Add to Cart" — a <strong>cart clerk</strong> writes it on your personal sticky note (your shopping cart) that follows you from your phone to your laptop.</p>
+    <p>Now the tricky part: <strong>checkout</strong>. You hit "Buy Now." At that moment, several workers scramble in perfect coordination. The <strong>inventory clerk</strong> checks the warehouse and puts a "reserved" tag on the last headphones. The <strong>payment clerk</strong> phones your bank and asks "may we charge $99?" — the bank says yes. The <strong>order clerk</strong> writes down that you own the headphones. The <strong>warehouse robot</strong> gets a message: "pick this, pack this, ship this." A few hours later a delivery driver has it. Every one of those steps must succeed together — if the bank declines, the "reserved" tag on the headphones has to be removed so another customer can buy them. This is the hardest part of building Amazon: <strong>making sure exactly one customer wins the last item, even if a million people click at the same second</strong>.</p>
+    <p>You've used this exact pattern on <strong>Amazon, Flipkart, eBay, Shopify stores, Walmart.com, Etsy, and Alibaba</strong>. Even food-delivery apps like DoorDash and Uber Eats work the same way — the "product" is dinner, the "warehouse" is the restaurant, the "delivery driver" is the same. Different names on the storefront; the workers behind the scenes are doing the same jobs.</p>
+    <p>One tiny example: you're one of a million people buying a $9 book on Prime Day. Even if everyone taps "Buy" in the same second, the store must sell exactly the copies it has, take exactly one payment per copy, and email exactly one order confirmation to each of you. <strong>No overselling, no double-charging, no lost orders</strong> — that's the promise.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What we're really building</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Browse &amp; search</strong> the catalog by keyword, category, filter (price, brand, rating).</li>
+      <li><strong>Product detail page</strong> with images, description, reviews, price, availability, seller info.</li>
+      <li><strong>Shopping cart</strong> persistent per user across devices; anonymous → logged-in merge.</li>
+      <li><strong>Checkout</strong> — address, shipping method, payment method, apply promotions.</li>
+      <li><strong>Order placement</strong> — atomic reserve inventory + charge + create order + notify.</li>
+      <li><strong>Post-purchase</strong> — order tracking, shipment updates, returns, refunds.</li>
+      <li><strong>Seller flows</strong> — product upload, inventory management, order fulfillment.</li>
+      <li><strong>Recommendations</strong> ("customers who bought this…", "your next order").</li>
+      <li><strong>Reviews &amp; ratings</strong>.</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Availability</strong>: 99.99 % (~53 min downtime/year). Browse path can degrade gracefully; checkout must not.</li>
+      <li><strong>Latency</strong>: product page &lt; 300 ms p95, search &lt; 500 ms p95, cart add &lt; 100 ms.</li>
+      <li><strong>Consistency</strong>: strong for inventory, order, payment; eventual for catalog, reviews, recommendations, search.</li>
+      <li><strong>Durability</strong>: orders and payments — 11 nines (never lose a purchase).</li>
+      <li><strong>Scale</strong>: handle Black Friday / Prime Day surges (5–10× normal traffic) without brownouts.</li>
+      <li><strong>Isolation</strong>: a failing recommendation service must not break checkout.</li>
+    </ul>
+
+    <h3>Back-of-envelope capacity</h3>
+    <table>
+      <thead><tr><th>Metric</th><th>Estimate</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Active customers</td><td>300M+</td><td>Public Amazon disclosure</td></tr>
+        <tr><td>DAU</td><td>~200M</td><td>~65% engagement × 300M</td></tr>
+        <tr><td>Peak QPS — browse/search</td><td>~1–2M req/s</td><td>~2B visits/month × ~30 pages × 20% peak concentration ÷ 86.4k s</td></tr>
+        <tr><td>Peak QPS — cart writes</td><td>~50–100k/s</td><td>~5% of active sessions writing at peak</td></tr>
+        <tr><td>Orders/day (avg)</td><td>~10–15M</td><td>Amazon ships 1.6M pkgs/day in US alone; global ×5–8</td></tr>
+        <tr><td>Peak orders/min (Prime Day)</td><td>50–100k+/min</td><td>~1000–2000/s sustained</td></tr>
+        <tr><td>Catalog size</td><td>~600M+ products</td><td>Public estimates 2022–24</td></tr>
+        <tr><td>Storage — product catalog</td><td>~5–10 TB text + PB images (S3)</td><td>~10 KB text metadata × 600M + hi-res images</td></tr>
+        <tr><td>Storage — orders (yearly)</td><td>~5 TB new/year</td><td>~5B orders × ~1 KB per order</td></tr>
+        <tr><td>Read:write ratio</td><td>~1000 : 1</td><td>Browse dominates writes; classic read-heavy e-commerce</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>Microservices around a strong event backbone</h2>
+    <p>The design breaks the monolith apart along <strong>business capabilities</strong>: each service owns its own database, its own team, and communicates through a mix of synchronous REST/gRPC (for read paths and checkout) and asynchronous events (for anything that can be eventually consistent). A <strong>Client</strong> (web / mobile / Alexa) hits <strong>CloudFront + Route 53</strong>, then the <strong>API Gateway / BFF layer</strong> (Backend-For-Frontend), which fans out to microservices. Read-heavy services front a <strong>Redis / DAX cache</strong>. Writes to inventory and orders go through an <strong>atomic checkout orchestrator</strong> that coordinates the <strong>SAGA</strong> across payment, inventory, and shipping. Every significant state change publishes an event to <strong>Kafka / Kinesis</strong>; downstream consumers (search indexer, recommender, notifications, analytics, ledger) subscribe to those events.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 950 620" xmlns="http://www.w3.org/2000/svg" font-family="Inter,Segoe UI,Arial" font-size="12">
+        <defs>
+          <marker id="arb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0L10 5L0 10z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="are" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0L10 5L0 10z" fill="#f4a259"/>
+          </marker>
+        </defs>
+
+        <!-- Clients -->
+        <rect x="40" y="30" width="140" height="55" rx="10" fill="#4361ee"/>
+        <text x="110" y="55" text-anchor="middle" fill="#fff" font-weight="700">Client (Web/App)</text>
+        <text x="110" y="72" text-anchor="middle" fill="#dbe4ff" font-size="10">Browser · iOS · Alexa</text>
+
+        <!-- CDN + DNS -->
+        <rect x="220" y="30" width="130" height="55" rx="10" fill="#ff9900"/>
+        <text x="285" y="55" text-anchor="middle" fill="#fff" font-weight="700">CloudFront + R53</text>
+        <text x="285" y="72" text-anchor="middle" fill="#3a2200" font-size="10">CDN · edge routing</text>
+
+        <!-- API Gateway / BFF -->
+        <rect x="390" y="30" width="170" height="55" rx="10" fill="#7048e8"/>
+        <text x="475" y="55" text-anchor="middle" fill="#fff" font-weight="700">API Gateway / BFF</text>
+        <text x="475" y="72" text-anchor="middle" fill="#e5dcfe" font-size="10">auth · rate-limit · fan-out</text>
+
+        <!-- Auth / IdP -->
+        <rect x="600" y="30" width="140" height="55" rx="10" fill="#00b4d8"/>
+        <text x="670" y="55" text-anchor="middle" fill="#fff" font-weight="700">Identity / OAuth</text>
+        <text x="670" y="72" text-anchor="middle" fill="#cfefff" font-size="10">JWT · session</text>
+
+        <!-- Row 2: read services -->
+        <rect x="30" y="130" width="130" height="55" rx="10" fill="#2dc653"/>
+        <text x="95" y="152" text-anchor="middle" fill="#fff" font-weight="700">Catalog Svc</text>
+        <text x="95" y="169" text-anchor="middle" fill="#dcffe4" font-size="10">product master</text>
+
+        <rect x="180" y="130" width="130" height="55" rx="10" fill="#2dc653"/>
+        <text x="245" y="152" text-anchor="middle" fill="#fff" font-weight="700">Search Svc</text>
+        <text x="245" y="169" text-anchor="middle" fill="#dcffe4" font-size="10">OpenSearch</text>
+
+        <rect x="330" y="130" width="130" height="55" rx="10" fill="#2dc653"/>
+        <text x="395" y="152" text-anchor="middle" fill="#fff" font-weight="700">Recommender</text>
+        <text x="395" y="169" text-anchor="middle" fill="#dcffe4" font-size="10">"customers also…"</text>
+
+        <rect x="480" y="130" width="130" height="55" rx="10" fill="#2dc653"/>
+        <text x="545" y="152" text-anchor="middle" fill="#fff" font-weight="700">Reviews Svc</text>
+        <text x="545" y="169" text-anchor="middle" fill="#dcffe4" font-size="10">stars, text</text>
+
+        <rect x="630" y="130" width="130" height="55" rx="10" fill="#2dc653"/>
+        <text x="695" y="152" text-anchor="middle" fill="#fff" font-weight="700">Pricing Svc</text>
+        <text x="695" y="169" text-anchor="middle" fill="#dcffe4" font-size="10">deals, promos</text>
+
+        <rect x="780" y="130" width="140" height="55" rx="10" fill="#f4a259"/>
+        <text x="850" y="152" text-anchor="middle" fill="#fff" font-weight="700">Redis / DAX</text>
+        <text x="850" y="169" text-anchor="middle" fill="#3a2200" font-size="10">hot page cache</text>
+
+        <!-- Row 3: write services -->
+        <rect x="30" y="230" width="130" height="55" rx="10" fill="#f7567c"/>
+        <text x="95" y="252" text-anchor="middle" fill="#fff" font-weight="700">Cart Svc</text>
+        <text x="95" y="269" text-anchor="middle" fill="#ffe1eb" font-size="10">DynamoDB</text>
+
+        <rect x="180" y="230" width="170" height="55" rx="10" fill="#f7567c"/>
+        <text x="265" y="248" text-anchor="middle" fill="#fff" font-weight="700">Checkout Orchestrator</text>
+        <text x="265" y="265" text-anchor="middle" fill="#ffe1eb" font-size="10">SAGA · state machine</text>
+
+        <rect x="370" y="230" width="130" height="55" rx="10" fill="#f7567c"/>
+        <text x="435" y="252" text-anchor="middle" fill="#fff" font-weight="700">Inventory Svc</text>
+        <text x="435" y="269" text-anchor="middle" fill="#ffe1eb" font-size="10">reserve/commit</text>
+
+        <rect x="520" y="230" width="130" height="55" rx="10" fill="#f7567c"/>
+        <text x="585" y="252" text-anchor="middle" fill="#fff" font-weight="700">Payment Svc</text>
+        <text x="585" y="269" text-anchor="middle" fill="#ffe1eb" font-size="10">idempotent charge</text>
+
+        <rect x="670" y="230" width="130" height="55" rx="10" fill="#f7567c"/>
+        <text x="735" y="252" text-anchor="middle" fill="#fff" font-weight="700">Order Svc</text>
+        <text x="735" y="269" text-anchor="middle" fill="#ffe1eb" font-size="10">Aurora / RDS</text>
+
+        <!-- Row 4: async backbone -->
+        <rect x="120" y="330" width="710" height="55" rx="10" fill="#0f1420" stroke="#4361ee" stroke-width="2"/>
+        <text x="475" y="352" text-anchor="middle" fill="#7fa2ff" font-weight="700">Event Backbone — Kafka / Kinesis / SNS+SQS · Outbox</text>
+        <text x="475" y="369" text-anchor="middle" fill="#c6d0e0" font-size="10">order.created · inventory.reserved · payment.captured · shipment.dispatched · review.posted</text>
+
+        <!-- Row 5: consumers -->
+        <rect x="30" y="420" width="150" height="55" rx="10" fill="#7048e8"/>
+        <text x="105" y="442" text-anchor="middle" fill="#fff" font-weight="700">Search Indexer</text>
+        <text x="105" y="459" text-anchor="middle" fill="#e5dcfe" font-size="10">→ OpenSearch</text>
+
+        <rect x="200" y="420" width="150" height="55" rx="10" fill="#7048e8"/>
+        <text x="275" y="442" text-anchor="middle" fill="#fff" font-weight="700">Notification Svc</text>
+        <text x="275" y="459" text-anchor="middle" fill="#e5dcfe" font-size="10">email · SMS · push</text>
+
+        <rect x="370" y="420" width="150" height="55" rx="10" fill="#7048e8"/>
+        <text x="445" y="442" text-anchor="middle" fill="#fff" font-weight="700">Fulfillment Svc</text>
+        <text x="445" y="459" text-anchor="middle" fill="#e5dcfe" font-size="10">warehouse · shipping</text>
+
+        <rect x="540" y="420" width="150" height="55" rx="10" fill="#7048e8"/>
+        <text x="615" y="442" text-anchor="middle" fill="#fff" font-weight="700">Analytics / Lake</text>
+        <text x="615" y="459" text-anchor="middle" fill="#e5dcfe" font-size="10">S3 · Redshift · Athena</text>
+
+        <rect x="710" y="420" width="150" height="55" rx="10" fill="#7048e8"/>
+        <text x="785" y="442" text-anchor="middle" fill="#fff" font-weight="700">Recommender ML</text>
+        <text x="785" y="459" text-anchor="middle" fill="#e5dcfe" font-size="10">SageMaker</text>
+
+        <!-- Row 6: media + observability -->
+        <rect x="80" y="520" width="180" height="55" rx="10" fill="#ff9900"/>
+        <text x="170" y="542" text-anchor="middle" fill="#fff" font-weight="700">S3 (images/media)</text>
+        <text x="170" y="559" text-anchor="middle" fill="#3a2200" font-size="10">→ CloudFront edge</text>
+
+        <rect x="290" y="520" width="200" height="55" rx="10" fill="#ff9900"/>
+        <text x="390" y="542" text-anchor="middle" fill="#fff" font-weight="700">Fraud &amp; Risk Svc</text>
+        <text x="390" y="559" text-anchor="middle" fill="#3a2200" font-size="10">ML score at checkout</text>
+
+        <rect x="520" y="520" width="360" height="55" rx="10" fill="#232f3e"/>
+        <text x="700" y="542" text-anchor="middle" fill="#fff" font-weight="700">Observability</text>
+        <text x="700" y="559" text-anchor="middle" fill="#c6d0e0" font-size="10">CloudWatch · X-Ray · logs · metrics · tracing</text>
+
+        <!-- Read path arrows (blue) -->
+        <path d="M180 55 L220 55" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arb)"/>
+        <path d="M350 55 L390 55" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arb)"/>
+        <path d="M560 55 L600 55" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arb)" stroke-dasharray="4 3"/>
+        <path d="M475 85 L95 130" stroke="#7fa2ff" stroke-width="1.5" fill="none" marker-end="url(#arb)"/>
+        <path d="M475 85 L245 130" stroke="#7fa2ff" stroke-width="1.5" fill="none" marker-end="url(#arb)"/>
+        <path d="M475 85 L395 130" stroke="#7fa2ff" stroke-width="1.5" fill="none" marker-end="url(#arb)"/>
+        <path d="M475 85 L545 130" stroke="#7fa2ff" stroke-width="1.5" fill="none" marker-end="url(#arb)"/>
+        <path d="M475 85 L695 130" stroke="#7fa2ff" stroke-width="1.5" fill="none" marker-end="url(#arb)"/>
+        <!-- write path arrows -->
+        <path d="M475 85 L95 230" stroke="#7fa2ff" stroke-width="1.5" fill="none" marker-end="url(#arb)"/>
+        <path d="M475 85 L265 230" stroke="#7fa2ff" stroke-width="1.5" fill="none" marker-end="url(#arb)"/>
+        <path d="M265 285 L435 230" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arb)"/>
+        <path d="M265 285 L585 230" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arb)"/>
+        <path d="M265 285 L735 230" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arb)"/>
+
+        <!-- write path -> event backbone (amber) -->
+        <path d="M435 285 L400 330" stroke="#f4a259" stroke-dasharray="5 3" stroke-width="2" fill="none" marker-end="url(#are)"/>
+        <path d="M585 285 L500 330" stroke="#f4a259" stroke-dasharray="5 3" stroke-width="2" fill="none" marker-end="url(#are)"/>
+        <path d="M735 285 L600 330" stroke="#f4a259" stroke-dasharray="5 3" stroke-width="2" fill="none" marker-end="url(#are)"/>
+        <path d="M95 285 L200 330" stroke="#f4a259" stroke-dasharray="5 3" stroke-width="2" fill="none" marker-end="url(#are)"/>
+
+        <!-- backbone -> consumers -->
+        <path d="M300 385 L105 420" stroke="#f4a259" stroke-dasharray="5 3" stroke-width="1.5" fill="none" marker-end="url(#are)"/>
+        <path d="M400 385 L275 420" stroke="#f4a259" stroke-dasharray="5 3" stroke-width="1.5" fill="none" marker-end="url(#are)"/>
+        <path d="M500 385 L445 420" stroke="#f4a259" stroke-dasharray="5 3" stroke-width="1.5" fill="none" marker-end="url(#are)"/>
+        <path d="M600 385 L615 420" stroke="#f4a259" stroke-dasharray="5 3" stroke-width="1.5" fill="none" marker-end="url(#are)"/>
+        <path d="M700 385 L785 420" stroke="#f4a259" stroke-dasharray="5 3" stroke-width="1.5" fill="none" marker-end="url(#are)"/>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#7fa2ff"></span>synchronous request/response</span>
+      <span><span class="dot" style="background:#f4a259"></span>async event flow</span>
+      <span><span class="dot" style="background:#2dc653"></span>read-path services</span>
+      <span><span class="dot" style="background:#f7567c"></span>write/checkout services</span>
+      <span><span class="dot" style="background:#7048e8"></span>async consumers</span>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>The "Buy Now" click, step by step</h2>
+    <p>What actually happens between clicking <em>Buy Now</em> and the confirmation page? This is the <strong>checkout SAGA</strong> — a state machine that reserves inventory, charges payment, creates the order, then hands off to fulfillment. If any step fails, compensating actions roll back the earlier ones. This is the beating heart of every e-commerce interview.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg" font-family="Inter,Segoe UI,Arial" font-size="12">
+        <defs>
+          <marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0L10 5L0 10z" fill="#00b4d8"/>
+          </marker>
+          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0L10 5L0 10z" fill="#f7567c"/>
+          </marker>
+        </defs>
+
+        <!-- User + click -->
+        <rect x="30" y="30" width="140" height="50" rx="10" fill="#4361ee"/>
+        <text x="100" y="53" text-anchor="middle" fill="#fff" font-weight="700">Customer</text>
+        <text x="100" y="70" text-anchor="middle" fill="#dbe4ff" font-size="10">taps "Buy Now"</text>
+
+        <!-- Orchestrator -->
+        <rect x="360" y="30" width="200" height="50" rx="10" fill="#f7567c"/>
+        <text x="460" y="53" text-anchor="middle" fill="#fff" font-weight="700">Checkout Orchestrator</text>
+        <text x="460" y="70" text-anchor="middle" fill="#ffe1eb" font-size="10">SAGA state machine</text>
+
+        <!-- Services row -->
+        <rect x="30" y="170" width="150" height="55" rx="10" fill="#2dc653"/>
+        <text x="105" y="192" text-anchor="middle" fill="#fff" font-weight="700">Inventory Svc</text>
+        <text x="105" y="209" text-anchor="middle" fill="#dcffe4" font-size="10">reserve N units</text>
+
+        <rect x="220" y="170" width="150" height="55" rx="10" fill="#2dc653"/>
+        <text x="295" y="192" text-anchor="middle" fill="#fff" font-weight="700">Payment Svc</text>
+        <text x="295" y="209" text-anchor="middle" fill="#dcffe4" font-size="10">charge card idempotent</text>
+
+        <rect x="410" y="170" width="150" height="55" rx="10" fill="#2dc653"/>
+        <text x="485" y="192" text-anchor="middle" fill="#fff" font-weight="700">Order Svc</text>
+        <text x="485" y="209" text-anchor="middle" fill="#dcffe4" font-size="10">write order row</text>
+
+        <rect x="600" y="170" width="150" height="55" rx="10" fill="#7048e8"/>
+        <text x="675" y="192" text-anchor="middle" fill="#fff" font-weight="700">Fulfillment Svc</text>
+        <text x="675" y="209" text-anchor="middle" fill="#e5dcfe" font-size="10">ship it</text>
+
+        <!-- Event bus -->
+        <rect x="90" y="290" width="710" height="45" rx="10" fill="#0f1420" stroke="#4361ee"/>
+        <text x="445" y="317" text-anchor="middle" fill="#7fa2ff" font-weight="700" font-size="12">
+          Event Backbone (Kafka / Kinesis)  ·  order.created  ·  payment.captured  ·  shipment.requested
+        </text>
+
+        <!-- Notification -->
+        <rect x="200" y="380" width="180" height="45" rx="10" fill="#7048e8"/>
+        <text x="290" y="405" text-anchor="middle" fill="#fff" font-weight="700">Notification Svc</text>
+        <text x="290" y="420" text-anchor="middle" fill="#e5dcfe" font-size="10">order confirmation email</text>
+
+        <rect x="420" y="380" width="200" height="45" rx="10" fill="#7048e8"/>
+        <text x="520" y="405" text-anchor="middle" fill="#fff" font-weight="700">Search Indexer / ML</text>
+        <text x="520" y="420" text-anchor="middle" fill="#e5dcfe" font-size="10">refresh recos, sold count</text>
+
+        <!-- Flow arrows -->
+        <path id="a-req" data-anim class="a-hidden"
+              d="M170 55 L360 55" stroke="#00b4d8" stroke-width="3" fill="none" marker-end="url(#ah1)"/>
+        <path id="a-inv" data-anim class="a-hidden"
+              d="M420 80 L150 170" stroke="#00b4d8" stroke-width="3" fill="none" marker-end="url(#ah1)"/>
+        <path id="a-pay" data-anim class="a-hidden"
+              d="M460 80 L295 170" stroke="#00b4d8" stroke-width="3" fill="none" marker-end="url(#ah1)"/>
+        <path id="a-ord" data-anim class="a-hidden"
+              d="M500 80 L485 170" stroke="#00b4d8" stroke-width="3" fill="none" marker-end="url(#ah1)"/>
+        <path id="a-event" data-anim class="a-hidden"
+              d="M485 225 L445 290" stroke="#f4a259" stroke-width="3" fill="none" marker-end="url(#ah1)"/>
+        <path id="a-ful" data-anim class="a-hidden"
+              d="M600 313 L675 225" stroke="#f4a259" stroke-width="3" fill="none" marker-end="url(#ah1)"/>
+        <path id="a-notify" data-anim class="a-hidden"
+              d="M300 335 L290 380" stroke="#f4a259" stroke-width="3" fill="none" marker-end="url(#ah1)"/>
+        <path id="a-search" data-anim class="a-hidden"
+              d="M550 335 L520 380" stroke="#f4a259" stroke-width="3" fill="none" marker-end="url(#ah1)"/>
+
+        <!-- Failure branch (compensating) -->
+        <path id="a-fail" data-anim class="a-hidden"
+              d="M295 225 C 200 250, 130 250, 105 225" stroke="#f7567c" stroke-width="3" fill="none" marker-end="url(#ah2)"/>
+        <text id="fail-label" data-anim class="a-hidden" x="200" y="270" fill="#f7567c" font-weight="700">compensate: release reservation</text>
+
+        <text id="ok-label" data-anim class="a-hidden" x="705" y="55" fill="#2dc653" font-weight="700">✓ 200 OK</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'A single "Buy Now" click orchestrates 5+ services in a SAGA — reserve inventory → charge card → create order → emit events → fulfill + notify.',
+          interval: 1900,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.add('a-hidden');
+              el.classList.remove('a-glow');
+            });
+          },
+          steps: [
+            { caption: 'Customer taps "Buy Now" on the product page. The BFF forwards it to the Checkout Orchestrator with an idempotency key.',
+              apply: (r, $) => { $('#a-req').classList.remove('a-hidden'); } },
+
+            { caption: 'Step 1 — Reserve inventory. The orchestrator calls Inventory to place a soft-hold on N units (a conditional DynamoDB update or a Redis WATCH/MULTI).',
+              apply: (r, $) => { $('#a-inv').classList.remove('a-hidden'); } },
+
+            { caption: 'Step 2 — Authorize payment. Payment Service calls the PSP (Stripe/Braintree) with the same idempotency key so retries never double-charge.',
+              apply: (r, $) => { $('#a-pay').classList.remove('a-hidden'); } },
+
+            { caption: 'Step 3 — Create the order row transactionally in Aurora, then publish "order.created" to the outbox (transactional outbox pattern).',
+              apply: (r, $) => { $('#a-ord').classList.remove('a-hidden'); } },
+
+            { caption: 'The outbox relay ships the event to Kafka / Kinesis. Everything downstream now flows asynchronously.',
+              apply: (r, $) => { $('#a-event').classList.remove('a-hidden'); } },
+
+            { caption: 'Fulfillment consumes the event, picks/packs/ships. Notification Service sends the confirmation email. Analytics + ML consume the same event.',
+              apply: (r, $) => { $('#a-ful').classList.remove('a-hidden'); $('#a-notify').classList.remove('a-hidden'); $('#a-search').classList.remove('a-hidden'); $('#ok-label').classList.remove('a-hidden'); } },
+
+            { caption: 'Failure branch — if payment declines after inventory was reserved, the orchestrator emits a compensating action to Inventory to release the hold.',
+              apply: (r, $) => { $('#a-fail').classList.remove('a-hidden'); $('#fail-label').classList.remove('a-hidden'); } },
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; return; }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. Catalog Service — the product master</h3>
+    <p>The catalog stores hundreds of millions of products, each with metadata (title, description, category tree, dimensions, seller id, variant options like size/color). Because writes come from ~2M sellers and reads dominate (billions of page views), the catalog uses a <strong>hybrid store</strong>: a <strong>document DB (DynamoDB / MongoDB / Aurora Postgres with JSONB)</strong> as the source of truth, fronted by an aggressive <strong>Redis cache</strong> keyed by product id (SKU) with a TTL of hours. Product images live in <strong>S3</strong> and are served from <strong>CloudFront</strong> so they load fast anywhere in the world. When a seller updates a listing, the write goes to the catalog DB and emits a <code>catalog.updated</code> event; consumers include the search indexer, the pricing service, and the cache invalidator.</p>
+
+    <h3>2. Search — OpenSearch / Elasticsearch with tuned relevance</h3>
+    <p>Search must return results in under half a second across ~600M documents. Amazon's approach: a <strong>separate OpenSearch cluster</strong> holds a denormalized document per product (title, keywords, brand, category, price, rating, popularity signal). The inverted index handles keyword matching; ML models re-rank the top-K by clickthrough and purchase probability. Faceted filters (price range, brand, rating) come from <strong>aggregations</strong> baked into the same query. The indexer is fed by the event backbone — a <strong>Kafka consumer</strong> tails catalog events and updates OpenSearch within seconds. For very hot queries ("iPhone 16"), the top result set is pre-computed and cached in <strong>Redis</strong>.</p>
+
+    <h3>3. Cart Service — the DynamoDB darling</h3>
+    <p>The shopping cart is one of the classic public DynamoDB workloads: <strong>low-latency writes, per-user isolation, must never lose your cart</strong>. The partition key is <code>user_id</code>; the sort key is <code>added_at</code>. Each cart item is an item in the table. Anonymous users get a browser cookie; logging in triggers a <strong>merge cart</strong> operation (union anonymous cart into user cart, dedupe by SKU). Cart TTL for anonymous users is 30 days. Multiple devices? Because it's centralized in DynamoDB, adding an item on your phone shows up on your laptop within milliseconds — no local state to sync.</p>
+
+    <h3>4. Checkout Orchestrator — the SAGA</h3>
+    <p>Placing an order requires <strong>changing state in ≥4 services atomically</strong>, but a distributed 2-phase commit is impractical at scale. The industry answer is the <strong>SAGA pattern</strong>: model checkout as a state machine — <code>PENDING → INVENTORY_RESERVED → PAYMENT_AUTHORIZED → ORDER_CREATED → FULFILLMENT_QUEUED → COMPLETE</code>. Each forward step has a <strong>compensating action</strong> (release inventory, void authorization, cancel order). If payment fails after inventory is reserved, the orchestrator emits <code>release_inventory</code>. The orchestrator can be either <strong>choreographed</strong> (each service reacts to events; simple but hard to reason about) or <strong>orchestrated</strong> (a central state machine like AWS Step Functions; easier to observe). Amazon's checkout is orchestrated. Every step is <strong>idempotent</strong> (same request twice = same result once) via an <strong>idempotency key</strong> tied to the customer's click.</p>
+
+    <h3>5. Inventory Service — the "last item" problem</h3>
+    <p>Two customers click "Buy" on the last iPhone at the same millisecond. Only one may win. Options: (a) <strong>Optimistic concurrency</strong> — check-and-set the row with a version number; the loser retries or fails. (b) <strong>Conditional DynamoDB update</strong> — <code>UPDATE ... WHERE units_available &gt;= N</code>; DynamoDB atomically fails one of them. (c) <strong>Redis + Lua script</strong> for extreme QPS — atomically decrement a counter, reject on negative. Amazon's real inventory system is more nuanced: it distinguishes <strong>available</strong>, <strong>reserved</strong>, and <strong>committed</strong> stock, and holds reservations for a short window (say 10 minutes) so payment can finish without another shopper stealing the item. Reservations time out via a TTL sweeper.</p>
+
+    <h3>6. Payment Service — idempotent and PCI-scoped</h3>
+    <p>Payment is the most dangerous part of the flow because a bug can cost real money. Two rules: <strong>idempotency</strong> (retrying the same charge must never double-bill — enforced via a customer-generated idempotency key persisted server-side) and <strong>PCI scope isolation</strong> (raw card data touches only a tokenizer service or the PSP directly — everywhere else uses tokens). The service authorizes now, captures on shipment (industry standard). Chargebacks flow back as separate events into the ledger.</p>
+
+    <h3>7. Order Service — the immutable ledger of truth</h3>
+    <p>An order is an immutable business fact: <code>order_id, user_id, items, total, currency, status, shipping_address</code>. It lives in a <strong>relational store</strong> (Aurora Postgres / MySQL) because orders benefit from ACID transactions, foreign keys, and rich queries ("all orders by user X in Q3"). Partitioning is by <strong>user_id</strong> for read locality, or by <strong>order_date</strong> for archiving. Old orders (&gt;2 years) tier down to S3 as Parquet for cheap analytical access. The <strong>Transactional Outbox pattern</strong> ensures every state change writes both the row and an event row in the same DB transaction; a relay ships the events to Kafka — no lost events, no phantom events.</p>
+
+    <h3>8. Recommendation Service — offline batch + online model</h3>
+    <p>"Customers who bought this also bought" is a <strong>collaborative filtering</strong> model trained offline on click and purchase logs. Amazon originated the <strong>item-to-item collaborative filtering</strong> paper (Linden et al., 2003) — for each item, precompute a similarity vector, store it in a key-value store, serve at request time. Modern recommenders are neural (matrix factorization + deep networks), trained on <strong>SageMaker</strong> and served via a real-time <strong>feature store + inference endpoint</strong>. Personalized homepage recos are a mix: batch-computed candidate set + online re-rank based on recent session behavior.</p>
+
+    <h3>9. Notification, Reviews, Fulfillment, Fraud, and dozens more</h3>
+    <p>Every state change fires an event; downstream services subscribe. <strong>Notification</strong> sends emails (SES), SMS (SNS), push (SNS mobile). <strong>Reviews</strong> lives in its own service with abuse detection. <strong>Fulfillment</strong> integrates with WMS (warehouse management), routes to the nearest FC (fulfillment center), and updates shipment status. <strong>Fraud &amp; Risk</strong> scores every order in real time — a Kinesis stream + a ML model that can hold a suspicious order for manual review. <strong>Loyalty (Prime)</strong>, <strong>Pricing</strong>, <strong>Promotions</strong>, and <strong>Returns</strong> are all their own services with the same shape.</p>
+
+    <h3>10. Handling Prime Day / Black Friday</h3>
+    <p>Predictable surge → pre-warm capacity. Amazon does <strong>weeks of capacity planning</strong>, pre-scales ECS/EKS clusters, doubles cache node counts, tests failover to secondary regions, and runs <strong>chaos-engineering game days</strong>. Non-critical services (recommendation, reviews) can be gracefully <strong>degraded</strong> — the site still works with a static "popular products" carousel if the recommender falls over. Static assets sit on <strong>CloudFront</strong> pre-warmed with the deals page. Rate limiters shed bot traffic. Fraud thresholds tighten. Prime Day is a load-testing exercise 364 days a year.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <table>
+      <thead><tr><th>Where</th><th>Structure / Algo</th><th>Complexity</th><th>Why chosen</th></tr></thead>
+      <tbody>
+        <tr><td>Product lookup by SKU</td><td>Hash partition (DynamoDB)</td><td>O(1) avg</td><td>Point-lookup by primary key at any QPS.</td></tr>
+        <tr><td>Search</td><td>Inverted index (BKD + Lucene)</td><td>O(log V + posting merge)</td><td>Fast keyword + facet + range queries across 600M docs.</td></tr>
+        <tr><td>Cart per user</td><td>DynamoDB partition + sort key</td><td>O(1) lookup, O(k) list</td><td>User-scoped small item lists — perfect KV shape.</td></tr>
+        <tr><td>Inventory decrement</td><td>Optimistic concurrency / CAS or Lua on Redis</td><td>O(1) with retry</td><td>Deterministic winner on contention; no lost updates.</td></tr>
+        <tr><td>Idempotency</td><td>Idempotency key + KV store (DynamoDB)</td><td>O(1)</td><td>Retries never double-charge or double-order.</td></tr>
+        <tr><td>Order id generation</td><td>Snowflake / KSUID / UUIDv7</td><td>O(1)</td><td>Sortable, unique across shards, no DB coordination.</td></tr>
+        <tr><td>Recommendations</td><td>Item-to-item CF, matrix factorization, ANN (HNSW)</td><td>O(k log n) for top-K</td><td>Amazon's own paper; ANN gives sub-ms nearest-neighbor.</td></tr>
+        <tr><td>Deduplicating events</td><td>Bloom filter / DynamoDB conditional put</td><td>O(k)</td><td>"Have I seen this event?" in constant memory.</td></tr>
+        <tr><td>SAGA state</td><td>Finite state machine (Step Functions)</td><td>O(1) per transition</td><td>Explicit steps + compensations, observable, retryable.</td></tr>
+        <tr><td>Rate limiting</td><td>Token bucket / sliding window (Redis)</td><td>O(1)</td><td>Absorb burst, protect origin services on peak days.</td></tr>
+        <tr><td>Pricing / promo evaluation</td><td>Rule tree / decision DAG</td><td>O(rules)</td><td>Coupon + tier + bundle rules composed in a defined order.</td></tr>
+        <tr><td>Fraud scoring</td><td>Gradient-boosted trees / DNN, real-time features</td><td>O(features)</td><td>Sub-100ms scoring per checkout.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping every service to AWS</h2>
+    <table>
+      <thead><tr><th>Component</th><th>AWS service</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>DNS + edge</td><td><strong>Route 53 + CloudFront + AWS WAF + Global Accelerator</strong></td><td>Anycast routing, edge caching of static assets and product pages, DDoS mitigation.</td></tr>
+        <tr><td>Client BFF / API</td><td><strong>API Gateway + ALB → ECS Fargate / EKS</strong></td><td>Managed HTTPS, per-endpoint throttling, auto-scaling containers.</td></tr>
+        <tr><td>AuthN/AuthZ</td><td><strong>Amazon Cognito / IAM</strong></td><td>OAuth/OIDC, JWTs, MFA, seller vs customer roles.</td></tr>
+        <tr><td>Catalog master</td><td><strong>DynamoDB (or Aurora)</strong> + <strong>DAX</strong> cache</td><td>Predictable single-digit-ms lookups; DAX for microsecond reads on hot SKUs.</td></tr>
+        <tr><td>Search</td><td><strong>Amazon OpenSearch Service</strong></td><td>Managed Lucene; near real-time indexing from event stream.</td></tr>
+        <tr><td>Cart</td><td><strong>DynamoDB</strong> (Amazon's public reference cart workload)</td><td>Per-user partition, TTL, global tables for cross-region.</td></tr>
+        <tr><td>Checkout orchestration</td><td><strong>AWS Step Functions</strong> (or self-managed FSM in ECS)</td><td>Built-in SAGA-style state machine with retries + compensations.</td></tr>
+        <tr><td>Inventory</td><td><strong>DynamoDB conditional updates</strong> + <strong>ElastiCache Redis</strong> for hot SKUs</td><td>Atomic decrements with strong consistency.</td></tr>
+        <tr><td>Payment</td><td><strong>Payment Service on ECS</strong> + <strong>PSP integration</strong> (Stripe/etc.); DynamoDB idempotency store</td><td>PCI-scoped, idempotent, tokenized.</td></tr>
+        <tr><td>Orders</td><td><strong>Aurora Postgres / MySQL</strong>, with <strong>Kinesis + S3 tiering</strong> for cold orders</td><td>ACID transactions + rich queries + cheap archival.</td></tr>
+        <tr><td>Event backbone</td><td><strong>Amazon MSK (Kafka)</strong> or <strong>Kinesis</strong> + <strong>SNS/SQS</strong></td><td>Durable, ordered, replayable events; fan-out via SNS.</td></tr>
+        <tr><td>Transactional outbox relay</td><td><strong>Debezium on MSK Connect</strong> or Lambda tailing Aurora WAL</td><td>No lost or ghost events; DB and stream stay consistent.</td></tr>
+        <tr><td>Images / static</td><td><strong>S3 + CloudFront + Lambda@Edge</strong></td><td>11-nines durability, edge caching, image resizing at the edge.</td></tr>
+        <tr><td>Recommendations</td><td><strong>Amazon Personalize / SageMaker</strong> + <strong>DynamoDB feature store</strong></td><td>Managed reco models + low-latency serving.</td></tr>
+        <tr><td>Fraud</td><td><strong>Amazon Fraud Detector</strong> or SageMaker + Kinesis</td><td>Real-time scoring; models trained on order history.</td></tr>
+        <tr><td>Analytics / lake</td><td><strong>S3 + Glue + Athena + Redshift</strong></td><td>Cheap columnar storage, ad-hoc SQL, BI dashboards.</td></tr>
+        <tr><td>Notifications</td><td><strong>SES (email) + SNS (SMS/push) + Pinpoint</strong></td><td>Managed multi-channel delivery.</td></tr>
+        <tr><td>Observability</td><td><strong>CloudWatch + X-Ray + OpenTelemetry</strong></td><td>Traces across dozens of microservices for the checkout SAGA.</td></tr>
+        <tr><td>Secrets / crypto</td><td><strong>Secrets Manager + KMS</strong></td><td>Encrypt PII, tokens, and payment credentials.</td></tr>
+      </tbody>
+    </table>
+    <p>Deployment story: services run in <strong>EKS or ECS Fargate</strong>, each owning its own DynamoDB / Aurora cluster. The <strong>CI/CD pipeline (CodePipeline)</strong> uses <strong>blue/green</strong> deploys behind ALB with automated rollback. Two active regions (say us-east-1 and us-west-2) with <strong>DynamoDB Global Tables</strong> and Aurora Global Database keep the site up during a region failure. <strong>CloudFront</strong> caches product pages at edge with a short TTL and a <strong>stale-while-revalidate</strong> policy so a slow origin never breaks browsing.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — an idempotent checkout SAGA step</h2>
+    <p>The single most important checkout invariant is <strong>idempotency</strong>: the same "Buy Now" retried after a network blip must produce exactly one order. Below is a compact, production-shaped C# handler that: (1) enforces idempotency via a DynamoDB conditional put, (2) reserves inventory with an atomic conditional update, (3) authorizes payment, (4) writes the order + outbox event in a single transaction, (5) runs compensations if any step fails. This is the shape you'd draw in an interview.</p>
+    <pre><code><span class="kw">using</span> Amazon.DynamoDBv2;
+<span class="kw">using</span> Amazon.DynamoDBv2.Model;
+
+<span class="kw">public class</span> <span class="typ">CheckoutSagaHandler</span>
+{
+    <span class="kw">private readonly</span> IAmazonDynamoDB _db;
+    <span class="kw">private readonly</span> IInventoryClient _inventory;
+    <span class="kw">private readonly</span> IPaymentClient   _payment;
+    <span class="kw">private readonly</span> IOrderRepository _orders;
+    <span class="kw">private readonly</span> IEventPublisher  _events;
+
+    <span class="cmt">// Idempotent entry point. The `idemKey` is generated by the client on
+    // the "Buy Now" tap; retrying the same click reuses the same key and
+    // returns the same OrderId — never a second charge.</span>
+    <span class="kw">public async</span> Task&lt;CheckoutResult&gt; <span class="fn">PlaceOrderAsync</span>(
+        CheckoutRequest req, <span class="kw">string</span> idemKey, CancellationToken ct)
+    {
+        <span class="cmt">// -------- 1. Idempotency guard (DynamoDB conditional put) --------
+        // If a record for this idemKey already exists, return its stored result.</span>
+        <span class="kw">var</span> claim = <span class="kw">await</span> TryClaimIdemKeyAsync(idemKey, req.UserId, ct);
+        <span class="kw">if</span> (claim.AlreadyExisted) <span class="kw">return</span> claim.PreviousResult!;
+
+        <span class="kw">string</span>? inventoryReservationId = <span class="kw">null</span>;
+        <span class="kw">string</span>? paymentAuthId          = <span class="kw">null</span>;
+
+        <span class="kw">try</span>
+        {
+            <span class="cmt">// -------- 2. Reserve inventory (atomic conditional decrement) --------</span>
+            inventoryReservationId = <span class="kw">await</span> _inventory.ReserveAsync(
+                req.Items, ttl: TimeSpan.FromMinutes(10), ct);
+
+            <span class="cmt">// -------- 3. Authorize payment (idempotent at PSP too) --------</span>
+            paymentAuthId = <span class="kw">await</span> _payment.AuthorizeAsync(
+                req.UserId, req.PaymentToken, req.TotalAmount,
+                idempotencyKey: idemKey, ct);
+
+            <span class="cmt">// -------- 4. Write order + outbox event in one Aurora transaction --------</span>
+            <span class="kw">var</span> order = <span class="kw">new</span> Order(
+                Id: Guid.NewGuid().ToString(),
+                UserId: req.UserId,
+                Items: req.Items,
+                Total: req.TotalAmount,
+                InventoryReservationId: inventoryReservationId,
+                PaymentAuthId: paymentAuthId,
+                Status: OrderStatus.Placed);
+
+            <span class="kw">await</span> _orders.SaveWithOutboxAsync(order, <span class="kw">new</span> OrderCreatedEvent(order), ct);
+
+            <span class="cmt">// -------- 5. Publish acknowledgment (best-effort — outbox relay
+            //          will re-emit anyway if this Kafka call fails) --------</span>
+            _ = _events.PublishAsync(<span class="kw">new</span> OrderCreatedEvent(order), ct);
+
+            <span class="kw">var</span> result = <span class="kw">new</span> CheckoutResult(order.Id, OrderStatus.Placed);
+            <span class="kw">await</span> StoreIdemResultAsync(idemKey, result, ct);
+            <span class="kw">return</span> result;
+        }
+        <span class="kw">catch</span> (PaymentDeclinedException)
+        {
+            <span class="cmt">// Compensating action: release the inventory hold. Inventory
+            // service is idempotent — safe to retry until it succeeds.</span>
+            <span class="kw">if</span> (inventoryReservationId != <span class="kw">null</span>)
+                <span class="kw">await</span> _inventory.ReleaseAsync(inventoryReservationId, ct);
+            <span class="kw">throw</span>;
+        }
+        <span class="kw">catch</span> (Exception) <span class="kw">when</span> (inventoryReservationId != <span class="kw">null</span>)
+        {
+            <span class="cmt">// Any downstream failure -> compensate. If payment succeeded but
+            // order write failed, void the auth too.</span>
+            <span class="kw">if</span> (paymentAuthId != <span class="kw">null</span>)
+                <span class="kw">await</span> _payment.VoidAsync(paymentAuthId, ct);
+            <span class="kw">await</span> _inventory.ReleaseAsync(inventoryReservationId, ct);
+            <span class="kw">throw</span>;
+        }
+    }
+
+    <span class="cmt">// Atomic "first writer wins" on the idempotency key.</span>
+    <span class="kw">private async</span> Task&lt;IdemClaim&gt; <span class="fn">TryClaimIdemKeyAsync</span>(
+        <span class="kw">string</span> key, <span class="kw">string</span> userId, CancellationToken ct)
+    {
+        <span class="kw">try</span>
+        {
+            <span class="kw">await</span> _db.PutItemAsync(<span class="kw">new</span> PutItemRequest
+            {
+                TableName = <span class="str">"IdempotencyKeys"</span>,
+                Item = <span class="kw">new</span>()
+                {
+                    [<span class="str">"pk"</span>]     = <span class="kw">new</span>(key),
+                    [<span class="str">"userId"</span>] = <span class="kw">new</span>(userId),
+                    [<span class="str">"state"</span>]  = <span class="kw">new</span>(<span class="str">"IN_PROGRESS"</span>),
+                    [<span class="str">"ttl"</span>]    = <span class="kw">new</span> AttributeValue {
+                        N = DateTimeOffset.UtcNow.AddHours(24).ToUnixTimeSeconds().ToString() }
+                },
+                ConditionExpression = <span class="str">"attribute_not_exists(pk)"</span>
+            }, ct);
+            <span class="kw">return new</span> IdemClaim(AlreadyExisted: <span class="kw">false</span>);
+        }
+        <span class="kw">catch</span> (ConditionalCheckFailedException)
+        {
+            <span class="cmt">// Someone (probably this same user retrying) got here first.
+            // Return the stored result so we don't reprocess.</span>
+            <span class="kw">var</span> existing = <span class="kw">await</span> LoadIdemResultAsync(key, ct);
+            <span class="kw">return new</span> IdemClaim(AlreadyExisted: <span class="kw">true</span>, PreviousResult: existing);
+        }
+    }
+}
+</code></pre>
+    <p>Notes: the same pattern is idiomatic in <strong>Java</strong> (Spring + AWS SDK), <strong>Go</strong> (channels for compensations), and <strong>Python</strong> (FastAPI + Boto3). The interesting bit isn't the language — it's the <strong>idempotency key + conditional put + compensating actions</strong>. In a real system, <strong>AWS Step Functions</strong> holds the SAGA state machine and each service step is a Lambda or an ECS task; failure retries and compensations are declarative in the state machine ASL.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Consistency: where to be strong vs eventual</h3>
+    <p>Strong consistency is expensive; eventual is cheap. Amazon spends the expense where correctness demands it: <strong>inventory, payment, order, ledger</strong>. Everything else — <strong>reviews, recommendations, search, catalog reads, notifications</strong> — is eventually consistent. A review added at 12:00:00 might appear at 12:00:04 in search results. Nobody cares; a wrong order does.</p>
+
+    <h3>The "two writes" problem — outbox pattern</h3>
+    <p>Every write path that both updates a DB and publishes an event faces the "dual write" problem: DB commit succeeds, Kafka publish fails, event lost. The industry answer is the <strong>Transactional Outbox pattern</strong>: write the row and an <code>events</code> row in the same DB transaction; a relay (Debezium, MSK Connect) tails the DB WAL and ships events to Kafka. No lost events, no phantom events.</p>
+
+    <h3>Hot partitions and celebrity SKUs</h3>
+    <p>When Taylor Swift's book drops, one row melts. Options: (a) <strong>Split the row</strong> — 10 sub-shards, decrement any one, sum in the read path; (b) <strong>Redis in front</strong> — Lua-scripted atomic decrement; (c) <strong>Rate-limit</strong> writes to the row; (d) <strong>Waiting room</strong> UI that queues shoppers.</p>
+
+    <h3>Region failover</h3>
+    <p>Two active regions with DynamoDB Global Tables and Aurora Global Database. Traffic shifts via Route 53 health checks. RPO ≈ single-digit seconds. Because orders are the source of truth in Aurora, a region failover requires promoting the secondary region — which can take minutes. Read-only browsing degrades to the surviving region instantly.</p>
+
+    <h3>Cache stampede on trending items</h3>
+    <p>When the deals page invalidates and 100k shoppers hit the same SKU, they all miss the cache and pile onto DynamoDB. Fix: <strong>request coalescing</strong> at the cache tier (only one miss goes to origin, others wait), <strong>stale-while-revalidate</strong>, <strong>early expiration jitter</strong>, or a <strong>bloom-filter warmup</strong>.</p>
+
+    <h3>Likely interviewer follow-ups</h3>
+
+    <div class="qa">
+      <p class="q">Q: How do you prevent overselling the last item under peak concurrency?</p>
+      <p class="a">A: Atomic conditional decrement with the inventory service as the arbiter. DynamoDB conditional update or Redis with a Lua script — the storage engine picks one winner. Losers get a 409/retry. Reservation holds have a short TTL so failed payments release inventory automatically.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: Why not use a distributed transaction (2PC) across services?</p>
+      <p class="a">A: 2PC blocks on the coordinator, doesn't scale to dozens of services, and has terrible availability during partitions. The industry uses <em>SAGA</em> instead — a sequence of local transactions plus compensating actions. Each service stays available; the trade-off is that intermediate states are visible (order can be "payment authorized but inventory released" for a moment).</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: How do you make sure a duplicate "Buy Now" click doesn't double-charge me?</p>
+      <p class="a">A: The client generates an <em>idempotency key</em> at click time. The checkout orchestrator does a conditional put on that key in DynamoDB — first click wins, retries reuse the stored result. The payment service also propagates the key to the PSP (Stripe supports this natively).</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: How does search stay near-real-time when the catalog changes?</p>
+      <p class="a">A: Catalog writes emit <code>catalog.updated</code> events to Kafka. A dedicated indexer consumer reads those and updates OpenSearch. End-to-end latency is a few seconds. For very hot deals during a sale, the indexer prioritizes the deals topic.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: How do recommendations work?</p>
+      <p class="a">A: A hybrid: offline batch training (item-to-item CF, matrix factorization, GNNs) on SageMaker produces a candidate set per user, stored in DynamoDB. Online re-ranking blends recent session behavior with the candidate set at request time. The homepage carousel is a mix of session, purchase history, and trending items.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: Prime Day is coming — how do you make sure the site holds up?</p>
+      <p class="a">A: Pre-scale ECS + cache node counts based on traffic forecasts. Load-test with real production shape (not synthetic!). Run chaos drills — kill nodes, fail a region — the week before. Turn on aggressive edge caching, tighten fraud thresholds, degrade non-critical services (reviews, recommendations) gracefully. Every year the org publishes a Prime Day post-mortem internally.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "Amazon is a microservices marketplace: browse and search are read-heavy and cache-served; checkout is a SAGA that orchestrates inventory, payment, and orders with idempotency keys and compensating actions. DynamoDB owns cart and user-scoped hot data, Aurora owns the order ledger, OpenSearch owns discovery, S3 + CloudFront own media, and Kafka is the event backbone that keeps recommendations, notifications, and analytics eventually consistent. The design optimizes for browse availability, checkout correctness, and event-driven decoupling."</p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>300M+ active customers · 200M Prime members · 2B visits/month.</li>
+      <li>Read:write ratio ~1000:1 on a normal day; browse ~1–2M QPS at peak.</li>
+      <li>Prime Day peak orders ~1–2k/s sustained; ~50–100k orders/min.</li>
+      <li>Catalog ~600M+ products; images petabyte-scale on S3.</li>
+      <li>Availability 99.99 % browse, higher on order path.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li>"<strong>SAGA + idempotency key</strong>, not 2PC, is how checkout stays correct at scale."</li>
+      <li>"<strong>Polyglot persistence</strong>: DynamoDB for cart, Aurora for orders, OpenSearch for search, S3+CDN for media — each store where it wins."</li>
+      <li>"<strong>Transactional Outbox</strong> — the only clean way to update a DB and publish an event without losing either."</li>
+      <li>"Strong consistency on <strong>money, inventory, orders</strong>; eventual consistency on <strong>everything else</strong>."</li>
+      <li>"Degrade gracefully — a broken recommender must never break checkout."</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li>Wikipedia — <a href="https://en.wikipedia.org/wiki/Amazon_(company)">Amazon (company)</a> — scale figures (300M customers, 200M Prime, 2B visits/month, revenue).</li>
+      <li>Linden, Smith, York — <a href="https://www.cs.umd.edu/~samir/498/Amazon-Recommendations.pdf">Amazon.com Recommendations: Item-to-Item Collaborative Filtering</a> (IEEE Internet Computing, 2003) — the original recommender paper.</li>
+      <li>DeCandia et al. — <a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf">Dynamo: Amazon's Highly Available Key-Value Store</a> (SOSP 2007) — the paper behind DynamoDB.</li>
+      <li>AWS Docs — <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/saga.html">SAGA Pattern</a>, <a href="https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html">Transactional Outbox</a>.</li>
+      <li>Chris Richardson — <a href="https://microservices.io/patterns/data/saga.html">Microservices.io: SAGA Pattern</a>.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Multi-Tenancy — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --laymen: #ffb703;
+    --laymen-bg: #fff9e6;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px;
+    box-shadow: var(--shadow); margin-bottom: 24px;
+  }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); color: #443300; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; font-size: .84rem; line-height: 1.35; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .3; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+
+  .model-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 16px 0; }
+  .model-card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .model-card h4 { margin: 0 0 6px; font-size: 1rem; }
+  .model-card p  { margin: 0; font-size: .9rem; color: var(--muted); }
+  .model-card.silo   { border-top: 4px solid #e63946; }
+  .model-card.bridge { border-top: 4px solid #ffb703; }
+  .model-card.pool   { border-top: 4px solid #2a9d8f; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Multi-Tenancy</h1>
+    <p>Serving thousands of customers from one system — without them ever seeing each other, stealing each other's resources, or making the ops team weep.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>Multi-tenancy is the discipline of running <strong>one software system that serves many independent customers</strong> — called <em>tenants</em> — from shared infrastructure while keeping each tenant's data, load, and failures walled off from the others. A tenant is an <strong>organization</strong>, not a user; a company with 500 employees is one tenant with 500 users. It is the defining architectural pattern of SaaS: without it there is no SaaS, there is only a hosting business that manually clones one stack per customer.</p>
+    <p>Every product you use for work is multi-tenant. <strong>Slack, Salesforce, GitHub, Notion, Stripe, Datadog, Zoom, HubSpot, Shopify</strong> — each is one running system serving millions of orgs. Companies build multi-tenant systems because the economics are transformational: a shared stack costs a fraction of a dedicated one, ships features to everyone at once, and lets a two-engineer team run a business with a million customers. The catch is that if you get isolation wrong even once, one customer sees another customer's data — a business-ending event. So multi-tenancy is really a conversation about <em>how much you share and how you enforce the boundaries when you share</em>.</p>
+    <p>The interview question is almost never "design multi-tenancy" in the abstract. It's usually embedded in a bigger question — <em>"you're building a SaaS analytics platform, walk me through your tenancy model"</em> — and the interviewer is watching whether you reach for the industry taxonomies (silo/pool/bridge, database-per-tenant vs sharded), name the tradeoffs, and handle the follow-ups on noisy neighbours, cost attribution, and blast radius.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The plain-English version</h2>
+    <p>Imagine you rent apartments for a living. <strong>You have a building with many families living in it.</strong> All of them share the front door, the elevator, the plumbing, and the roof — but each family has their own locked apartment with their own key. That's multi-tenancy. One building, many families, and no family ever wanders into another family's kitchen.</p>
+    <p>Now think about a company like <strong>Slack</strong>. Your company uses Slack. So does the company across the street, and 10 million other companies. Slack didn't build 10 million separate copies of Slack. They built one Slack — one building — and gave each company a "locked apartment" inside it. When you open Slack, some invisible check figures out <em>which company you belong to</em> and only shows you your company's messages. If that check ever failed, you'd see someone else's private messages. That would be the end of Slack. So the check has to be perfect.</p>
+    <p><strong>The hard parts are what happen when families share things.</strong> If one family throws a huge party, does everyone else lose water pressure? If one family calls the elevator constantly, does everyone wait? If the roof leaks, does every family get wet? Real software has the same problems. If one customer runs a giant report at 3am, other customers shouldn't feel it. If one customer's data corrupts, others shouldn't be affected. If one customer gets hacked, others shouldn't spill.</p>
+    <p>Some customers pay a lot more money. For them, you might build a <strong>private house instead of an apartment</strong> — dedicated everything. It costs more, but they get all the water pressure to themselves and nobody can hear their music. Big banks and hospitals often get the private house. Small startups happily share the building.</p>
+    <p>A tiny example: your two-person startup and IBM both use Slack. Your startup lives in a "shared apartment" — cheap, fine. IBM might live in a dedicated wing with its own elevator. Slack's job is to make both of you feel like you're the only tenant on the planet, even though you're technically breathing the same air.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Tenant onboarding</strong> — create a new tenant in seconds; provision users, initial config, quotas.</li>
+      <li><strong>Data isolation</strong> — a user of tenant A must never read or write data of tenant B, at any layer.</li>
+      <li><strong>Tenant context on every request</strong> — every request carries a verifiable <code>tenant_id</code>; every query is scoped to it.</li>
+      <li><strong>Per-tenant quotas / rate limits</strong> — noisy tenants must not degrade quiet tenants.</li>
+      <li><strong>Tier-based isolation</strong> — free / pro / enterprise get different isolation levels.</li>
+      <li><strong>Cost attribution</strong> — cost per tenant is knowable (for pricing, capacity planning, churn analysis).</li>
+      <li><strong>Tenant lifecycle</strong> — offboarding (delete all data, GDPR), tier migration (pool → silo), export.</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Isolation guarantee</strong>: zero cross-tenant reads/writes — treated as a P0 breach.</li>
+      <li><strong>Blast radius</strong>: one failing tenant / one failing cell must not take down the fleet.</li>
+      <li><strong>P99 fairness</strong>: enterprise tenants see stable P99 even during flash-sale-scale spikes from other tenants.</li>
+      <li><strong>Elasticity</strong>: onboarding a tenant is O(seconds), not O(days).</li>
+    </ul>
+
+    <h3>Capacity — a mid-sized SaaS example</h3>
+    <table>
+      <tr><th>Metric</th><th>Value</th><th>Why</th></tr>
+      <tr><td>Tenants</td><td>50,000 orgs (98% pool, 2% silo)</td><td>Power law — enterprise is few but pays most.</td></tr>
+      <tr><td>Users total</td><td>~5 M</td><td>Avg 100 users/tenant.</td></tr>
+      <tr><td>QPS (aggregate)</td><td>~50 K</td><td>1 req/s per active user, 10% concurrency.</td></tr>
+      <tr><td>P99 per tenant read</td><td>≤ 100 ms</td><td>Standard interactive SaaS.</td></tr>
+      <tr><td>Storage/tenant</td><td>10 GB avg, 5 TB p99</td><td>Long-tail tenants dominate storage.</td></tr>
+      <tr><td>Fleet DB size</td><td>~500 TB</td><td>Requires sharding — no single Postgres fits.</td></tr>
+      <tr><td>Shard fanout</td><td>~480 logical shards over ~32 physical DBs</td><td>Same order as Notion's real numbers.</td></tr>
+      <tr><td>Cell size (blast radius)</td><td>~2 K tenants / cell</td><td>Slack-style cellular isolation.</td></tr>
+    </table>
+
+    <p><strong>Volunteer these numbers unprompted.</strong> "50 K tenants, power-law distributed, so I'll pool the small 98% and silo the enterprise 2%; that shapes every other choice from routing to billing." Interviewers reward math you bring before they ask.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The classic multi-tenant SaaS architecture is a <strong>shared control plane</strong> (identity, onboarding, billing, observability) sitting in front of a <strong>tenant-aware data plane</strong> whose isolation level varies by pricing tier. On every request the flow is: client → edge (TLS, WAF) → identity (validate JWT, extract <code>tenant_id</code>) → API gateway (per-tenant rate limit, tier lookup) → services (execute business logic scoped to <code>tenant_id</code>) → data (either the shared pool table with row/item-level policies, or the dedicated silo database for enterprise tenants). Async traffic — notifications, exports, ETL — flows through queues that carry the tenant tag so downstream workers can preserve isolation.</p>
+
+    <p>The load-bearing decision is <strong>which components pool and which silo</strong>. Microsoft's Azure Architecture Center calls isolation a <em>continuum, not a binary</em> — you can pool the UI/app tier while siloing the data tier, or the other way around, depending on what actually causes noisy-neighbour pain. In practice, the app tier is almost always pooled (compute is cheap and stateless), while the data tier is where the isolation model lives.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 480" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'Segoe UI',Roboto,sans-serif" font-size="12">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#4ade80"/>
+          </marker>
+          <marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#fbbf24"/>
+          </marker>
+        </defs>
+        <rect x="0" y="0" width="900" height="480" fill="#0f1420"/>
+
+        <!-- Clients -->
+        <g>
+          <rect x="20" y="30" width="120" height="60" rx="10" fill="#1b2940" stroke="#4361ee"/>
+          <text x="80" y="55" text-anchor="middle" fill="#c6d0e0" font-weight="700">Tenant A user</text>
+          <text x="80" y="75" text-anchor="middle" fill="#7fa2ff">(pool tier)</text>
+
+          <rect x="20" y="115" width="120" height="60" rx="10" fill="#1b2940" stroke="#4361ee"/>
+          <text x="80" y="140" text-anchor="middle" fill="#c6d0e0" font-weight="700">Tenant B user</text>
+          <text x="80" y="160" text-anchor="middle" fill="#7fa2ff">(pool tier)</text>
+
+          <rect x="20" y="200" width="120" height="60" rx="10" fill="#1b2940" stroke="#e63946"/>
+          <text x="80" y="225" text-anchor="middle" fill="#c6d0e0" font-weight="700">Tenant Z user</text>
+          <text x="80" y="245" text-anchor="middle" fill="#f7567c">(silo · enterprise)</text>
+        </g>
+
+        <!-- Edge / Auth -->
+        <rect x="180" y="30" width="130" height="230" rx="10" fill="#1b2940" stroke="#00b4d8"/>
+        <text x="245" y="55" text-anchor="middle" fill="#c6d0e0" font-weight="700">Edge + Identity</text>
+        <text x="245" y="80" text-anchor="middle" fill="#7fa2ff">TLS · WAF</text>
+        <text x="245" y="100" text-anchor="middle" fill="#7fa2ff">JWT verify</text>
+        <text x="245" y="120" text-anchor="middle" fill="#7fa2ff">Extract tenant_id</text>
+        <text x="245" y="140" text-anchor="middle" fill="#7fa2ff">Lookup tier</text>
+        <text x="245" y="170" text-anchor="middle" fill="#a3e635" font-weight="700">→ pool router</text>
+        <text x="245" y="215" text-anchor="middle" fill="#fb7185" font-weight="700">→ silo router</text>
+
+        <!-- API Gateway (with rate limit) -->
+        <rect x="350" y="30" width="160" height="120" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="430" y="55" text-anchor="middle" fill="#c6d0e0" font-weight="700">API Gateway</text>
+        <text x="430" y="78" text-anchor="middle" fill="#7fa2ff">per-tenant rate limit</text>
+        <text x="430" y="98" text-anchor="middle" fill="#7fa2ff">quota check</text>
+        <text x="430" y="118" text-anchor="middle" fill="#7fa2ff">route by tier</text>
+
+        <!-- Services (pool) -->
+        <rect x="350" y="170" width="160" height="80" rx="10" fill="#1b2940" stroke="#4ade80"/>
+        <text x="430" y="197" text-anchor="middle" fill="#c6d0e0" font-weight="700">Pool services</text>
+        <text x="430" y="220" text-anchor="middle" fill="#a3e635">stateless</text>
+        <text x="430" y="238" text-anchor="middle" fill="#a3e635">tenant_id in context</text>
+
+        <!-- Data plane: pool -->
+        <rect x="560" y="30" width="140" height="100" rx="10" fill="#1b2940" stroke="#4ade80"/>
+        <text x="630" y="55" text-anchor="middle" fill="#c6d0e0" font-weight="700">Pool DB</text>
+        <text x="630" y="78" text-anchor="middle" fill="#a3e635">shared table</text>
+        <text x="630" y="96" text-anchor="middle" fill="#a3e635">PK = tenant_id</text>
+        <text x="630" y="115" text-anchor="middle" fill="#a3e635">RLS / LeadingKeys</text>
+
+        <!-- Data plane: silo -->
+        <rect x="560" y="150" width="140" height="100" rx="10" fill="#1b2940" stroke="#e63946"/>
+        <text x="630" y="175" text-anchor="middle" fill="#c6d0e0" font-weight="700">Silo DB (per-tenant)</text>
+        <text x="630" y="198" text-anchor="middle" fill="#fb7185">dedicated cluster</text>
+        <text x="630" y="216" text-anchor="middle" fill="#fb7185">dedicated KMS key</text>
+        <text x="630" y="234" text-anchor="middle" fill="#fb7185">VPC boundary</text>
+
+        <!-- Cell / shard -->
+        <rect x="740" y="30" width="140" height="220" rx="10" fill="#0b1120" stroke="#7048e8" stroke-dasharray="4,3"/>
+        <text x="810" y="55" text-anchor="middle" fill="#c6d0e0" font-weight="700">Cell 3 of N</text>
+        <text x="810" y="80" text-anchor="middle" fill="#a78bfa">bounded blast radius</text>
+        <text x="810" y="105" text-anchor="middle" fill="#a78bfa">~2 K tenants / cell</text>
+        <text x="810" y="130" text-anchor="middle" fill="#a78bfa">shuffle-sharded</text>
+        <text x="810" y="155" text-anchor="middle" fill="#a78bfa">workers</text>
+
+        <!-- Async plane -->
+        <rect x="180" y="300" width="130" height="60" rx="10" fill="#1b2940" stroke="#fbbf24"/>
+        <text x="245" y="325" text-anchor="middle" fill="#c6d0e0" font-weight="700">Kafka / SQS</text>
+        <text x="245" y="345" text-anchor="middle" fill="#fbbf24">carries tenant_id</text>
+
+        <rect x="350" y="300" width="160" height="60" rx="10" fill="#1b2940" stroke="#fbbf24"/>
+        <text x="430" y="325" text-anchor="middle" fill="#c6d0e0" font-weight="700">Async workers</text>
+        <text x="430" y="345" text-anchor="middle" fill="#fbbf24">export · billing · ETL</text>
+
+        <rect x="560" y="300" width="140" height="60" rx="10" fill="#1b2940" stroke="#fbbf24"/>
+        <text x="630" y="325" text-anchor="middle" fill="#c6d0e0" font-weight="700">Data lake</text>
+        <text x="630" y="345" text-anchor="middle" fill="#fbbf24">partitioned by tenant</text>
+
+        <!-- Control plane -->
+        <rect x="180" y="400" width="520" height="60" rx="10" fill="#1b2940" stroke="#a78bfa"/>
+        <text x="440" y="425" text-anchor="middle" fill="#c6d0e0" font-weight="700">Shared control plane</text>
+        <text x="440" y="445" text-anchor="middle" fill="#a78bfa">tenant registry · onboarding · billing · observability (tagged by tenant_id)</text>
+
+        <!-- Arrows -->
+        <line x1="140" y1="60"  x2="180" y2="80"  stroke="#7fa2ff" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="140" y1="145" x2="180" y2="130" stroke="#7fa2ff" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="140" y1="230" x2="180" y2="215" stroke="#f7567c" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="310" y1="90"  x2="350" y2="90"  stroke="#4ade80" stroke-width="2" marker-end="url(#ahg)"/>
+        <line x1="510" y1="90"  x2="560" y2="80"  stroke="#4ade80" stroke-width="2" marker-end="url(#ahg)"/>
+        <line x1="510" y1="210" x2="560" y2="200" stroke="#f7567c" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="700" y1="80"  x2="740" y2="100" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="3,3"/>
+        <line x1="430" y1="250" x2="430" y2="300" stroke="#fbbf24" stroke-width="2" marker-end="url(#aha)"/>
+        <line x1="310" y1="330" x2="350" y2="330" stroke="#fbbf24" stroke-width="2" marker-end="url(#aha)"/>
+        <line x1="510" y1="330" x2="560" y2="330" stroke="#fbbf24" stroke-width="2" marker-end="url(#aha)"/>
+      </svg>
+    </div>
+
+    <div class="legend">
+      <span><span class="dot" style="background:#4ade80"></span>Pool data plane (shared)</span>
+      <span><span class="dot" style="background:#e63946"></span>Silo data plane (dedicated)</span>
+      <span><span class="dot" style="background:#a78bfa"></span>Cell / control plane</span>
+      <span><span class="dot" style="background:#fbbf24"></span>Async plane</span>
+    </div>
+
+    <h3>The three canonical isolation models</h3>
+    <div class="model-grid">
+      <div class="model-card silo">
+        <h4>🏰 Silo</h4>
+        <p>Dedicated resources per tenant. No noisy neighbours, trivial cost attribution, simple to enforce. But hits account/quota ceilings and costs ~linearly. Best for enterprise / regulated tenants.</p>
+      </div>
+      <div class="model-card bridge">
+        <h4>🌉 Bridge</h4>
+        <p>Mix per microservice. Regulatory + noisy-neighbour sensitivity pushes a service to silo; agility + cost pushes to pool. Most real SaaS ends up here.</p>
+      </div>
+      <div class="model-card pool">
+        <h4>🏢 Pool</h4>
+        <p>Shared everything, keyed by <code>tenant_id</code>. Cheapest, most agile, hardest to isolate. Requires fine-grained IAM / row-level security. Best for free/pro tiers.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a tenant request flow end-to-end</h2>
+    <p>Two tenants — Tenant A (pool tier) and Tenant Z (silo tier) — send a request at the same time. Follow how JWT context, per-tenant rate limiting, tier routing, and shuffle-sharded workers keep them isolated. Press ▶ Play.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,'Segoe UI',Roboto,sans-serif" font-size="12">
+        <defs>
+          <marker id="hh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <rect x="0" y="0" width="900" height="380" fill="#0b1120"/>
+
+        <!-- Lanes -->
+        <text x="30" y="30" fill="#7fa2ff" font-weight="700">TENANT A · pool tier</text>
+        <text x="30" y="220" fill="#fb7185" font-weight="700">TENANT Z · silo tier</text>
+
+        <!-- Tenant A (pool) lane at y ~ 40..180 -->
+        <rect x="20"  y="55" width="80"  height="60" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="60"  y="88" text-anchor="middle" fill="#c6d0e0">User A</text>
+
+        <rect x="140" y="55" width="110" height="60" rx="10" fill="#1b2940" stroke="#00b4d8"/>
+        <text x="195" y="80" text-anchor="middle" fill="#c6d0e0">Auth / JWT</text>
+        <text x="195" y="100" text-anchor="middle" fill="#7fa2ff" font-size="10">tenant_id=A</text>
+
+        <rect x="290" y="55" width="110" height="60" rx="10" fill="#1b2940" stroke="#fbbf24"/>
+        <text x="345" y="80" text-anchor="middle" fill="#c6d0e0">Rate limiter</text>
+        <text x="345" y="100" text-anchor="middle" fill="#fbbf24" font-size="10">token bucket A</text>
+
+        <rect x="440" y="55" width="110" height="60" rx="10" fill="#1b2940" stroke="#4ade80"/>
+        <text x="495" y="80" text-anchor="middle" fill="#c6d0e0">Pool service</text>
+        <text x="495" y="100" text-anchor="middle" fill="#a3e635" font-size="10">stateless</text>
+
+        <rect x="590" y="55" width="120" height="60" rx="10" fill="#1b2940" stroke="#4ade80"/>
+        <text x="650" y="80" text-anchor="middle" fill="#c6d0e0">Shared DB</text>
+        <text x="650" y="100" text-anchor="middle" fill="#a3e635" font-size="10">WHERE tenant_id=A</text>
+
+        <rect x="740" y="55" width="130" height="60" rx="10" fill="#1b2940" stroke="#a78bfa"/>
+        <text x="805" y="80" text-anchor="middle" fill="#c6d0e0">Row for A</text>
+        <text x="805" y="100" text-anchor="middle" fill="#a78bfa" font-size="10">RLS gates read</text>
+
+        <!-- Tenant Z (silo) lane -->
+        <rect x="20"  y="245" width="80"  height="60" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="60"  y="278" text-anchor="middle" fill="#c6d0e0">User Z</text>
+
+        <rect x="140" y="245" width="110" height="60" rx="10" fill="#1b2940" stroke="#00b4d8"/>
+        <text x="195" y="270" text-anchor="middle" fill="#c6d0e0">Auth / JWT</text>
+        <text x="195" y="290" text-anchor="middle" fill="#fb7185" font-size="10">tenant_id=Z (silo)</text>
+
+        <rect x="290" y="245" width="110" height="60" rx="10" fill="#1b2940" stroke="#fbbf24"/>
+        <text x="345" y="270" text-anchor="middle" fill="#c6d0e0">Rate limiter</text>
+        <text x="345" y="290" text-anchor="middle" fill="#fbbf24" font-size="10">token bucket Z</text>
+
+        <rect x="440" y="245" width="110" height="60" rx="10" fill="#1b2940" stroke="#e63946"/>
+        <text x="495" y="270" text-anchor="middle" fill="#c6d0e0">Silo service Z</text>
+        <text x="495" y="290" text-anchor="middle" fill="#fb7185" font-size="10">dedicated cluster</text>
+
+        <rect x="590" y="245" width="120" height="60" rx="10" fill="#1b2940" stroke="#e63946"/>
+        <text x="650" y="270" text-anchor="middle" fill="#c6d0e0">Silo DB Z</text>
+        <text x="650" y="290" text-anchor="middle" fill="#fb7185" font-size="10">dedicated cluster</text>
+
+        <rect x="740" y="245" width="130" height="60" rx="10" fill="#1b2940" stroke="#a78bfa"/>
+        <text x="805" y="270" text-anchor="middle" fill="#c6d0e0">All Z data</text>
+        <text x="805" y="290" text-anchor="middle" fill="#a78bfa" font-size="10">VPC boundary</text>
+
+        <!-- Moving request packets -->
+        <circle id="pkt-a" cx="100" cy="85" r="8" fill="#4361ee" class="a-el a-hidden"/>
+        <circle id="pkt-z" cx="100" cy="275" r="8" fill="#e63946" class="a-el a-hidden"/>
+
+        <!-- Noisy-neighbour spike from another tenant (X) -->
+        <g id="noisy" class="a-el a-hidden">
+          <circle cx="60" cy="180" r="12" fill="#fbbf24"/>
+          <text x="60" y="205" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="700">Tenant X spike ↑</text>
+        </g>
+
+        <!-- Reject stamp on A -->
+        <g id="reject-x" class="a-el a-hidden">
+          <rect x="290" y="140" width="110" height="30" rx="6" fill="#e63946"/>
+          <text x="345" y="160" text-anchor="middle" fill="#fff" font-weight="700">X: 429 throttled</text>
+        </g>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const label = root.querySelector('.anim-step-label');
+        const cap   = root.querySelector('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const move = (id, x, y) => { const el = $('#'+id); if (el) el.setAttribute('transform', `translate(${x},${y})`); };
+
+        const CFG = {
+          intro: 'Two tenants send a request simultaneously. Watch how JWT, rate limiting, tier routing, and dedicated silos keep them isolated.',
+          interval: 1800,
+          reset: (r) => {
+            r.querySelectorAll('.a-glow, .a-dim').forEach(e => e.classList.remove('a-glow', 'a-dim'));
+            ['pkt-a','pkt-z','noisy','reject-x'].forEach(id => {
+              const el = r.querySelector('#'+id); if (el) { el.classList.add('a-hidden'); el.removeAttribute('transform'); }
+            });
+          },
+          steps: [
+            { caption: 'User A (pool) and User Z (silo) each fire a request. Both packets appear at their clients.',
+              apply: (r) => { r.querySelector('#pkt-a').classList.remove('a-hidden'); r.querySelector('#pkt-z').classList.remove('a-hidden'); } },
+            { caption: 'Each request arrives at Auth. The JWT is verified and the tenant_id + tier custom claim is extracted.',
+              apply: (r) => { move('pkt-a', 95, 0); move('pkt-z', 95, 0); r.querySelector('#pkt-a').classList.add('a-glow'); r.querySelector('#pkt-z').classList.add('a-glow'); } },
+            { caption: 'At the API gateway, per-tenant token buckets check quotas. Both tenants have tokens — both pass.',
+              apply: (r) => { move('pkt-a', 245, 0); move('pkt-z', 245, 0); } },
+            { caption: 'Meanwhile a third tenant X starts hammering. Their token bucket empties and their requests get 429 — A and Z feel nothing.',
+              apply: (r) => { r.querySelector('#noisy').classList.remove('a-hidden'); r.querySelector('#reject-x').classList.remove('a-hidden'); } },
+            { caption: 'Tenant A hits the pool service. It is stateless — tenant_id is passed in the request context.',
+              apply: (r) => { move('pkt-a', 395, 0); } },
+            { caption: 'Tenant Z is routed by tier to their dedicated silo service — a completely separate cluster.',
+              apply: (r) => { move('pkt-z', 395, 0); } },
+            { caption: 'Pool DB query for A appends WHERE tenant_id=A. Row-level policy / dynamodb:LeadingKeys enforces isolation at the storage engine.',
+              apply: (r) => { move('pkt-a', 545, 0); } },
+            { caption: 'Silo DB for Z is a physically separate cluster inside its own VPC — network policy alone guarantees isolation.',
+              apply: (r) => { move('pkt-z', 545, 0); } },
+            { caption: 'Both tenants receive their data. Neither one ever saw the other exist. The noisy tenant X never affected them.',
+              apply: (r) => { move('pkt-a', 705, 0); move('pkt-z', 705, 0); } }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; return; }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext.addEventListener('click', () => { if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; } goto(idx + 1); });
+        btnPrev.addEventListener('click', () => { if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; } goto(idx - 1); });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. Tenant identification &amp; routing</h3>
+    <p>Every request must carry a <strong>verifiable tenant identity</strong>. The industry-standard pattern (from AWS's serverless SaaS reference) is: the identity provider — Amazon Cognito, Auth0, Okta — authenticates the user and issues a <strong>JWT with <code>tenant_id</code> and <code>tier</code> as custom claims</strong>. Downstream services trust the JWT signature and read the claims from a shared library (a Lambda Layer in AWS-speak). This means the tenant context is <em>attached to the request itself</em> — you never trust a client-supplied header, and you never make a network call to look up who the user's tenant is. Every service downstream — API gateway, business services, workers, background jobs — receives the tenant context and scopes every operation to it.</p>
+
+    <h3>2. Tenant isolation is not authentication</h3>
+    <p>This is the single most-repeated point in the AWS SaaS Lens, and the point interviewers use to separate strong candidates from weak ones. <strong>An authenticated, authorized user can still cross tenant boundaries</strong> if you rely on authorization alone. AuthN answers "who are you"; AuthZ answers "what can you do"; <em>isolation</em> answers "which tenant's slice of the world can you touch". You need a separate mechanism — application-layer scoping, row-level security, dynamically minted IAM policies — that binds every resource operation to the request's tenant context. A breach of this boundary is treated as a P0 event: business-ending.</p>
+
+    <h3>3. Data isolation strategies</h3>
+    <p>Data isolation runs on a spectrum. From most-shared to most-isolated:</p>
+    <ul>
+      <li><strong>Shared table + <code>tenant_id</code> column</strong> — cheapest. Every query filters by tenant. Bug in one query = cross-tenant leak. Postgres <strong>Row-Level Security (RLS)</strong> policies push the guard into the database so even a raw query can't escape the tenant. DynamoDB uses <code>dynamodb:LeadingKeys</code> IAM conditions to achieve the same at the storage engine.</li>
+      <li><strong>Shared DB + schema-per-tenant</strong> — Postgres schemas, MySQL databases. Cleaner separation, still one DB engine, migrations run N times.</li>
+      <li><strong>Database-per-tenant (in elastic pool)</strong> — Azure SQL and RDS both support this. Isolation is at the storage engine, cost sharing is at the pool. Scales to <em>100 000+ databases</em> per Azure SQL instance.</li>
+      <li><strong>Silo — dedicated DB cluster</strong> — enterprise tier. Own VPC, own KMS key, own IAM boundary. Trivial isolation, expensive.</li>
+    </ul>
+
+    <h3>4. Sharding — the real production pattern</h3>
+    <p>Notion runs Postgres in the pooled model but hit the limits of one machine. Their solution — the pattern most large SaaS reach — is <strong>application-level sharding on <code>workspace_id</code> (their tenant key)</strong> into 480 logical shards across 32 physical databases, colocating all block data for a workspace on one shard to preserve transactional consistency <em>within</em> a tenant while avoiding cross-shard joins. This is the sweet spot between pool and silo: shared engine, but tenant data is physically grouped.</p>
+
+    <h3>5. Noisy-neighbour mitigation</h3>
+    <p>The whole reason silo exists is to eliminate noisy neighbours. In pool mode you fight it with three tools:</p>
+    <ul>
+      <li><strong>Per-tenant token buckets</strong> — Stripe's rate limiter runs 4 layers: per-user request rate, per-user concurrent-requests, fleet-wide load shedder, and a burst limiter. Keyed by tenant.</li>
+      <li><strong>Shuffle sharding</strong> — assign each tenant a random subset of workers so any two tenants overlap on ≤ 1 worker. A tenant that saturates its subset only affects a tiny fraction of others. AWS's canonical technique from the Builders' Library.</li>
+      <li><strong>Cell-based architecture</strong> — divide the fleet into fixed-size cells (say ~2 K tenants each). A cell's failure is confined to its tenants. Slack moved to this after a June 2021 AZ outage; each us-east-1 AZ is now a cell.</li>
+    </ul>
+
+    <h3>6. Blast radius &amp; cellular design</h3>
+    <p>The largest architectural upgrade a maturing SaaS makes is <strong>cellular</strong>. Instead of one global fleet where a bad deploy breaks everyone, you deploy N identical cells, each serving a bounded set of tenants. Roll out to one cell first, watch it, then the rest. A poison pill from tenant Q blows up cell 3 only; cells 1, 2, 4…N are fine.</p>
+
+    <h3>7. Cost attribution</h3>
+    <p>Silo makes cost trivial — infrastructure tags per tenant → billing report. Pool makes it hard — you have to instrument every request with the tenant tag and aggregate telemetry back. AWS's <em>Split Cost Allocation Data</em> and per-tenant CloudWatch dimensions are the standard tools; underneath, you're just tagging every metric and log line with <code>tenant_id</code>.</p>
+
+    <h3>8. Onboarding &amp; tier migration</h3>
+    <p>Onboarding in pool mode is a row in the tenants table — milliseconds. Onboarding a silo tenant is a Terraform / control-plane workflow that spins up a dedicated stack — minutes. The <em>hardest</em> operation is <strong>tier migration</strong>, e.g. pool → silo when a Standard tenant upgrades to Enterprise. You provision the silo stack, run a background copy of the tenant's data, dual-write for a window, then cut reads over and stop the pool writes. No downtime, no lost writes — this is what shipped-in-production SaaS teams get paid to do right.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+
+    <p>Multi-tenancy is not one algorithm — it's a stack of small, tenant-keyed data structures that show up everywhere.</p>
+
+    <table>
+      <tr><th>Data structure / algorithm</th><th>Where it lives</th><th>Complexity</th><th>Why</th></tr>
+      <tr><td><strong>Consistent hashing ring</strong></td><td>Router → shard mapping. <code>hash(tenant_id) % ring</code>.</td><td>O(log N) lookup</td><td>Adding a shard remaps only K/N tenants, not all of them.</td></tr>
+      <tr><td><strong>Token bucket</strong></td><td>Per-tenant rate limiter.</td><td>O(1) per request</td><td>Bursty but bounded — matches real API traffic.</td></tr>
+      <tr><td><strong>Shuffle sharding</strong></td><td>Worker pool assignment.</td><td>O(1) per tenant</td><td>Combinatorial isolation: pick S of W workers → P(overlap) ≈ C(W-S,S)/C(W,S).</td></tr>
+      <tr><td><strong>Cellular routing</strong></td><td>Tenant → cell map (in tenant registry).</td><td>O(1) lookup</td><td>Bounded blast radius; deployable in ripples.</td></tr>
+      <tr><td><strong>Bloom filter</strong></td><td>"Does tenant X even exist here?" hot-path guard.</td><td>O(k) per lookup</td><td>Skip the DB on unknown tenants — cheap negative check.</td></tr>
+      <tr><td><strong>LRU / LFU cache</strong></td><td>Tenant metadata cache (tier, quotas, shard).</td><td>O(1) get/put</td><td>Every request needs this — must be sub-millisecond.</td></tr>
+      <tr><td><strong>B-tree / composite index</strong></td><td>Pool table: <code>(tenant_id, entity_id)</code>.</td><td>O(log N) scan</td><td>Leading column = tenant_id → tenant's data physically contiguous.</td></tr>
+      <tr><td><strong>Priority queue</strong></td><td>Background jobs (billing, exports) ordered by tier.</td><td>O(log N)</td><td>Enterprise jobs don't wait behind free-tier jobs.</td></tr>
+      <tr><td><strong>Circular buffer / sketch (Count-Min)</strong></td><td>Per-tenant usage counter for billing/alerts.</td><td>O(1) update</td><td>Approximate but sub-linear in memory — 50 K tenants fits.</td></tr>
+    </table>
+
+    <p><strong>Interview-critical:</strong> the two data structures interviewers probe most are the <em>tenant → shard router</em> (consistent hashing or range map) and the <em>per-tenant rate limiter</em> (token bucket). Be able to whiteboard both in 90 seconds.</p>
+
+    <h3>Shuffle sharding — the one clever bit</h3>
+    <p>AWS's foundational multi-tenant idea. If you have W workers and give each tenant S of them at random, then two tenants overlap on all S workers with probability <code>C(S, S) / C(W, S)</code>. For W = 8, S = 2 → <code>1/28</code>. For W = 100, S = 4 → <code>1/3.9 M</code>. A single bad tenant can only take out its S workers, and every other tenant still has W − S good ones. It's isolation without dedicated hardware — the math does the walling off.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+
+    <p>AWS publishes a canonical serverless SaaS reference (2021, still cited). Below is that reference distilled and generalized to non-serverless deployments.</p>
+
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Identity + JWT</td><td><strong>Amazon Cognito</strong></td><td>Emits <code>tenant_id</code> and <code>tier</code> as JWT custom claims. Multi-user-pool option for silo tenants.</td></tr>
+      <tr><td>Edge + rate limiting</td><td><strong>API Gateway + WAF</strong></td><td>Per-key rate limits and usage plans map onto per-tenant. WAF for L7 filtering.</td></tr>
+      <tr><td>Authorizer</td><td><strong>Lambda authorizer</strong> (shared Lambda Layer)</td><td>Extracts JWT claims, injects tenant context, mints scoped STS credentials for the request.</td></tr>
+      <tr><td>Pool compute</td><td><strong>Lambda</strong> or <strong>ECS/EKS</strong></td><td>Stateless services scaled by aggregate load; tenant_id in the request.</td></tr>
+      <tr><td>Silo compute (enterprise)</td><td><strong>Dedicated ECS/EKS cluster in tenant VPC</strong></td><td>Full network + IAM boundary. Own KMS key per tenant.</td></tr>
+      <tr><td>Pool data</td><td><strong>DynamoDB</strong> shared table, <code>PK = tenant_id</code></td><td><code>dynamodb:LeadingKeys</code> IAM condition enforces item-level isolation at the storage engine.</td></tr>
+      <tr><td>Pool relational data</td><td><strong>Aurora / RDS Postgres</strong> with Row-Level Security</td><td>RLS policy scopes every row to <code>current_setting('app.tenant_id')</code>.</td></tr>
+      <tr><td>Silo data</td><td><strong>Dedicated RDS / Aurora cluster per tenant</strong></td><td>One DB per enterprise tenant, own KMS key, own VPC subnet group.</td></tr>
+      <tr><td>Object storage</td><td><strong>S3</strong> with prefix-per-tenant + bucket policy</td><td><code>s3:prefix</code> IAM condition scopes list/get/put per tenant.</td></tr>
+      <tr><td>Async / eventing</td><td><strong>SQS + EventBridge + Kinesis / MSK</strong></td><td>Every message tagged with <code>tenant_id</code>; consumers preserve isolation downstream.</td></tr>
+      <tr><td>Cache</td><td><strong>ElastiCache Redis</strong> with tenant-prefixed keys</td><td><code>tenant_id:entity:id</code>. Multi-shard for hot tenants.</td></tr>
+      <tr><td>Cost attribution</td><td><strong>CloudWatch dimensions + Cost Allocation Tags + Split Cost Allocation Data</strong></td><td>Silo → tag resources by tenant. Pool → tag every metric/log emission.</td></tr>
+      <tr><td>Observability</td><td><strong>CloudWatch Logs + X-Ray</strong> with tenant dimension</td><td>Every log/trace carries <code>tenant_id</code>. Dashboards per tenant.</td></tr>
+      <tr><td>Tenant control plane</td><td><strong>Step Functions + Terraform / CDK</strong></td><td>Silo tenant onboarding = state-machine driving IaC apply. Pool onboarding = one DynamoDB Put.</td></tr>
+    </table>
+
+    <h3>AWS reference flow, in one paragraph</h3>
+    <p>Client hits API Gateway. A Lambda authorizer verifies the Cognito-issued JWT, pulls <code>tenant_id</code> and <code>tier</code> out of custom claims, and generates a short-lived STS credential scoped by a dynamically constructed IAM policy that uses <code>dynamodb:LeadingKeys = tenant_id</code>. That credential is handed to the Lambda business logic, which reads from a shared DynamoDB table where the partition key <em>is</em> the tenant id. If the same JWT had a <code>tier=Platinum</code> claim, the authorizer would route to a dedicated Lambda + DynamoDB + Cognito pool that lives in a tenant-specific VPC and is invisible to pool tenants. Async writes fan out through EventBridge with the tenant tag; downstream workers scope everything to that tag.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+
+    <p>Three of the most-asked reference snippets: (1) middleware that extracts the tenant from a JWT and puts it in the request context, (2) per-tenant token-bucket rate limiter backed by Redis, and (3) tenant-scoped repository using EF Core global query filters. Together they cover the request→service→DB path.</p>
+
+    <h3>1. Tenant context middleware — extract from JWT, fail-closed</h3>
+    <pre><span class="cmt">// ASP.NET Core middleware. Runs on every request. Extracts tenant_id + tier
+// from a verified JWT and stashes it in a scoped ITenantContext. Downstream
+// code is REQUIRED to use ITenantContext — never a client header.</span>
+
+<span class="kw">public sealed class</span> <span class="typ">TenantContext</span> : <span class="typ">ITenantContext</span>
+{
+    <span class="kw">public string</span> <span class="typ">TenantId</span> { <span class="kw">get</span>; <span class="kw">init</span>; } = <span class="str">""</span>;
+    <span class="kw">public string</span> <span class="typ">Tier</span>     { <span class="kw">get</span>; <span class="kw">init</span>; } = <span class="str">"pool"</span>;   <span class="cmt">// pool | silo</span>
+}
+
+<span class="kw">public sealed class</span> <span class="typ">TenantContextMiddleware</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">RequestDelegate</span> _next;
+    <span class="kw">public</span> <span class="fn">TenantContextMiddleware</span>(<span class="typ">RequestDelegate</span> next) => _next = next;
+
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">Invoke</span>(<span class="typ">HttpContext</span> ctx, <span class="typ">ITenantContextAccessor</span> acc)
+    {
+        <span class="cmt">// The JWT is already validated by [Authorize] earlier in the pipeline.
+        // We just pull the trusted claims. If any are missing, 401 — fail closed.</span>
+        <span class="kw">var</span> user = ctx.User;
+        <span class="kw">var</span> tenant = user.FindFirst(<span class="str">"tenant_id"</span>)?.Value;
+        <span class="kw">var</span> tier   = user.FindFirst(<span class="str">"tier"</span>)?.Value ?? <span class="str">"pool"</span>;
+
+        <span class="kw">if</span> (<span class="fn">string.IsNullOrEmpty</span>(tenant))
+        {
+            ctx.Response.StatusCode = <span class="typ">StatusCodes</span>.Status401Unauthorized;
+            <span class="kw">await</span> ctx.Response.<span class="fn">WriteAsync</span>(<span class="str">"missing tenant claim"</span>);
+            <span class="kw">return</span>;
+        }
+
+        acc.Current = <span class="kw">new</span> <span class="typ">TenantContext</span> { TenantId = tenant, Tier = tier };
+
+        <span class="cmt">// Tag every log line for this request so observability aggregates by tenant.</span>
+        <span class="kw">using</span> (<span class="typ">LogContext</span>.<span class="fn">PushProperty</span>(<span class="str">"tenant_id"</span>, tenant))
+        <span class="kw">using</span> (<span class="typ">LogContext</span>.<span class="fn">PushProperty</span>(<span class="str">"tier"</span>, tier))
+        {
+            <span class="kw">await</span> _next(ctx);
+        }
+    }
+}
+</pre>
+
+    <h3>2. Per-tenant token-bucket rate limiter (Redis-backed)</h3>
+    <pre><span class="cmt">// Atomic Lua script: refill bucket at rate r, take 1 token, return 0 if empty.
+// Runs in Redis under one RTT — safe under contention across service replicas.</span>
+
+<span class="kw">public sealed class</span> <span class="typ">TenantRateLimiter</span>
+{
+    <span class="kw">private const string</span> LUA = @<span class="str">"
+        local key      = KEYS[1]
+        local rate     = tonumber(ARGV[1])       -- tokens/sec
+        local capacity = tonumber(ARGV[2])
+        local now      = tonumber(ARGV[3])       -- ms
+
+        local b   = redis.call('HMGET', key, 'tok', 'ts')
+        local tok = tonumber(b[1]) or capacity
+        local ts  = tonumber(b[2]) or now
+
+        local delta = math.max(0, now - ts)
+        tok = math.min(capacity, tok + (delta * rate / 1000.0))
+
+        local allowed = 0
+        if tok >= 1 then tok = tok - 1; allowed = 1 end
+
+        redis.call('HMSET', key, 'tok', tok, 'ts', now)
+        redis.call('PEXPIRE', key, 60000)
+        return allowed
+    "</span>;
+
+    <span class="kw">private readonly</span> <span class="typ">IDatabase</span> _redis;
+    <span class="kw">public</span> <span class="fn">TenantRateLimiter</span>(<span class="typ">IConnectionMultiplexer</span> mux) => _redis = mux.<span class="fn">GetDatabase</span>();
+
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="kw">bool</span>&gt; <span class="fn">TryAcquireAsync</span>(<span class="kw">string</span> tenantId, <span class="kw">int</span> ratePerSec, <span class="kw">int</span> capacity)
+    {
+        <span class="kw">var</span> key = <span class="str">$"rl:{tenantId}"</span>;
+        <span class="kw">var</span> now = <span class="typ">DateTimeOffset</span>.UtcNow.ToUnixTimeMilliseconds();
+        <span class="kw">var</span> res = (<span class="kw">int</span>)(<span class="kw">long</span>)<span class="kw">await</span> _redis.<span class="fn">ScriptEvaluateAsync</span>(
+            LUA, <span class="kw">new</span>[] { (<span class="typ">RedisKey</span>)key },
+            <span class="kw">new</span> <span class="typ">RedisValue</span>[] { ratePerSec, capacity, now });
+        <span class="kw">return</span> res == 1;
+    }
+}
+</pre>
+
+    <h3>3. EF Core global query filter — tenant-scoped repository</h3>
+    <pre><span class="cmt">// Every entity carries a TenantId. The global query filter appends
+// `WHERE TenantId = @current` to EVERY query — so a forgotten filter
+// in a repo can't leak. Belt AND suspenders: DB-side RLS on top for depth.</span>
+
+<span class="kw">public class</span> <span class="typ">AppDb</span> : <span class="typ">DbContext</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">ITenantContextAccessor</span> _tenant;
+    <span class="kw">public</span> <span class="fn">AppDb</span>(<span class="typ">DbContextOptions</span>&lt;<span class="typ">AppDb</span>&gt; o, <span class="typ">ITenantContextAccessor</span> t) : <span class="kw">base</span>(o)
+        => _tenant = t;
+
+    <span class="kw">public</span> <span class="typ">DbSet</span>&lt;<span class="typ">Invoice</span>&gt; Invoices =&gt; <span class="fn">Set</span>&lt;<span class="typ">Invoice</span>&gt;();
+
+    <span class="kw">protected override void</span> <span class="fn">OnModelCreating</span>(<span class="typ">ModelBuilder</span> mb)
+    {
+        mb.Entity&lt;<span class="typ">Invoice</span>&gt;().<span class="fn">HasQueryFilter</span>(i =&gt; i.TenantId == _tenant.Current!.TenantId);
+    }
+
+    <span class="cmt">// Also stamp TenantId on inserts — never trust the caller.</span>
+    <span class="kw">public override</span> <span class="typ">Task</span>&lt;<span class="kw">int</span>&gt; <span class="fn">SaveChangesAsync</span>(<span class="typ">CancellationToken</span> ct = <span class="kw">default</span>)
+    {
+        <span class="kw">var</span> tid = _tenant.Current!.TenantId;
+        <span class="kw">foreach</span> (<span class="kw">var</span> e <span class="kw">in</span> ChangeTracker.<span class="fn">Entries</span>&lt;<span class="typ">Invoice</span>&gt;())
+            <span class="kw">if</span> (e.State == <span class="typ">EntityState</span>.Added) e.Entity.TenantId = tid;
+        <span class="kw">return base</span>.<span class="fn">SaveChangesAsync</span>(ct);
+    }
+}
+</pre>
+
+    <p><strong>Note on "belt and suspenders":</strong> the EF query filter is application-side. It's convenient but a bad LINQ query using <code>IgnoreQueryFilters()</code> can bypass it. In production, pair it with a <em>database-side</em> guarantee — Postgres RLS or DynamoDB <code>LeadingKeys</code>. Two independent walls. Interviewers love this answer.</p>
+
+    <h3>Other-language notes</h3>
+    <p>Same shapes in other stacks: <strong>Spring / Java</strong> — Hibernate <code>@FilterDef</code> + <code>@Filter</code>; <strong>Django</strong> — a tenant-scoped model manager; <strong>Node / Prisma</strong> — a middleware that injects <code>where: { tenantId }</code> before every query. Redis Lua for the rate limiter is language-agnostic and is what Stripe, GitHub, and Cloudflare all publicly describe.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>The one tradeoff that rules them all</h3>
+    <p><strong>Isolation strength vs economies of scale.</strong> Every other decision — noisy neighbours, cost attribution, blast radius, onboarding cost — falls out of this. Silo maximises isolation and sacrifices scale economics; pool maximises economics and sacrifices isolation guarantees; bridge picks per microservice.</p>
+
+    <h3>Common bottlenecks</h3>
+    <ul>
+      <li><strong>Hot tenant</strong> — one tenant is 50× the traffic of the median. In pool mode they'll saturate whatever shard they're on. Cure: shuffle-shard them, or graduate them to silo.</li>
+      <li><strong>Pool DB write hotspot</strong> — pool tables with <code>tenant_id</code> as the leading key are fine for reads but a hot tenant creates a hot partition. Cure: composite key (<code>tenant_id + hash-suffix</code>) or move to database-per-tenant.</li>
+      <li><strong>Silo account limits</strong> — AWS has quota ceilings on VPCs, IAM roles, RDS instances per account. Hit them at ~1 K silo tenants. Cure: multi-account (AWS Organizations), one account per ~500 silo tenants.</li>
+      <li><strong>Cross-tenant analytics</strong> — the CFO wants "total signups this quarter across all tenants". Pool table is easy; silo means fanning out queries to N tenant DBs. Cure: ETL every tenant into a shared analytics warehouse (with tenant tag), never query silos live for cross-tenant analytics.</li>
+    </ul>
+
+    <h3>Failure modes to name unprompted</h3>
+    <ul>
+      <li><strong>Leak via a forgotten <code>WHERE tenant_id = ?</code></strong> — the classic P0. Answer: RLS at the DB, plus code-review checklist, plus contract tests.</li>
+      <li><strong>Bad deploy blows up all tenants at once</strong> — cellular deploy + canary cell.</li>
+      <li><strong>Poison message from tenant Q clogs the queue for everyone</strong> — per-tenant DLQ, tenant-aware retry policy.</li>
+      <li><strong>Enterprise tenant's silo DB is slow → looks like the whole product is slow to their execs</strong> — silo P99 SLO is per-tenant, not fleet-wide.</li>
+    </ul>
+
+    <h3>Likely interviewer follow-ups (with 30-second answers)</h3>
+
+    <div class="qa">
+      <p class="q">"What if a pool tenant grows so big they need to become a silo tenant — how do you migrate them without downtime?"</p>
+      <p class="a">Provision the silo stack. Snapshot + streaming replicate the tenant's data into it. Enter a dual-write window where writes go to both. Cut reads over to silo, verify parity. Stop writes to pool, delete pool data. Feature-flag the whole thing so you can roll back at any step.</p>
+    </div>
+    <div class="qa">
+      <p class="q">"How do you rate-limit tenants fairly when quiet tenants can't predict what noisy ones will do?"</p>
+      <p class="a">Per-tenant token buckets sized to their tier, plus a fleet-wide load shedder that kicks in when aggregate load threatens SLO. Weighted fair queueing between tiers. That's Stripe's public model.</p>
+    </div>
+    <div class="qa">
+      <p class="q">"How do you enforce isolation if a bug in your ORM lets a query drop the tenant filter?"</p>
+      <p class="a">Never rely on the ORM alone. Two independent walls: application-side (query filter / repository middleware) and database-side (Postgres RLS or DynamoDB LeadingKeys). A single bug breaks one wall, not both.</p>
+    </div>
+    <div class="qa">
+      <p class="q">"How do you know what each tenant costs?"</p>
+      <p class="a">Silo: tag every resource with <code>tenant_id</code>, use AWS Cost Allocation Tags and Split Cost Allocation Data. Pool: instrument requests with a cost proxy (DB rows read, S3 bytes stored, Lambda ms) tagged per tenant, roll up nightly. It's an approximation, but it's defensible.</p>
+    </div>
+    <div class="qa">
+      <p class="q">"What's your blast-radius story?"</p>
+      <p class="a">Cellular. Fixed-size cells, deployable independently, tenants pinned to cells. A blast is confined to one cell of ~2 K tenants — that's how Slack survives AZ failures.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "Multi-tenancy is a spectrum from silo (dedicated per tenant) to pool (shared with tenant_id keys), with bridge as the practical mix. Tenant isolation is separate from authN/authZ — the JWT carries tenant_id + tier as custom claims, every service scopes to it, and I use two independent walls: application-side query filters plus a database-side guarantee like Postgres RLS or DynamoDB LeadingKeys. Small tenants share a pooled Aurora + DynamoDB, enterprise tenants get siloed stacks. I contain blast radius with cellular deploys, contain noisy neighbours with per-tenant token buckets and shuffle sharding, and attribute cost via CloudWatch tenant dimensions."</p>
+
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Azure SQL DB-per-tenant scales to <strong>100 000+ databases per instance</strong>.</li>
+      <li>Notion runs Postgres in <strong>480 logical shards over 32 physical DBs</strong>, sharded by workspace_id.</li>
+      <li>Slack cellularized after the <strong>June 30 2021 AZ outage</strong>; each us-east-1 AZ is a cell.</li>
+      <li>Stripe runs <strong>4 rate limiters</strong>: per-user request, per-user concurrent, fleet load-shedder, burst.</li>
+      <li>Shuffle sharding: W=100, S=4 → P(two tenants share all workers) ≈ <strong>1 in 3.9 M</strong>.</li>
+    </ul>
+
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li>"Isolation is a spectrum, not a binary — I decide per tier and per component."</li>
+      <li>"Tenant isolation ≠ AuthN/AuthZ. An authenticated user can still cross tenants."</li>
+      <li>"Two independent walls: app-side query filter + DB-side RLS / LeadingKeys."</li>
+      <li>"Blast radius contained via cellular architecture; noisy neighbours via shuffle sharding + per-tenant token buckets."</li>
+      <li>"Cost is easy in silo, requires per-request telemetry in pool — I'd tag every log, metric, and message with tenant_id from day 1."</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://learn.microsoft.com/en-us/azure/azure-sql/database/saas-tenancy-app-design-patterns">Microsoft Learn — Multitenant SaaS Patterns (Azure SQL Database)</a> — the three-pattern taxonomy and scale numbers (100 K+ DBs per instance).</li>
+      <li><a href="https://learn.microsoft.com/en-us/azure/architecture/guide/multitenant/considerations/tenancy-models">Microsoft Azure Architecture Center — Tenancy Models</a> — isolation as a spectrum, per-tier mixing.</li>
+      <li><a href="https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/silo-pool-and-bridge-models.html">AWS Well-Architected SaaS Lens — Silo, Pool, Bridge Models</a> — canonical definitions.</li>
+      <li><a href="https://docs.aws.amazon.com/whitepapers/latest/saas-tenant-isolation-strategies/saas-tenant-isolation-strategies.html">AWS Whitepaper — SaaS Tenant Isolation Strategies</a> — pros/cons of silo and pool.</li>
+      <li><a href="https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/tenant-isolation.html">AWS SaaS Lens — Tenant Isolation</a> — isolation vs authN/authZ.</li>
+      <li><a href="https://aws.amazon.com/blogs/apn/building-a-multi-tenant-saas-solution-using-aws-serverless-services/">AWS APN Blog — Multi-Tenant SaaS on Serverless (Cognito + Lambda authorizer + dynamodb:LeadingKeys)</a>.</li>
+      <li><a href="https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/">AWS Builders' Library — Workload Isolation Using Shuffle Sharding</a>.</li>
+      <li><a href="https://docs.aws.amazon.com/wellarchitected/latest/reducing-scope-of-impact-with-cell-based-architecture/reducing-scope-of-impact-with-cell-based-architecture.html">AWS — Reducing Scope of Impact with Cell-Based Architecture</a>.</li>
+      <li><a href="https://www.notion.com/blog/sharding-postgres-at-notion">Notion Engineering — Sharding Postgres at Notion (480 shards / 32 DBs)</a>.</li>
+      <li><a href="https://slack.engineering/slacks-migration-to-a-cellular-architecture/">Slack Engineering — Migration to a Cellular Architecture</a>.</li>
+      <li><a href="https://slack.engineering/unified-grid-how-we-re-architected-slack-for-our-largest-customers/">Slack Engineering — Unified Grid (enterprise customers)</a>.</li>
+      <li><a href="https://stripe.com/blog/rate-limiters">Stripe — Scaling Your API with Rate Limiters</a>.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search + verified deep-research pass · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

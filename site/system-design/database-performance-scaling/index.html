@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scaling the Database Layer for High Concurrency — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #ffd166;
+    --laymen-bg: #fffbe6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 50%, #2dc653 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);  background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: #c99500; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  h4 { margin: 16px 0 6px; font-size: 1rem; color: var(--arch); }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+  .ladder { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 18px 0; }
+  .rung { background: var(--card); border: 1px solid var(--line); border-left: 6px solid var(--arch); border-radius: 10px; padding: 14px 18px; }
+  .rung .n { display: inline-block; background: var(--arch); color: #fff; font-weight: 800; font-size: .78rem; padding: 3px 10px; border-radius: 999px; margin-right: 8px; }
+  .rung .title { font-weight: 700; font-size: 1.05rem; margin-bottom: 4px; }
+  .rung .buys { color: var(--accent); font-weight: 700; font-size: .85rem; }
+  .rung .breaks { color: var(--scenario); font-weight: 700; font-size: .85rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Architecture Patterns</div>
+    <h1>Scaling the Database Layer for High Concurrency</h1>
+    <p>The complete ladder of architectural moves — from a single Postgres instance to a globally-sharded, multi-cache, CQRS + event-sourced stack — and when to pull each lever.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Signals</a>
+    <a href="#ladder">🪜 Ladder</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 Code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>The problem: your app grew, your database didn't</h2>
+    <p>Every internet-scale product you've ever used — Amazon, Instagram, Uber, LinkedIn, Netflix, Shopify — began life on a <strong>single Postgres or MySQL box</strong>. That single box is one of the fastest, most productive pieces of infrastructure ever built: transactional, consistent, expressive, well-understood. And that same single box is the number-one cause of "why is the site down" during any traffic spike. The database is <em>always</em> the bottleneck, and the whole point of "system design" is knowing which lever to pull, in which order, when your user count grows from 10k → 100k → 1M → 100M.</p>
+    <p>This page is the interview-grade playbook: <strong>the eleven architectural moves</strong> that engineering teams reach for, in the order they reach for them, with real numbers and specific trade-offs. It's the answer to the question interviewers love: "your database is the bottleneck — walk me through everything you would try". A junior says "add a cache". A mid-level engineer says "read replica and sharding". An architect walks all eleven rungs, names the failure mode of each, and states clearly which one <em>they</em> would try next given the specifics of the workload.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In plain English</span>
+    <h2>The story, told without any jargon</h2>
+    <p>Imagine you run <strong>a small library</strong>. One librarian sits behind the desk, answering questions and stamping books. Five people a day walk in — it's fine. One librarian handles it easily.</p>
+    <p>Business booms. Fifty people a day. The librarian's line gets long. What do you do? First move: <strong>hire an intern</strong> — someone who <em>only</em> answers "where is book X?" and doesn't need to touch the stamp. That's a <em>cache</em> — most people are asking the same thing over and over, and the intern remembers the popular answers. It takes 80% of the traffic off the head librarian.</p>
+    <p>Still growing. 500 visitors. Now you notice: <strong>most people just <em>read</em> — they don't check anything out</strong>. So you photocopy the popular books and put them on a self-service shelf outside. That's a <em>read replica</em> — a second copy of the library that only handles reads. Writes still go through the head librarian.</p>
+    <p>5,000 visitors. The library building itself is packed. You split into <strong>five smaller libraries in different neighbourhoods</strong>, and each one holds only certain letters of the alphabet: A–E in one, F–J in another, and so on. Now a visitor asking about "Zoology" goes straight to the Z branch — no bumping into the Astronomy crowd. That's <em>sharding</em>.</p>
+    <p>500,000 visitors. Your quiet requests ("give me a report of everything checked out this year") slow down the busy librarian. Solution: <strong>make a nightly summary book</strong> that answers those questions from a snapshot. That's a <em>materialized view</em> or a separate <em>reporting/analytics warehouse</em>.</p>
+    <p>Eventually, the librarian is doing so much stamping that even the writes are the bottleneck. So you switch to a totally different model: <strong>everyone shouts out their loans and returns into a "log book", and a team of clerks catches up in the background</strong>. That's <em>event sourcing + CQRS</em>. The library is now a stream of events, and any question about state is answered by playing the log forward.</p>
+    <p>That's the whole scaling ladder in five paragraphs. Every real-world database scale-up follows this exact shape: cache the hot stuff, split reads from writes, split the data itself, split reads from writes <em>logically</em> (CQRS), and finally treat the truth as a stream. You already understand it — the rest of this page just gives you the vocabulary and the numbers.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Signals</span>
+    <h2>How to spot which rung you're actually on</h2>
+    <p>Before pulling any lever, an architect diagnoses. The interviewer expects you to <em>read the metrics first</em>. Here is the mapping from <em>symptom</em> to <em>rung</em>:</p>
+    <table>
+      <thead><tr><th>Symptom</th><th>What it means</th><th>Rung to try</th></tr></thead>
+      <tbody>
+        <tr><td>CPU 90%+, IOPS saturated</td><td>Instance is undersized for its workload</td><td>1. Vertical scaling</td></tr>
+        <tr><td>Same query runs slow on same rows</td><td>Missing/wrong index; full-table scans</td><td>2. Indexing &amp; query tuning</td></tr>
+        <tr><td>"Too many connections" errors, Lambda cold storm</td><td>Connection pool exhausted at DB</td><td>3. Connection pooling / RDS Proxy</td></tr>
+        <tr><td>80% of queries are reads, all the same</td><td>Hot reads dominate</td><td>4. Caching (Redis / Memcached)</td></tr>
+        <tr><td>Reads &gt;&gt; writes; analytics queries slow the OLTP path</td><td>Read amplification</td><td>5. Read replicas</td></tr>
+        <tr><td>Query pattern is always <code>WHERE date &gt;= X</code></td><td>Table too large; hot slice</td><td>6. Partitioning</td></tr>
+        <tr><td>Single-instance write throughput ceiling reached</td><td>Writes saturate one box</td><td>7. Sharding</td></tr>
+        <tr><td>Reports/dashboards on live OLTP tables kill P99</td><td>Wrong storage for query pattern</td><td>8. Materialized views + OLAP replica</td></tr>
+        <tr><td>Write path and read path have very different scale/latency needs</td><td>Coupled models fight each other</td><td>9. CQRS</td></tr>
+        <tr><td>Need audit trail, time-travel, cross-service consistency</td><td>State-as-of-now isn't enough</td><td>10. Event sourcing</td></tr>
+        <tr><td>Relational model is fighting the access pattern (key-value, timeseries, graph)</td><td>Wrong storage engine</td><td>11. Polyglot persistence / NoSQL</td></tr>
+      </tbody>
+    </table>
+    <p><strong>The golden rule:</strong> never jump rungs. Sharding a system that never had caching is almost always premature; CQRS on a codebase that hasn't tried materialized views is over-engineering. Pull the cheapest lever that solves the actual bottleneck first, measure, and only then move up.</p>
+  </section>
+
+  <section id="ladder" class="card">
+    <h2>🪜 The 11-rung scaling ladder</h2>
+    <p>Read top-to-bottom in the order you'd apply them. Each rung <em>buys</em> a specific capability and <em>breaks</em> in a specific way that motivates the next rung.</p>
+
+    <div class="ladder">
+      <div class="rung"><span class="n">1</span><span class="title">Vertical scaling (bigger box)</span>
+        <p>Move from <code>db.t3.medium</code> to <code>db.r6i.24xlarge</code>. More CPU, more RAM, more IOPS. Zero code change. Storage resizes without downtime; instance resize takes seconds on Multi-AZ (standby upgraded, then failover). This is <em>always</em> the first move — it's cheap and works.</p>
+        <p class="buys">Buys: 5–20× headroom, hours of work.</p>
+        <p class="breaks">Breaks when: single-box limits hit (~64 vCPU, ~500k IOPS). Cost curves quadratic.</p>
+      </div>
+      <div class="rung"><span class="n">2</span><span class="title">Indexing &amp; query tuning</span>
+        <p>Add B-tree/hash indexes on <code>WHERE</code> and <code>JOIN</code> columns; drop unused indexes (they slow writes); rewrite N+1 queries into batch <code>IN (…)</code> or joins; add <code>EXPLAIN ANALYZE</code> to CI. This move regularly delivers 100× speed-ups on production hot paths.</p>
+        <p class="buys">Buys: 10–1000× on the tuned queries.</p>
+        <p class="breaks">Breaks when: every query is already an index seek, and there's still too much load.</p>
+      </div>
+      <div class="rung"><span class="n">3</span><span class="title">Connection pooling / DB proxy</span>
+        <p>Postgres opens a full process per connection (~10 MB each); MySQL a thread. 10k Lambda invocations = 10k connections = OOM. Put <strong>PgBouncer</strong>, <strong>ProxySQL</strong>, or <strong>AWS RDS Proxy</strong> in front — they multiplex "hundreds of thousands of connections" over a small pool of real DB connections. Zero code change.</p>
+        <p class="buys">Buys: 10–100× more concurrent clients without touching schema.</p>
+        <p class="breaks">Breaks when: even the pooled queries are too slow. Session state (temp tables, prepared statements) can be tricky.</p>
+      </div>
+      <div class="rung"><span class="n">4</span><span class="title">Caching (Redis / Memcached / DAX)</span>
+        <p>Put an in-memory cache in front of the DB. Patterns: <em>cache-aside</em> (app reads cache, falls back to DB, writes cache on miss), <em>write-through</em> (writes go through cache), <em>write-behind</em> (writes queued to DB async), <em>read-through</em> (cache library owns the miss path). 90%+ hit ratios are typical for read-heavy workloads.</p>
+        <p class="buys">Buys: 10× read throughput at 10× lower latency for hot keys.</p>
+        <p class="breaks">Breaks when: cache invalidation goes wrong. "There are only two hard things in computer science…"</p>
+      </div>
+      <div class="rung"><span class="n">5</span><span class="title">Read replicas (leader–follower)</span>
+        <p>Async replication from primary → N followers. App routes reads to followers, writes to primary. Followers can be 100 ms–seconds behind (<strong>replication lag</strong>). Great for reports/dashboards; dangerous for read-your-writes without care.</p>
+        <p class="buys">Buys: near-linear read scale (add follower = add read capacity).</p>
+        <p class="breaks">Breaks when: writes saturate the primary; lag violates freshness SLAs.</p>
+      </div>
+      <div class="rung"><span class="n">6</span><span class="title">Partitioning (single-DB, split-table)</span>
+        <p>Split a huge table into partitions by <em>range</em> (e.g. by month), <em>list</em>, or <em>hash</em>. The query planner prunes irrelevant partitions. Still one DB, still one primary. Cheap to operate; huge speed-up on time-bounded queries.</p>
+        <p class="buys">Buys: 10–100× on partition-pruned queries; faster maintenance (drop old partitions).</p>
+        <p class="breaks">Breaks when: even the largest partition is too hot; every partition writes hit the same box.</p>
+      </div>
+      <div class="rung"><span class="n">7</span><span class="title">Sharding (multi-DB, split-data)</span>
+        <p>Split the entire dataset across <em>N independent</em> databases keyed by a <strong>shard key</strong> (user_id, tenant_id, geo). Every write goes to exactly one shard. Cross-shard joins are painful — pick a key that keeps 95%+ of queries single-shard. Consistent hashing keeps re-shards manageable.</p>
+        <p class="buys">Buys: linear write scale; no single-box ceiling.</p>
+        <p class="breaks">Breaks when: shard key was picked wrong; hot shard; cross-shard transactions.</p>
+      </div>
+      <div class="rung"><span class="n">8</span><span class="title">Materialized views &amp; OLAP replica</span>
+        <p>Precompute expensive aggregates into a <em>materialized view</em> (Postgres native, or a summary table refreshed by cron). For truly analytical workloads, replicate to a column-store OLAP system (<strong>Redshift</strong>, <strong>Snowflake</strong>, <strong>BigQuery</strong>) so heavy reports never touch OLTP.</p>
+        <p class="buys">Buys: reports run in ms instead of minutes; OLTP path is protected.</p>
+        <p class="breaks">Breaks when: freshness of the materialized view is not enough; refresh cost exceeds savings.</p>
+      </div>
+      <div class="rung"><span class="n">9</span><span class="title">CQRS — split read model from write model</span>
+        <p><strong>Command Query Responsibility Segregation</strong>: the write side and the read side are <em>separate</em> models, often separate storage engines. Writes go to a normalized OLTP store; reads served from denormalized projections (Redis, Elasticsearch, DynamoDB, a read-optimized SQL view) built from a change-stream. Massively different scale/latency profiles handled independently.</p>
+        <p class="buys">Buys: reads and writes scale independently; read side can be denormalized freely.</p>
+        <p class="breaks">Breaks when: eventual-consistency window is too big for users; two models drift.</p>
+      </div>
+      <div class="rung"><span class="n">10</span><span class="title">Event sourcing</span>
+        <p>Instead of storing current state, store the <strong>append-only log of every event</strong>. Current state is a projection. This scales writes trivially (append-only), gives free audit history, enables time-travel, and is the natural pair to CQRS. Kafka / Kinesis as the log, projectors build materialized reads.</p>
+        <p class="buys">Buys: write-only OLTP; audit for free; multiple read models from one log.</p>
+        <p class="breaks">Breaks when: schema evolution of events is hard; eventual consistency on projections; complexity.</p>
+      </div>
+      <div class="rung"><span class="n">11</span><span class="title">Polyglot persistence &amp; NoSQL migration</span>
+        <p>The final rung: <strong>the wrong storage engine</strong>. Key-value workloads should be on DynamoDB or Redis, not Postgres. Timeseries on Timescale, ClickHouse, or InfluxDB. Full-text on Elasticsearch/OpenSearch. Graphs on Neptune. Documents on MongoDB. Real systems use 3–5 stores together, each fit-for-purpose. This unlocks horizontal scale that a general-purpose RDBMS never will.</p>
+        <p class="buys">Buys: right tool for the job — often 10–100× on the mismatched workloads.</p>
+        <p class="breaks">Breaks when: operational surface area explodes; cross-store consistency is hard.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ Reference architecture</span>
+    <h2>What a mature, high-concurrency database layer looks like</h2>
+    <p>After you've climbed the ladder, the shape below is what a serious production system looks like: a proxy, an in-memory cache, a sharded write layer, replicas for reads, an OLAP mirror, and a change stream feeding projections.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 940 560" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="arG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/>
+          </marker>
+          <marker id="arR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/>
+          </marker>
+        </defs>
+
+        <!-- App tier -->
+        <rect x="30" y="30" width="880" height="60" rx="10" fill="#1a2340" stroke="#2a3652"/>
+        <text x="470" y="55" text-anchor="middle" fill="#7fa2ff" font-weight="700" font-size="14">Application tier — N stateless services (Kubernetes / ECS / Lambda)</text>
+        <text x="470" y="75" text-anchor="middle" fill="#c6d0e0" font-size="11">Reads/Writes routed by data access layer</text>
+
+        <!-- Proxy -->
+        <rect x="30" y="110" width="880" height="46" rx="10" fill="#2a3652" stroke="#00b4d8"/>
+        <text x="470" y="138" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">Connection pool / DB proxy (PgBouncer · RDS Proxy · ProxySQL)</text>
+
+        <!-- Cache line -->
+        <rect x="30" y="176" width="280" height="60" rx="10" fill="url(#gCache)" fill="#ff9900" opacity=".9"/>
+        <text x="170" y="200" text-anchor="middle" fill="#0f1420" font-weight="800" font-size="13">Redis / Memcached / DAX</text>
+        <text x="170" y="220" text-anchor="middle" fill="#0f1420" font-size="10">cache-aside · write-through · TTL</text>
+
+        <!-- Primary shards -->
+        <text x="470" y="196" text-anchor="middle" fill="#7fa2ff" font-size="11" font-weight="700">Sharded primary write layer</text>
+        <rect x="340" y="210" width="130" height="70" rx="10" fill="#4361ee" stroke="#4361ee"/>
+        <text x="405" y="235" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Shard 1</text>
+        <text x="405" y="253" text-anchor="middle" fill="#fff" font-size="10">users A–H</text>
+        <rect x="480" y="210" width="130" height="70" rx="10" fill="#4361ee" stroke="#4361ee"/>
+        <text x="545" y="235" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Shard 2</text>
+        <text x="545" y="253" text-anchor="middle" fill="#fff" font-size="10">users I–P</text>
+        <rect x="620" y="210" width="130" height="70" rx="10" fill="#4361ee" stroke="#4361ee"/>
+        <text x="685" y="235" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Shard 3</text>
+        <text x="685" y="253" text-anchor="middle" fill="#fff" font-size="10">users Q–Z</text>
+
+        <!-- Read replicas -->
+        <text x="470" y="308" text-anchor="middle" fill="#7fa2ff" font-size="11" font-weight="700">Async read replicas (per-shard)</text>
+        <rect x="340" y="320" width="130" height="60" rx="10" fill="#2a3652" stroke="#2dc653"/>
+        <text x="405" y="345" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Replica 1a · 1b</text>
+        <text x="405" y="362" text-anchor="middle" fill="#c6d0e0" font-size="10">read-only, ~100 ms lag</text>
+        <rect x="480" y="320" width="130" height="60" rx="10" fill="#2a3652" stroke="#2dc653"/>
+        <text x="545" y="345" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Replica 2a · 2b</text>
+        <rect x="620" y="320" width="130" height="60" rx="10" fill="#2a3652" stroke="#2dc653"/>
+        <text x="685" y="345" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">Replica 3a · 3b</text>
+
+        <!-- Change data capture / event log -->
+        <rect x="780" y="176" width="130" height="204" rx="10" fill="#0f1a30" stroke="#7048e8"/>
+        <text x="845" y="200" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">CDC / Event log</text>
+        <text x="845" y="218" text-anchor="middle" fill="#c6d0e0" font-size="10">Debezium · Kinesis</text>
+        <text x="845" y="234" text-anchor="middle" fill="#c6d0e0" font-size="10">Kafka · DynamoDB Streams</text>
+        <text x="845" y="270" text-anchor="middle" fill="#7048e8" font-size="10" font-weight="700">Fan-out to projections</text>
+
+        <!-- OLAP -->
+        <rect x="340" y="410" width="180" height="60" rx="10" fill="#7048e8" stroke="#7048e8"/>
+        <text x="430" y="435" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">OLAP / Warehouse</text>
+        <text x="430" y="453" text-anchor="middle" fill="#fff" font-size="10">Redshift · Snowflake · ClickHouse</text>
+
+        <!-- Search -->
+        <rect x="540" y="410" width="180" height="60" rx="10" fill="#7048e8" stroke="#7048e8"/>
+        <text x="630" y="435" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Search index</text>
+        <text x="630" y="453" text-anchor="middle" fill="#fff" font-size="10">Elasticsearch · OpenSearch</text>
+
+        <!-- KV / other -->
+        <rect x="740" y="410" width="170" height="60" rx="10" fill="#7048e8" stroke="#7048e8"/>
+        <text x="825" y="435" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">KV / TS / Graph</text>
+        <text x="825" y="453" text-anchor="middle" fill="#fff" font-size="10">DynamoDB · Timescale · Neptune</text>
+
+        <!-- CQRS labels -->
+        <rect x="30" y="410" width="280" height="60" rx="10" fill="#0f1a30" stroke="#00b4d8"/>
+        <text x="170" y="435" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">CQRS read models</text>
+        <text x="170" y="453" text-anchor="middle" fill="#c6d0e0" font-size="10">materialized views · Redis structs</text>
+
+        <!-- Arrows -->
+        <line x1="470" y1="156" x2="310" y2="176" stroke="#7fa2ff" stroke-width="2" marker-end="url(#ar)"/>
+        <line x1="470" y1="156" x2="470" y2="210" stroke="#7fa2ff" stroke-width="2" marker-end="url(#ar)"/>
+        <line x1="405" y1="280" x2="405" y2="320" stroke="#2dc653" stroke-width="2" marker-end="url(#arG)"/>
+        <line x1="545" y1="280" x2="545" y2="320" stroke="#2dc653" stroke-width="2" marker-end="url(#arG)"/>
+        <line x1="685" y1="280" x2="685" y2="320" stroke="#2dc653" stroke-width="2" marker-end="url(#arG)"/>
+        <line x1="750" y1="245" x2="780" y2="245" stroke="#f4a259" stroke-width="2" marker-end="url(#arR)"/>
+        <line x1="845" y1="380" x2="825" y2="410" stroke="#7048e8" stroke-width="2" marker-end="url(#ar)"/>
+        <line x1="845" y1="380" x2="630" y2="410" stroke="#7048e8" stroke-width="2" marker-end="url(#ar)"/>
+        <line x1="845" y1="380" x2="430" y2="410" stroke="#7048e8" stroke-width="2" marker-end="url(#ar)"/>
+        <line x1="845" y1="380" x2="170" y2="410" stroke="#7048e8" stroke-width="2" marker-end="url(#ar)"/>
+
+        <text x="470" y="510" text-anchor="middle" fill="#7f8aa0" font-size="11">Reads (green) served from cache → replicas → materialized projections · Writes (blue) hit sharded primary</text>
+        <text x="470" y="530" text-anchor="middle" fill="#7f8aa0" font-size="11">CDC (orange) streams every commit into projections for CQRS/search/analytics</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#ff9900"></span> Cache tier</span>
+        <span><span class="dot" style="background:#4361ee"></span> Sharded writes</span>
+        <span><span class="dot" style="background:#2dc653"></span> Read replicas</span>
+        <span><span class="dot" style="background:#7048e8"></span> Projections / polyglot</span>
+        <span><span class="dot" style="background:#f4a259"></span> Change stream</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch traffic grow — and each rung engage in turn</h2>
+    <p>The animation plays a system as it grows from 100 rps to 100k rps. Each rung of the scaling ladder engages when the previous one saturates.</p>
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="a2-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <!-- traffic gauge -->
+        <rect x="20" y="15" width="860" height="30" rx="8" fill="#0f1a30" stroke="#2a3652"/>
+        <text x="35" y="34" fill="#7f8aa0" font-size="11" font-weight="700">TRAFFIC:</text>
+        <rect id="gauge" x="120" y="22" width="20" height="16" rx="4" fill="#2dc653" data-anim/>
+        <text id="gaugeTxt" x="770" y="34" text-anchor="end" fill="#c6d0e0" font-size="11">100 rps</text>
+
+        <!-- App -->
+        <rect x="30" y="70" width="200" height="50" rx="10" fill="#2a3652" stroke="#7f8aa0"/>
+        <text x="130" y="100" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="12">App servers</text>
+
+        <!-- Rungs -->
+        <g font-size="11">
+          <rect id="r1" x="270" y="70" width="180" height="50" rx="10" fill="#2a3652" stroke="#7f8aa0" data-anim/>
+          <text x="360" y="93" text-anchor="middle" fill="#c6d0e0" font-weight="700">1. Vertical scale</text>
+          <text x="360" y="110" text-anchor="middle" fill="#c6d0e0" font-size="10">one Postgres box</text>
+
+          <rect id="r2" x="270" y="130" width="180" height="40" rx="10" fill="#2a3652" stroke="#7f8aa0" data-anim/>
+          <text x="360" y="155" text-anchor="middle" fill="#c6d0e0" font-weight="700">2. Indexes &amp; tuning</text>
+
+          <rect id="r3" x="270" y="180" width="180" height="40" rx="10" fill="#2a3652" stroke="#7f8aa0" data-anim/>
+          <text x="360" y="205" text-anchor="middle" fill="#c6d0e0" font-weight="700">3. Connection pool</text>
+
+          <rect id="r4" x="270" y="230" width="180" height="40" rx="10" fill="#2a3652" stroke="#7f8aa0" data-anim/>
+          <text x="360" y="255" text-anchor="middle" fill="#c6d0e0" font-weight="700">4. Redis cache</text>
+
+          <rect id="r5" x="270" y="280" width="180" height="40" rx="10" fill="#2a3652" stroke="#7f8aa0" data-anim/>
+          <text x="360" y="305" text-anchor="middle" fill="#c6d0e0" font-weight="700">5. Read replicas</text>
+
+          <rect id="r6" x="270" y="330" width="180" height="40" rx="10" fill="#2a3652" stroke="#7f8aa0" data-anim/>
+          <text x="360" y="355" text-anchor="middle" fill="#c6d0e0" font-weight="700">6. Partitioning</text>
+
+          <rect id="r7" x="470" y="70" width="180" height="50" rx="10" fill="#2a3652" stroke="#7f8aa0" data-anim/>
+          <text x="560" y="93" text-anchor="middle" fill="#c6d0e0" font-weight="700">7. Sharding</text>
+          <text x="560" y="110" text-anchor="middle" fill="#c6d0e0" font-size="10">N primary shards</text>
+
+          <rect id="r8" x="470" y="130" width="180" height="40" rx="10" fill="#2a3652" stroke="#7f8aa0" data-anim/>
+          <text x="560" y="155" text-anchor="middle" fill="#c6d0e0" font-weight="700">8. OLAP / MView</text>
+
+          <rect id="r9" x="470" y="180" width="180" height="40" rx="10" fill="#2a3652" stroke="#7f8aa0" data-anim/>
+          <text x="560" y="205" text-anchor="middle" fill="#c6d0e0" font-weight="700">9. CQRS split</text>
+
+          <rect id="r10" x="470" y="230" width="180" height="40" rx="10" fill="#2a3652" stroke="#7f8aa0" data-anim/>
+          <text x="560" y="255" text-anchor="middle" fill="#c6d0e0" font-weight="700">10. Event sourcing</text>
+
+          <rect id="r11" x="470" y="280" width="180" height="40" rx="10" fill="#2a3652" stroke="#7f8aa0" data-anim/>
+          <text x="560" y="305" text-anchor="middle" fill="#c6d0e0" font-weight="700">11. Polyglot / NoSQL</text>
+        </g>
+
+        <!-- Health -->
+        <rect x="680" y="70" width="200" height="300" rx="10" fill="#0f1a30" stroke="#2a3652"/>
+        <text x="780" y="90" text-anchor="middle" fill="#7fa2ff" font-weight="700" font-size="12">DB HEALTH</text>
+        <text id="h1" x="695" y="115" fill="#c6d0e0" font-size="11">CPU:</text>
+        <rect id="cpuBar" x="740" y="105" width="0" height="12" rx="3" fill="#2dc653" data-anim/>
+        <text id="cpuTxt" x="850" y="115" text-anchor="end" fill="#c6d0e0" font-size="11">20%</text>
+        <text x="695" y="145" fill="#c6d0e0" font-size="11">IOPS:</text>
+        <rect id="ioBar" x="740" y="135" width="0" height="12" rx="3" fill="#2dc653" data-anim/>
+        <text id="ioTxt" x="850" y="145" text-anchor="end" fill="#c6d0e0" font-size="11">10k</text>
+        <text x="695" y="175" fill="#c6d0e0" font-size="11">Conn:</text>
+        <rect id="connBar" x="740" y="165" width="0" height="12" rx="3" fill="#2dc653" data-anim/>
+        <text id="connTxt" x="850" y="175" text-anchor="end" fill="#c6d0e0" font-size="11">50</text>
+        <text x="695" y="205" fill="#c6d0e0" font-size="11">P99:</text>
+        <text id="p99Txt" x="850" y="205" text-anchor="end" fill="#c6d0e0" font-size="11">80ms</text>
+        <text x="695" y="235" fill="#c6d0e0" font-size="11">Repl lag:</text>
+        <text id="lagTxt" x="850" y="235" text-anchor="end" fill="#c6d0e0" font-size="11">—</text>
+        <text x="780" y="305" text-anchor="middle" fill="#f4a259" font-size="10" font-weight="700" id="alert"></text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+    <script>
+      (function(){
+        const root = document.getElementById('anim1');
+        if(!root) return;
+        const $=(s)=>root.querySelector(s);
+        const $$=(s)=>root.querySelectorAll(s);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        function activate(id){ const el=$('#'+id); el.setAttribute('stroke','#2dc653'); el.classList.add('a-glow'); }
+        function gauge(w, txt){ $('#gauge').setAttribute('width', w); $('#gaugeTxt').textContent = txt; }
+        function metric(id, w, t, color){ const b=$('#'+id); b.setAttribute('width', w); if(color) b.setAttribute('fill', color); }
+        function txt(id, t){ $('#'+id).textContent = t; }
+        function alertTxt(t, color){ const a=$('#alert'); a.textContent = t; a.setAttribute('fill', color||'#f4a259'); }
+
+        const CFG = {
+          intro: 'A system growing from 100 rps to 100,000 rps — watch each ladder rung engage as the previous one saturates.',
+          interval: 1800,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => { el.classList.remove('a-glow'); if(el.tagName==='rect' && el.id.startsWith('r')) el.setAttribute('stroke','#7f8aa0'); });
+            ['cpuBar','ioBar','connBar'].forEach(id => { const b=$('#'+id); b.setAttribute('width',0); b.setAttribute('fill','#2dc653'); });
+            gauge(20, '100 rps'); txt('cpuTxt','20%'); txt('ioTxt','10k'); txt('connTxt','50'); txt('p99Txt','80ms'); txt('lagTxt','—'); alertTxt('');
+          },
+          steps: [
+            { caption: '100 rps · One Postgres box, 20% CPU. Life is easy.', apply:(r,$)=>{ activate('r1'); gauge(30,'100 rps'); metric('cpuBar',30,''); alertTxt('healthy','#2dc653'); } },
+            { caption: '2,000 rps · CPU hitting 80%, IOPS climbing. Vertical scale to a bigger instance.', apply:(r,$)=>{ gauge(80,'2,000 rps'); metric('cpuBar',80,''); metric('ioBar',60,''); txt('cpuTxt','80%'); txt('ioTxt','60k'); txt('p99Txt','120ms'); alertTxt('CPU pressure — resize instance','#f4a259'); } },
+            { caption: '5,000 rps · Slow queries dominate. Add indexes, drop N+1s. P99 recovers.', apply:(r,$)=>{ activate('r2'); gauge(140,'5,000 rps'); metric('cpuBar',50,''); txt('cpuTxt','50%'); txt('p99Txt','40ms'); alertTxt('indexes fixed the slow path','#2dc653'); } },
+            { caption: '10,000 rps + Lambda · connection storm. Put PgBouncer / RDS Proxy in front.', apply:(r,$)=>{ activate('r3'); gauge(220,'10,000 rps'); metric('connBar',180,'','#f7567c'); txt('connTxt','9,800'); alertTxt('too many connections — proxy pooling now','#f7567c'); } },
+            { caption: 'Proxy active. 500 connections → 20,000 clients. CPU still climbing.', apply:(r,$)=>{ metric('connBar',60,'','#2dc653'); txt('connTxt','500 pooled'); alertTxt('healthy','#2dc653'); } },
+            { caption: '25,000 rps · 90% of reads are the same 200 keys. Add Redis. Hit ratio → 92%.', apply:(r,$)=>{ activate('r4'); gauge(320,'25,000 rps'); metric('cpuBar',35,''); txt('cpuTxt','35%'); txt('p99Txt','8ms'); alertTxt('cache hit 92% — huge win','#2dc653'); } },
+            { caption: '50,000 rps · Reports on live tables slow OLTP. Add read replicas, route heavy reads there.', apply:(r,$)=>{ activate('r5'); gauge(450,'50,000 rps'); txt('lagTxt','120ms'); metric('cpuBar',45,''); txt('cpuTxt','45%'); alertTxt('reads offloaded to replicas','#2dc653'); } },
+            { caption: 'Events table is 2 TB. Partition by month. Query planner prunes 99% of it.', apply:(r,$)=>{ activate('r6'); txt('p99Txt','6ms'); alertTxt('partition pruning active','#2dc653'); } },
+            { caption: '100,000 rps · Write path saturates the primary. Shard by user_id across 8 primaries.', apply:(r,$)=>{ activate('r7'); gauge(650,'100,000 rps'); metric('cpuBar',55,''); txt('cpuTxt','55% each'); txt('p99Txt','10ms'); alertTxt('sharded — linear write scale','#2dc653'); } },
+            { caption: 'Dashboards need aggregates over months. Replicate to Redshift; refresh materialized views hourly.', apply:(r,$)=>{ activate('r8'); alertTxt('OLAP mirror runs the heavy reports','#2dc653'); } },
+            { caption: 'Read and write scale requirements diverge dramatically. Split into CQRS: writes go to shards, reads served by projections.', apply:(r,$)=>{ activate('r9'); alertTxt('CQRS — independent scaling','#2dc653'); } },
+            { caption: 'Move to event sourcing: writes are append-only events; multiple read projections built from the log.', apply:(r,$)=>{ activate('r10'); alertTxt('append-only writes · time-travel free','#2dc653'); } },
+            { caption: 'Some workloads (KV, timeseries, search, graph) never belonged in Postgres. Polyglot: each in its own store.', apply:(r,$)=>{ activate('r11'); alertTxt('right tool for each job','#2dc653'); } }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i){ if(i<0||i>=CFG.steps.length) return; CFG.reset(root); for(let k=0;k<=i;k++) CFG.steps[k].apply(root,$,$$); idx=i; label.textContent=`Step ${i+1}/${CFG.steps.length}`; cap.textContent=CFG.steps[i].caption; }
+        function reset(){ idx=-1; playing=false; if(timer){clearTimeout(timer); timer=null;} CFG.reset(root); label.textContent='Ready'; cap.textContent=CFG.intro; btnPlay.textContent='▶ Play'; }
+        function play(){ if(playing){ playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play'; return;} if(idx>=CFG.steps.length-1) reset(); playing=true; btnPlay.textContent='⏸ Pause'; function tick(){ if(!playing) return; if(idx+1<CFG.steps.length) goto(idx+1); if(idx<CFG.steps.length-1) timer=setTimeout(tick,CFG.interval); else{playing=false; btnPlay.textContent='▶ Replay';}} timer=setTimeout(tick,400);}
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx+1); });
+        btnPrev && btnPrev.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx-1); });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Deep-dive — each rung, in detail</h2>
+
+    <h3>Vertical scaling — cheap but bounded</h3>
+    <p>Bigger CPUs, more RAM, faster disk. On AWS RDS, storage and instance type are decoupled — storage resizes without downtime, and Multi-AZ instances scale by upgrading the standby first, then failing over (~30–60 s blip). Real ceilings: about <strong>64 vCPU and 400–500 k IOPS</strong> on a single node. Watch out for BYOL licensing on Oracle / SQL Server when you resize. Vertical scaling is the right answer <em>surprisingly often</em> — modern instance families are so beefy that most apps never need to leave rung 1.</p>
+
+    <h3>Indexing &amp; query tuning — the highest-leverage rung</h3>
+    <p>The most common production win is not "add a cache" — it's <strong>find the missing index</strong>. Every DBA cliché: check <code>pg_stat_statements</code> or <code>slow_query_log</code>, sort by total time, run <code>EXPLAIN ANALYZE</code>, add the covering index, watch P99 drop 100×. Also: kill N+1 patterns (one query per row instead of one query with <code>IN</code>), avoid <code>SELECT *</code> on wide tables, use <code>LIMIT</code> and cursor-based pagination instead of <code>OFFSET</code> N. Every index costs write throughput — drop unused ones.</p>
+
+    <h3>Connection pooling — invisible but critical</h3>
+    <p>Postgres forks a process per connection; each process holds ~10 MB. A microservice fleet or a Lambda function can easily open thousands of connections and OOM the DB before any query runs. Solution: a pooler. <strong>PgBouncer</strong> is the community classic; <strong>RDS Proxy</strong> is the AWS-managed answer that supports "hundreds of thousands of connections". Modes: <em>session</em> (client owns a connection until disconnect), <em>transaction</em> (connection reassigned per transaction — best throughput but no session state), <em>statement</em> (aggressive; watch prepared statements).</p>
+
+    <h3>Caching — patterns that actually work</h3>
+    <p>Cache-aside is the default: read → miss → DB → set. Simple, robust. <strong>Write-through</strong> writes to cache and DB in one call — good for consistency, bad for latency. <strong>Write-behind</strong> queues DB writes async — great throughput, risky if the queue loses data. <strong>Read-through</strong> hides the miss behind a library. Always set a TTL; always jitter it (avoid stampedes when many keys expire at once); always plan for <em>cache warming</em> after a flush. Consider a two-level cache (in-process LRU + Redis) for extreme hot keys.</p>
+
+    <h3>Read replicas — what to watch out for</h3>
+    <p>Async replication buys read scale but introduces <strong>replication lag</strong>. Reading a value you just wrote can hit a follower that hasn't caught up — a "read-your-writes" violation. Two fixes: (1) route read-after-write to the primary for a short window, (2) use a session token / LSN pin to wait until the replica catches up. AWS Aurora replicates via a shared distributed storage layer — lag is typically &lt; 20 ms — but the semantic problem is the same.</p>
+
+    <h3>Partitioning — pruning is everything</h3>
+    <p>Partition by range (usually time), list, or hash. The <em>whole point</em> is <em>partition pruning</em> — the planner never touches irrelevant partitions. Query filters must include the partition key or you scan them all (worse than the un-partitioned table). Time-based partitioning is a maintenance win too: drop last year's partition in ms instead of running <code>DELETE</code> for hours.</p>
+
+    <h3>Sharding — the shard key is the whole decision</h3>
+    <p>The hard question isn't "how do I shard" — it's "what's the shard key". Pick something that <em>keeps 95% of queries single-shard</em>. Multi-tenant SaaS → tenant_id. Consumer social → user_id. Global marketplace → maybe country + user_id. Bad shard keys create <em>hotspots</em> (one shard doing all the work) or <em>fanout queries</em> (every query hits every shard). Use <strong>consistent hashing</strong> so re-sharding only moves a slice of data. Cross-shard transactions require 2PC or careful business logic — usually you design them out.</p>
+
+    <h3>Materialized views &amp; OLAP replica</h3>
+    <p>OLTP databases (row-oriented) are optimized for point reads and small updates. OLAP workloads (column-oriented) scan millions of rows for one aggregate. Mixing the two crushes both. Solution: <strong>replicate</strong> commits to an OLAP store (Redshift, Snowflake, BigQuery, ClickHouse) via Debezium/CDC/Kinesis Data Streams. Dashboards query the OLAP mirror; the OLTP primary never sees them. Materialized views (Postgres native, or a summary table refreshed by cron) work when refresh cost is acceptable and freshness bounds are loose.</p>
+
+    <h3>CQRS — the two-model design</h3>
+    <p>The write model and read model are <em>different objects, possibly different databases</em>. A write hits a normalized OLTP store; a stream of changes (CDC or event log) fans out to <em>projections</em> — a Redis structure for a leaderboard, an Elasticsearch index for search, a DynamoDB table for a mobile API, a materialized SQL view for a dashboard. Each read model is optimized for its own query pattern. The write side stays clean and consistent; the read side scales orthogonally.</p>
+
+    <h3>Event sourcing — writes as an append-only log</h3>
+    <p>The store of record is not "current state" but "every event that ever changed state". Current state is a projection built by folding the event stream. Writes become trivial (append-only, huge throughput on Kafka/Kinesis). You get free audit history, time-travel, and multiple read models. Trade-off: schema evolution of old events is a real engineering discipline; projections are eventually consistent; the mental model is unfamiliar to newcomers.</p>
+
+    <h3>Polyglot persistence — use the right store</h3>
+    <p>General-purpose SQL is a jack-of-all-trades. Some workloads have masters:</p>
+    <ul>
+      <li><strong>Key-value / massive scale</strong> → DynamoDB, Redis, Cassandra</li>
+      <li><strong>Timeseries</strong> → TimescaleDB, InfluxDB, ClickHouse</li>
+      <li><strong>Full-text search</strong> → Elasticsearch, OpenSearch, Meilisearch</li>
+      <li><strong>Graph</strong> → Neo4j, Amazon Neptune, TigerGraph</li>
+      <li><strong>Document / flexible schema</strong> → MongoDB, DocumentDB</li>
+      <li><strong>Wide-column</strong> → Cassandra, ScyllaDB, HBase</li>
+      <li><strong>OLAP</strong> → Redshift, Snowflake, BigQuery, ClickHouse, Druid</li>
+    </ul>
+    <p>Real systems typically use three to five stores together, wired via change streams and background workers. This is the ceiling of the ladder — beyond it, every scaling problem is now an application-architecture problem, not a database problem.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>The data structures that make each rung possible</h2>
+    <table>
+      <thead><tr><th>Rung</th><th>Data structure / algorithm</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Indexing</td><td><strong>B+ tree</strong> (SQL default); <strong>LSM tree</strong> (Cassandra, RocksDB); <strong>Hash index</strong>; <strong>GIN/GiST</strong> for full-text/geometry</td><td>O(log N) lookup vs O(N) scan.</td></tr>
+        <tr><td>Query optimizer</td><td><strong>Cost-based planner</strong> — histograms + selectivity estimation → dynamic programming over join orders</td><td>Same SQL can plan two orders-of-magnitude differently.</td></tr>
+        <tr><td>Connection pool</td><td><strong>Bounded semaphore + FIFO queue</strong> of pre-established connections</td><td>Amortize TCP + TLS + auth costs; cap concurrency at DB.</td></tr>
+        <tr><td>Caching</td><td><strong>LRU / LFU / ARC</strong> eviction; <strong>consistent hashing</strong> for cluster routing; <strong>bloom filter</strong> for negative caching</td><td>Bounded memory, deterministic locality.</td></tr>
+        <tr><td>Read replicas</td><td><strong>Write-ahead log</strong> streamed to followers; per-tuple/logical replication</td><td>Async, append-only fanout; lag is time-based.</td></tr>
+        <tr><td>Partitioning</td><td><strong>Range trees</strong> (time partitions); <strong>hash mod N</strong>; <strong>interleaved indexes</strong></td><td>Prune irrelevant data before I/O.</td></tr>
+        <tr><td>Sharding</td><td><strong>Consistent hashing</strong> (ring, jump-consistent hash, rendezvous); <strong>directory service</strong> for range shards</td><td>Re-shard moves ~1/N of the data, not everything.</td></tr>
+        <tr><td>OLAP</td><td><strong>Columnar storage</strong> + <strong>run-length encoding</strong> + <strong>zone maps</strong>; <strong>vectorized execution</strong></td><td>100× throughput on aggregates over big scans.</td></tr>
+        <tr><td>CQRS / projections</td><td><strong>Change data capture (CDC)</strong> — a topic of ordered mutations; projectors are pure functions from log → state</td><td>Read models are cheap to add and to rebuild.</td></tr>
+        <tr><td>Event sourcing</td><td><strong>Append-only log</strong> + <strong>snapshotting</strong> + <strong>replay</strong></td><td>Writes O(1) append; state is a fold.</td></tr>
+      </tbody>
+    </table>
+    <table>
+      <thead><tr><th>Operation</th><th>Complexity / typical latency</th></tr></thead>
+      <tbody>
+        <tr><td>Indexed point read (SQL)</td><td>O(log N) · &lt; 1 ms</td></tr>
+        <tr><td>Redis GET</td><td>O(1) · 100 µs–1 ms</td></tr>
+        <tr><td>Cross-shard fanout join</td><td>O(N) shards · 10–100 ms</td></tr>
+        <tr><td>OLAP aggregate over 1 B rows</td><td>seconds (was minutes on OLTP)</td></tr>
+        <tr><td>Event append (Kafka)</td><td>O(1) · single-digit ms</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Every rung mapped to AWS</h2>
+    <table>
+      <thead><tr><th>Rung</th><th>AWS service(s)</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Vertical scaling</td><td><strong>RDS / Aurora</strong> instance resize; <strong>Aurora Serverless v2</strong> auto-scale</td><td>Storage resize is zero-downtime; Multi-AZ resize ~60 s blip.</td></tr>
+        <tr><td>Indexing</td><td>Performance Insights, RDS + Aurora native indexes</td><td>Use Performance Insights + <code>pg_stat_statements</code> to find offenders.</td></tr>
+        <tr><td>Connection pooling</td><td><strong>Amazon RDS Proxy</strong></td><td>Supports "hundreds of thousands of connections"; critical for Lambda.</td></tr>
+        <tr><td>Caching</td><td><strong>ElastiCache</strong> (Redis, Memcached); <strong>DAX</strong> for DynamoDB</td><td>DAX gives DynamoDB microsecond latency reads.</td></tr>
+        <tr><td>Read replicas</td><td>RDS Read Replicas; <strong>Aurora Read Replicas</strong> (up to 15, &lt; 20 ms lag)</td><td>Aurora replicas share storage — no async streaming.</td></tr>
+        <tr><td>Partitioning</td><td>Native Postgres/MySQL partitioning on RDS; DynamoDB automatic partitioning</td><td>DynamoDB auto-splits by partition key — you don't manage it.</td></tr>
+        <tr><td>Sharding</td><td>Aurora with app-level sharding; <strong>DynamoDB</strong> (partition key = shard key); <strong>Vitess on Kubernetes</strong> for MySQL</td><td>DynamoDB is essentially a managed shard fabric.</td></tr>
+        <tr><td>OLAP / warehouse</td><td><strong>Amazon Redshift</strong>, <strong>Athena</strong> (S3 + Iceberg/Glue), replicate via <strong>DMS</strong> or <strong>Zero-ETL</strong></td><td>Zero-ETL replicates Aurora → Redshift in seconds.</td></tr>
+        <tr><td>CQRS / projections</td><td><strong>DynamoDB Streams</strong>, <strong>Kinesis Data Streams</strong>, <strong>MSK</strong> (Kafka), Lambda projectors</td><td>Standard fan-out pattern.</td></tr>
+        <tr><td>Event sourcing</td><td>Kinesis / MSK as log; DynamoDB / Aurora as snapshot store</td><td>EventBridge for downstream event routing.</td></tr>
+        <tr><td>Polyglot</td><td><strong>DynamoDB</strong>, <strong>OpenSearch</strong>, <strong>Timestream</strong>, <strong>Neptune</strong>, <strong>DocumentDB</strong>, <strong>Keyspaces</strong> (Cassandra), <strong>Redshift</strong></td><td>Each purpose-built; connected via streams.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 Code — the patterns you'll actually write</h2>
+
+    <h4>Cache-aside in C#</h4>
+<pre><span class="kw">public class</span> <span class="typ">OrderService</span>(<span class="typ">IDistributedCache</span> cache, <span class="typ">AppDb</span> db)
+{
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">Order</span>?&gt; <span class="fn">GetAsync</span>(<span class="typ">int</span> id, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">var</span> key = $<span class="str">"order:{id}"</span>;
+        <span class="kw">var</span> hit = <span class="kw">await</span> cache.<span class="fn">GetStringAsync</span>(key, ct);
+        <span class="kw">if</span> (hit is not null) <span class="kw">return</span> JsonSerializer.<span class="fn">Deserialize</span>&lt;<span class="typ">Order</span>&gt;(hit);
+        <span class="kw">var</span> order = <span class="kw">await</span> db.Orders.<span class="fn">FindAsync</span>([id], ct);
+        <span class="kw">if</span> (order is not null)
+            <span class="kw">await</span> cache.<span class="fn">SetStringAsync</span>(key, JsonSerializer.<span class="fn">Serialize</span>(order),
+                <span class="kw">new</span> <span class="typ">DistributedCacheEntryOptions</span> { AbsoluteExpirationRelativeToNow = TimeSpan.<span class="fn">FromMinutes</span>(5) }, ct);
+        <span class="kw">return</span> order;
+    }
+}
+</pre>
+
+    <h4>Read/write routing (EF Core with primary + replica)</h4>
+<pre><span class="cmt">// Program.cs — separate connection strings for writer and reader</span>
+services.<span class="fn">AddDbContextFactory</span>&lt;<span class="typ">AppDb</span>&gt;(o =&gt; o.<span class="fn">UseNpgsql</span>(cfg[<span class="str">"Db:Writer"</span>]), <span class="typ">ServiceLifetime</span>.Scoped);
+services.<span class="fn">AddDbContext</span>&lt;<span class="typ">AppDbReader</span>&gt;(o =&gt; o.<span class="fn">UseNpgsql</span>(cfg[<span class="str">"Db:Reader"</span>]));
+
+<span class="cmt">// controller — writes to primary, reads from replica</span>
+[<span class="fn">HttpGet</span>(<span class="str">"{id}"</span>)]
+<span class="kw">public</span> <span class="typ">Task</span>&lt;<span class="typ">Order</span>&gt; <span class="fn">Get</span>(<span class="typ">int</span> id, [<span class="fn">FromServices</span>] <span class="typ">AppDbReader</span> reader) =&gt; reader.Orders.<span class="fn">FindAsync</span>(id);
+[<span class="fn">HttpPost</span>] <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">Post</span>(<span class="typ">Order</span> o, [<span class="fn">FromServices</span>] <span class="typ">IDbContextFactory</span>&lt;<span class="typ">AppDb</span>&gt; f) {
+   <span class="kw">await using var</span> db = <span class="kw">await</span> f.<span class="fn">CreateDbContextAsync</span>();
+   db.Orders.<span class="fn">Add</span>(o); <span class="kw">await</span> db.<span class="fn">SaveChangesAsync</span>();
+}
+</pre>
+
+    <h4>Consistent-hash shard picker</h4>
+<pre><span class="kw">public class</span> <span class="typ">ShardRouter</span> {
+    <span class="kw">private readonly</span> <span class="typ">SortedDictionary</span>&lt;<span class="typ">uint</span>, <span class="typ">string</span>&gt; ring = <span class="kw">new</span>();
+    <span class="kw">public</span> <span class="fn">ShardRouter</span>(<span class="typ">IEnumerable</span>&lt;<span class="typ">string</span>&gt; shards, <span class="typ">int</span> vnodes = 128) {
+        <span class="kw">foreach</span> (<span class="kw">var</span> s <span class="kw">in</span> shards)
+            <span class="kw">for</span> (<span class="kw">int</span> v = 0; v &lt; vnodes; v++)
+                ring[<span class="fn">Hash</span>($<span class="str">"{s}#{v}"</span>)] = s;
+    }
+    <span class="kw">public</span> <span class="typ">string</span> <span class="fn">ShardFor</span>(<span class="typ">string</span> key) {
+        <span class="kw">var</span> h = <span class="fn">Hash</span>(key);
+        <span class="kw">foreach</span> (<span class="kw">var</span> kv <span class="kw">in</span> ring) <span class="kw">if</span> (kv.Key &gt;= h) <span class="kw">return</span> kv.Value;
+        <span class="kw">return</span> ring.<span class="fn">First</span>().Value;   <span class="cmt">// wrap around the ring</span>
+    }
+    <span class="kw">private static</span> <span class="typ">uint</span> <span class="fn">Hash</span>(<span class="typ">string</span> s) =&gt; BitConverter.<span class="fn">ToUInt32</span>(SHA1.<span class="fn">HashData</span>(Encoding.UTF8.<span class="fn">GetBytes</span>(s)), 0);
+}
+</pre>
+
+    <h4>CDC projector (Kinesis → Redis leaderboard)</h4>
+<pre><span class="kw">public class</span> <span class="typ">OrderCreatedProjector</span>(<span class="typ">IConnectionMultiplexer</span> redis) : <span class="typ">IEventHandler</span>&lt;<span class="typ">OrderCreated</span>&gt;
+{
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">Handle</span>(<span class="typ">OrderCreated</span> e, <span class="typ">CancellationToken</span> ct) {
+        <span class="cmt">// projection: leaderboard of top spenders</span>
+        <span class="kw">await</span> redis.<span class="fn">GetDatabase</span>().<span class="fn">SortedSetIncrementAsync</span>(<span class="str">"top-spenders"</span>, e.UserId, e.Total);
+    }
+}
+</pre>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Consistency vs availability at every rung</h3>
+    <p>Each rung introduces new consistency choices. Vertical scaling and indexing preserve <em>strong consistency</em> — same box, same transaction. Cache and read replicas step into <em>eventual consistency</em> (stale read possible). Sharding preserves consistency within a shard but not across. CQRS and event sourcing make eventual consistency <em>explicit and central</em> — the business must accept that "the report shows what was true a second ago". Interviewers love this: at every rung, ask "is that OK for this feature?"</p>
+
+    <h3>Cost curve</h3>
+    <p>Vertical scaling is linear in dollars. Read replicas are linear per replica. Caching is cheap. Sharding <em>is</em> cheap per shard but expensive in engineering — the operational surface (deployments, backups, monitoring) multiplies. CQRS and event sourcing carry a permanent complexity tax — worth it at scale, punishing at small scale.</p>
+
+    <h3>Rebalancing is the killer bug</h3>
+    <p>Adding a shard, promoting a replica, migrating storage — every one of these is a distributed-systems problem. Use consistent hashing so re-shards move ~1/N of the data. Use online schema-change tools (pt-online-schema-change, gh-ost) so DDL doesn't lock a table for hours. Test failover regularly — an untested standby is a fake standby.</p>
+
+    <h3>The observability multiplier</h3>
+    <p>Every rung you add is another metric to monitor. Cache hit ratio, replica lag, connection pool saturation, per-shard QPS, CDC lag, projection age. Without dashboards, you're flying blind and won't spot the next bottleneck until it pages you at 3 am.</p>
+
+    <h3>Likely follow-up questions</h3>
+    <div class="qa"><p class="q">Q: We already have replicas. Why still shard?</p><p class="a">Replicas only scale <em>reads</em>. If your write rate exceeds one primary's ceiling (~15k–30k writes/s on a beefy box, tens of thousands more on Aurora), you must shard to scale writes horizontally.</p></div>
+    <div class="qa"><p class="q">Q: How do you pick a shard key?</p><p class="a">Pick something (a) high-cardinality (avoid hot partitions), (b) present on 95%+ of queries (avoid cross-shard fanout), (c) doesn't change often (avoid re-sharding a row). Multi-tenant SaaS → tenant_id; consumer → user_id.</p></div>
+    <div class="qa"><p class="q">Q: How does Aurora differ from RDS Postgres?</p><p class="a">Aurora rewrites the storage layer as a distributed, log-structured, 6-way-replicated fabric. Replicas share storage (no async streaming, &lt; 20 ms lag), storage auto-scales, and failover is sub-30-seconds. Same SQL surface, different guts.</p></div>
+    <div class="qa"><p class="q">Q: Can we skip rungs?</p><p class="a">Rarely. Most teams that sharded before caching regretted it. Most that adopted CQRS before trying materialized views wrote systems they couldn't operate. Pull the cheapest lever first.</p></div>
+    <div class="qa"><p class="q">Q: Read-your-writes on replicas?</p><p class="a">Pin recent writers to the primary for a short window (5–30 s), OR use logical-timestamp/LSN tracking so a read waits until the replica catches up to the client's last observed write.</p></div>
+    <div class="qa"><p class="q">Q: When should we switch to NoSQL entirely?</p><p class="a">When the access pattern is pure key/value, timeseries, document, or graph — and the operational cost of the polyglot outweighs the SQL joins you'd give up. DynamoDB for user profiles/sessions at massive scale is a common landing.</p></div>
+    <div class="qa"><p class="q">Q: What's the biggest myth?</p><p class="a">"Just add a cache". Caching only shifts the bottleneck; it doesn't solve write pressure, replication lag, or wrong-index problems. Diagnose before prescribing.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "Scaling the database layer is a ladder, not a switch. I start by <em>diagnosing</em> the bottleneck — CPU, IOPS, connections, replica lag, or query plan. Then I climb: <strong>vertical scale, then indexing, then connection pooling, then caching, then read replicas, then partitioning, then sharding, then materialized views / OLAP, then CQRS, then event sourcing, then polyglot persistence.</strong> Each rung buys a specific capability and breaks in a specific way that motivates the next. Sharding without caching is premature; CQRS without materialized views is over-engineering. The interview answer is not 'add DynamoDB' — it's 'here's how I'd read the metrics and pick the cheapest lever that actually solves the problem'."</p>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li><strong>"Diagnose first — a missing index beats a shard cluster."</strong> Show the interviewer you check <code>EXPLAIN</code> before proposing architecture.</li>
+      <li><strong>"Every rung introduces eventual consistency."</strong> Reads from cache / replica / projection are stale. Business must accept it feature-by-feature.</li>
+      <li><strong>"Shard key is the whole sharding decision."</strong> Pick one that keeps 95%+ of queries single-shard.</li>
+      <li><strong>"CQRS + event sourcing decouples read and write scaling."</strong> This is what powers Amazon, Uber, Netflix under the hood.</li>
+      <li><strong>"Polyglot is the endgame."</strong> Real systems have 3–5 stores, each fit-for-purpose, connected by a change stream.</li>
+    </ul>
+    <h3>Numbers to quote confidently</h3>
+    <ul>
+      <li>Single beefy box: ~15–30 k writes/s, ~100 k reads/s.</li>
+      <li>Postgres connection: ~10 MB each; PgBouncer/RDS Proxy multiplexes 100 k+ clients → 500 real conns.</li>
+      <li>Cache hit ratio for well-designed hot paths: 90–99%.</li>
+      <li>Aurora replica lag: &lt; 20 ms typical; classic RDS async replicas: 100 ms – seconds.</li>
+      <li>Consistent hashing: re-shard moves ~1/N of the data, not everything.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://aws.amazon.com/blogs/database/scaling-your-amazon-rds-instance-vertically-and-horizontally/">Scaling your Amazon RDS instance vertically and horizontally — AWS Database Blog</a></li>
+      <li><a href="https://aws.amazon.com/rds/proxy/">Amazon RDS Proxy overview — AWS</a></li>
+      <li><a href="https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Replication.html">Aurora replication &amp; read replicas — AWS docs</a></li>
+      <li><a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.Partitions.html">DynamoDB partitions &amp; sharding — AWS docs</a></li>
+      <li><a href="https://martinfowler.com/bliki/CQRS.html">CQRS — Martin Fowler</a></li>
+      <li><a href="https://martinfowler.com/eaaDev/EventSourcing.html">Event sourcing — Martin Fowler</a></li>
+      <li><a href="https://www.pgbouncer.org/">PgBouncer connection pooler</a></li>
+      <li><a href="https://redis.io/docs/latest/develop/reference/patterns/">Redis caching patterns</a></li>
+      <li><a href="https://vitess.io/">Vitess (YouTube/PlanetScale MySQL sharding)</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

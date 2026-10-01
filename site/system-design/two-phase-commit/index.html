@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Two-Phase & Three-Phase Commit — Distributed Systems</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c; --scenario-bg: #fff0f4;
+    --reqs: #f4a259; --reqs-bg: #fff7ed;
+    --arch: #4361ee; --arch-bg: #eef2ff;
+    --dsa: #7048e8; --dsa-bg: #f3effe;
+    --aws: #ff9900; --aws-bg: #fff6e6;
+    --code-bg: #1e2430; --code-ink: #e7ecf3; --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08); --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { position: relative; padding: 10px 0 10px 46px; margin: 0; border-bottom: 1px dashed var(--line); }
+  .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 10px; width: 30px; height: 30px; border-radius: 50%; background: var(--arch); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: .9rem; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .warn { background:#fff0f4; border:1px solid #fbc9d8; border-left:5px solid #f7567c; border-radius:12px; padding:14px 18px; margin:16px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Distributed Systems · Interview Prep</div>
+    <h1>Two-Phase & Three-Phase Commit</h1>
+    <p>How independent nodes agree to commit one atomic transaction — the classic distributed-commit protocols, their blocking flaw, and what replaced them.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 The problem</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Goals</a>
+    <a href="#arch">🏗️ 2PC protocol</a>
+    <a href="#deep">🔍 Failure modes</a>
+    <a href="#dsa">🧮 3PC & Saga</a>
+    <a href="#aws">☁️ AWS mapping</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Follow-ups</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>The atomic-commit problem across machines</h2>
+    <p>Imagine transferring $100 from an account in the <em>Payments</em> database to a balance in the <em>Ledger</em> database — two separate systems on two separate machines. You need <strong>all-or-nothing</strong>: either both the debit and the credit happen, or neither does. If the debit commits and the credit is lost, money vanishes. On a single database an ACID transaction handles this trivially, but the moment the data spans multiple independent nodes there is no shared transaction log to lean on. This is the <strong>distributed atomic commit</strong> problem, and <strong>Two-Phase Commit (2PC)</strong> is its textbook solution.</p>
+    <p>You'll meet 2PC anywhere multiple resource managers must commit together: the <strong>XA transaction</strong> standard used by Java/JEE app servers and message brokers, distributed SQL engines, and older microservice designs that spanned several databases in one request. Interviewers ask about it because it is the cleanest way to test whether you understand <em>coordination under failure</em> — and because its famous blocking weakness motivates everything that came after (Paxos, Raft, and the Saga pattern).</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The friends who want to swap concert seats — but only if everyone agrees</h2>
+    <p>You and five friends are at a concert, but you all got seated in <strong>random spots</strong>. You want to swap so you can sit together. The catch — a swap only works if <strong>every single one of the five</strong> is willing to move, at the same time. If even one person refuses, everybody stays put.</p>
+    <p>So one of you becomes the "organiser." The organiser walks around the row and asks each friend, one by one, "<strong>Are you ready to move if I tell you to?</strong>" Each friend thinks about it — packs up their popcorn, folds their jacket, and says either "yes, ready" or "no, my knee hurts, I'm not moving." The organiser writes down every answer on a piece of paper. This is phase one.</p>
+    <p>Once everyone has said "yes," the organiser walks around a second time and says "<strong>OK, move now.</strong>" Everyone gets up together, swaps seats, and it's done. If even one person had said no, the organiser would instead say "abort, sit back down" — and everyone unpacks their popcorn again. This is phase two. That is basically how banks, airlines, and old-style databases used to make sure two computer systems don't get out of sync when they need to change something together.</p>
+    <p>Here is the ugly part. Suppose after everyone said "yes," the <strong>organiser goes to the bathroom</strong> and never comes back. Now the five friends are stuck. They've all promised they will move — they can't sit down, they can't get more popcorn, they can't even leave — because the organiser might return any moment with the "move now" signal. They are <strong>frozen</strong>, waiting. That is the famous blocking problem: one bad moment for the organiser, and the whole row is paralysed. This is why modern apps like <strong>WhatsApp</strong> or <strong>Uber</strong> avoid this dance — they use a gentler pattern called a Saga, where each step can be undone later, so nobody has to freeze and wait.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 What atomic commit must guarantee</span>
+    <h2>Requirements of a distributed-commit protocol</h2>
+    <table>
+      <tr><th>Property</th><th>Meaning</th></tr>
+      <tr><td><strong>Agreement</strong></td><td>All participants that decide, decide the <em>same</em> outcome (all commit or all abort). No split decisions.</td></tr>
+      <tr><td><strong>Validity</strong></td><td>If any participant votes No, the outcome is abort. If all vote Yes and no failures, the outcome is commit.</td></tr>
+      <tr><td><strong>Stability / Durability</strong></td><td>Once a node commits or aborts, that decision is final and survives crashes (written to a stable log).</td></tr>
+      <tr><td><strong>Termination</strong></td><td>Non-faulty nodes eventually reach a decision. <em>This is the one 2PC fails to guarantee</em> — hence its blocking problem.</td></tr>
+    </table>
+    <p>The roles: one <strong>coordinator</strong> (the transaction manager) drives the decision; multiple <strong>participants</strong> (also called cohorts or resource managers) each own a slice of the data and vote. Both sides write to a durable log so they can recover their state after a crash.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ The 2PC protocol</span>
+    <h2>Two phases: vote, then decide</h2>
+    <p>Phase 1 is <strong>prepare/voting</strong>: the coordinator asks everyone "can you commit?" Each participant does all the work up to the commit point — acquires locks, writes undo/redo log records — and replies <strong>Yes</strong> (I'm ready and I promise I can commit) or <strong>No</strong>. Crucially, a Yes vote is a binding promise: the participant must now be able to commit even if it crashes and restarts, so it forces its prepare record to stable storage first. Phase 2 is <strong>commit/completion</strong>: if <em>all</em> voted Yes, the coordinator writes a commit record and broadcasts <code>COMMIT</code>; if <em>anyone</em> voted No (or timed out), it broadcasts <code>ABORT</code>. Participants act, release their locks, and acknowledge.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <defs>
+          <marker id="a1" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#7aa2f7"/></marker>
+          <marker id="a2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#2dc653"/></marker>
+        </defs>
+        <text x="360" y="20" fill="#ffd166" font-size="13" text-anchor="middle" font-weight="bold">PHASE 1 — Prepare / Vote</text>
+        <text x="360" y="190" fill="#9ece6a" font-size="13" text-anchor="middle" font-weight="bold">PHASE 2 — Commit / Complete</text>
+        <!-- coordinator -->
+        <rect x="290" y="34" width="140" height="44" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="360" y="61" fill="#e7ecf3" font-size="13" text-anchor="middle">Coordinator</text>
+        <!-- participants P1..P3 phase1 -->
+        <rect x="40" y="120" width="120" height="40" rx="8" fill="#132a1c" stroke="#2dc653"/>
+        <text x="100" y="145" fill="#e7ecf3" font-size="12" text-anchor="middle">P1 → Yes</text>
+        <rect x="300" y="120" width="120" height="40" rx="8" fill="#132a1c" stroke="#2dc653"/>
+        <text x="360" y="145" fill="#e7ecf3" font-size="12" text-anchor="middle">P2 → Yes</text>
+        <rect x="560" y="120" width="120" height="40" rx="8" fill="#132a1c" stroke="#2dc653"/>
+        <text x="620" y="145" fill="#e7ecf3" font-size="12" text-anchor="middle">P3 → Yes</text>
+        <!-- phase1 arrows down -->
+        <line x1="330" y1="78" x2="110" y2="118" stroke="#7aa2f7" stroke-width="2" marker-end="url(#a1)"/>
+        <line x1="360" y1="78" x2="360" y2="118" stroke="#7aa2f7" stroke-width="2" marker-end="url(#a1)"/>
+        <line x1="390" y1="78" x2="610" y2="118" stroke="#7aa2f7" stroke-width="2" marker-end="url(#a1)"/>
+        <text x="150" y="100" fill="#7aa2f7" font-size="10">"can commit?"</text>
+        <!-- phase2 boxes -->
+        <rect x="40" y="250" width="120" height="40" rx="8" fill="#132a1c" stroke="#2dc653"/>
+        <text x="100" y="275" fill="#9ece6a" font-size="12" text-anchor="middle">P1 commit ✓</text>
+        <rect x="300" y="250" width="120" height="40" rx="8" fill="#132a1c" stroke="#2dc653"/>
+        <text x="360" y="275" fill="#9ece6a" font-size="12" text-anchor="middle">P2 commit ✓</text>
+        <rect x="560" y="250" width="120" height="40" rx="8" fill="#132a1c" stroke="#2dc653"/>
+        <text x="620" y="275" fill="#9ece6a" font-size="12" text-anchor="middle">P3 commit ✓</text>
+        <!-- phase2 arrows -->
+        <line x1="100" y1="160" x2="100" y2="248" stroke="#2dc653" stroke-width="2" marker-end="url(#a2)"/>
+        <line x1="360" y1="160" x2="360" y2="248" stroke="#2dc653" stroke-width="2" marker-end="url(#a2)"/>
+        <line x1="620" y1="160" x2="620" y2="248" stroke="#2dc653" stroke-width="2" marker-end="url(#a2)"/>
+        <text x="150" y="215" fill="#2dc653" font-size="10">all Yes → "COMMIT"</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7aa2f7"></span>phase 1: prepare + vote</span>
+        <span><span class="dot" style="background:#2dc653"></span>phase 2: commit broadcast</span>
+      </div>
+    </div>
+    <ol class="steps">
+      <li><strong>Prepare:</strong> coordinator logs <code>BEGIN</code>, sends <code>CanCommit?</code> to all participants.</li>
+      <li><strong>Vote:</strong> each participant does the work, force-writes a <code>prepared</code> record, replies Yes/No. After Yes it holds locks and waits — it is now <em>in doubt</em>.</li>
+      <li><strong>Decide:</strong> coordinator force-writes the global decision (commit iff all Yes). This write is the point of no return.</li>
+      <li><strong>Broadcast &amp; ack:</strong> coordinator sends the decision; participants apply it, release locks, and acknowledge. Coordinator completes once all acks arrive.</li>
+    </ol>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Failure modes — where 2PC hurts</h2>
+    <div class="warn"><strong>The blocking problem (the answer they're fishing for):</strong> Its greatest disadvantage is that 2PC is a <em>blocking</em> protocol. After a participant votes Yes it is "in doubt" — it holds its locks and <em>cannot unilaterally decide</em>. If the coordinator crashes after collecting votes but before broadcasting the decision, the in-doubt participants must <strong>block indefinitely</strong>, holding locks, until the coordinator recovers. There is no safe timeout: the participant can't abort (maybe others already committed) and can't commit (maybe others aborted).</div>
+    <h3>Why a participant can't just guess</h3>
+    <p>Suppose P2 voted Yes, then loses contact with both the coordinator and its peers. It cannot ask "did we commit?" If it assumes commit and the real decision was abort, it diverges; if it assumes abort and the decision was commit, it diverges the other way. Safety forces it to wait. This is precisely the tension the <a href="../cap-theorem/index.html">CAP theorem</a> predicts: 2PC chooses <strong>Consistency over Availability</strong> — it would rather freeze than risk divergence, making it a <strong>CP</strong> protocol.</p>
+    <h3>Other costs</h3>
+    <ul>
+      <li><strong>Latency &amp; disk:</strong> multiple forced log flushes to stable storage and two network round-trips per commit.</li>
+      <li><strong>Locks held across the round-trip</strong> hurt throughput and create contention/deadlock risk.</li>
+      <li><strong>Coordinator is a single point of failure</strong> unless it is itself replicated (which is what real systems do — replicate the coordinator via Paxos/Raft).</li>
+      <li>Optimizations — <em>presumed abort</em>, <em>presumed commit</em>, tree/dynamic 2PC — cut messages and logging but never remove blocking.</li>
+    </ul>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 3PC and the modern alternatives</span>
+    <h2>Three-Phase Commit and what actually replaced 2PC</h2>
+    <p><strong>Three-Phase Commit (3PC)</strong> attacks the blocking flaw by inserting a <code>pre-commit</code> phase between voting and committing, and by giving every state a timeout. The extra phase guarantees that before anyone commits, everyone <em>knows the decision will be commit</em>. So if the coordinator dies, a surviving participant can look at its own state and safely time out toward the right outcome: if it reached pre-commit, it commits; if not, it aborts. This makes 3PC <strong>non-blocking</strong> under a single fail-stop failure.</p>
+    <div class="viz">2PC:  [Prepare/Vote] ────────────────▶ [Commit]
+                    │                        ▲
+                    └── coordinator dies here → IN-DOUBT, BLOCKS ✗
+
+3PC:  [Prepare/Vote] ─▶ [Pre-Commit] ─▶ [Commit]
+                             │              ▲
+                             └ everyone knows outcome → timeout is SAFE ✓</div>
+    <p>The catch — and the reason 3PC is a textbook curiosity rather than a workhorse — is that it assumes <strong>synchronous</strong> timing and fail-stop crashes. Under <strong>network partitions</strong>, 3PC can still produce inconsistent decisions: two sides can time out toward different outcomes. It also adds a whole extra round-trip, worsening latency. Real systems therefore skipped 3PC and went to <strong>consensus</strong>.</p>
+    <table>
+      <tr><th>Approach</th><th>Blocking?</th><th>Handles partitions?</th><th>Used in practice</th></tr>
+      <tr><td>2PC</td><td>Yes (coordinator failure)</td><td>Chooses to block (CP)</td><td>XA transactions, distributed SQL</td></tr>
+      <tr><td>3PC</td><td>No (fail-stop only)</td><td>No — can diverge under partition</td><td>Rare; mostly academic</td></tr>
+      <tr><td><strong>Consensus (Paxos/Raft)</strong></td><td>No (majority quorum)</td><td>Yes — minority stalls, majority proceeds</td><td>etcd, ZooKeeper, Spanner, CockroachDB</td></tr>
+      <tr><td><strong>Saga pattern</strong></td><td>No</td><td>Yes (eventual, no locks)</td><td>Microservices, long-lived business txns</td></tr>
+    </table>
+    <h3>The two winners you must name</h3>
+    <p><strong>Consensus-backed commit:</strong> instead of one fragile coordinator, replicate the commit decision through Raft/Paxos so a <em>majority</em> agreeing is the decision — the coordinator can fail and a new one takes over from the replicated log. Google Spanner and CockroachDB run 2PC <em>on top of</em> Paxos/Raft groups, getting atomic commit without the single-coordinator block. See the <a href="../consensus-raft-paxos/index.html">consensus page</a>.</p>
+    <p><strong>Saga pattern:</strong> for microservices, avoid distributed locks entirely. Break the transaction into a sequence of local commits, each with a <em>compensating action</em> to undo it. If step 3 fails, run the compensations for steps 2 and 1 (refund, restock). You trade atomic isolation for availability and eventual consistency — the AP-style answer to the same problem.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS mapping</span>
+    <h2>How atomic commit shows up on AWS</h2>
+    <p>Modern AWS architectures generally <em>avoid</em> classic cross-service 2PC and lean on single-partition transactions, idempotency, or the Saga pattern.</p>
+    <table>
+      <tr><th>Need</th><th>AWS service / pattern</th><th>Why</th></tr>
+      <tr><td>Atomic multi-item write in one store</td><td>DynamoDB <code>TransactWriteItems</code></td><td>ACID across items in a region without you running 2PC — the service coordinates internally.</td></tr>
+      <tr><td>Saga orchestration</td><td>AWS Step Functions</td><td>Model each step + compensating step as a state machine; built-in retries and catch/rollback branches.</td></tr>
+      <tr><td>Saga choreography</td><td>EventBridge / SQS / SNS</td><td>Services emit events; each reacts and emits the next, with compensation events on failure.</td></tr>
+      <tr><td>Reliable "commit the DB write AND publish the event"</td><td>Transactional Outbox + DynamoDB Streams / CDC</td><td>Write business row and outbox row in one local transaction; a relay publishes the event — dodges dual-write 2PC.</td></tr>
+      <tr><td>Exactly-once effect</td><td>Idempotency keys (DynamoDB conditional writes)</td><td>Make retries safe so you don't need distributed locking.</td></tr>
+    </table>
+    <p>The interview-grade takeaway: in a cloud microservices world you almost never run true 2PC across services — you use <strong>Step Functions Sagas</strong> plus the <strong>Outbox pattern</strong> and idempotency to get correctness without the blocking coordinator.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — a 2PC coordinator</h2>
+    <p>This models the coordinator driving prepare → decide, and shows exactly where a Yes vote makes a participant "in doubt." Note the durable log writes at the decision point — that record is what lets recovery finish the transaction after a crash.</p>
+    <pre><span class="kw">public enum</span> <span class="typ">Vote</span> { Yes, No }
+
+<span class="kw">public interface</span> <span class="typ">IParticipant</span>
+{
+    <span class="cmt">// Phase 1: do the work, force-write a 'prepared' record, then vote.</span>
+    <span class="typ">Task</span>&lt;<span class="typ">Vote</span>&gt; <span class="fn">PrepareAsync</span>(<span class="typ">Guid</span> txId);
+    <span class="typ">Task</span> <span class="fn">CommitAsync</span>(<span class="typ">Guid</span> txId);   <span class="cmt">// phase 2</span>
+    <span class="typ">Task</span> <span class="fn">AbortAsync</span>(<span class="typ">Guid</span> txId);    <span class="cmt">// phase 2</span>
+}
+
+<span class="kw">public sealed class</span> <span class="typ">Coordinator</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IReadOnlyList</span>&lt;<span class="typ">IParticipant</span>&gt; _parts;
+    <span class="kw">private readonly</span> <span class="typ">ITxLog</span> _log;   <span class="cmt">// durable, survives crashes</span>
+
+    <span class="kw">public</span> <span class="fn">Coordinator</span>(<span class="typ">IReadOnlyList</span>&lt;<span class="typ">IParticipant</span>&gt; parts, <span class="typ">ITxLog</span> log)
+        =&gt; (_parts, _log) = (parts, log);
+
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="kw">bool</span>&gt; <span class="fn">RunAsync</span>(<span class="typ">Guid</span> txId, <span class="typ">TimeSpan</span> voteTimeout)
+    {
+        <span class="kw">await</span> _log.WriteAsync(txId, <span class="str">"BEGIN"</span>);
+
+        <span class="cmt">// ---- PHASE 1: collect votes (with a timeout -&gt; treat as No) ----</span>
+        <span class="typ">Vote</span>[] votes;
+        <span class="kw">try</span>
+        {
+            <span class="kw">var</span> tasks = _parts.Select(p =&gt; p.PrepareAsync(txId));
+            votes = <span class="kw">await</span> <span class="typ">Task</span>.WhenAll(tasks).WaitAsync(voteTimeout);
+        }
+        <span class="kw">catch</span> (<span class="typ">TimeoutException</span>)
+        {
+            <span class="kw">await</span> <span class="fn">BroadcastAbort</span>(txId);   <span class="cmt">// a missing vote is a No</span>
+            <span class="kw">return false</span>;
+        }
+
+        <span class="kw">bool</span> commit = votes.All(v =&gt; v == <span class="typ">Vote</span>.Yes);
+
+        <span class="cmt">// ---- DECISION: this durable write is the point of no return ----</span>
+        <span class="kw">await</span> _log.WriteAsync(txId, commit ? <span class="str">"COMMIT"</span> : <span class="str">"ABORT"</span>);
+
+        <span class="cmt">// ---- PHASE 2: broadcast + retry until every participant acks ----</span>
+        <span class="kw">foreach</span> (<span class="kw">var</span> p <span class="kw">in</span> _parts)
+            <span class="kw">await</span> <span class="fn">RetryForever</span>(() =&gt; commit ? p.CommitAsync(txId) : p.AbortAsync(txId));
+        <span class="cmt">// If the coordinator crashes BEFORE this loop, prepared participants
+        // are IN-DOUBT and BLOCK until it recovers and replays the log. &lt;- the flaw.</span>
+        <span class="kw">return</span> commit;
+    }
+}</pre>
+    <p>In the real world you rarely hand-roll this: <strong>.NET</strong> exposes <code>System.Transactions.TransactionScope</code> and <code>MSDTC</code> for XA-style 2PC, Java uses JTA/XA, and distributed databases embed it. For microservices, prefer a Saga library (e.g. <strong>MassTransit</strong> sagas, or AWS Step Functions) over rolling your own coordinator.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks & likely follow-ups</h2>
+    <div class="qa"><p class="q">"What is the single biggest problem with 2PC?"</p><p class="a">It blocks. If the coordinator fails after participants vote Yes, they're stuck holding locks in an in-doubt state until it recovers — it can't guarantee termination. That's the answer to lead with.</p></div>
+    <div class="qa"><p class="q">"Does 3PC fully fix it?"</p><p class="a">Only under synchronous timing and fail-stop crashes. Under network partitions 3PC can still make inconsistent decisions, and it costs an extra round-trip. That's why production systems use consensus (Raft/Paxos) instead.</p></div>
+    <div class="qa"><p class="q">"How do real databases get atomic commit without blocking?"</p><p class="a">They replicate the coordinator/decision through consensus. Spanner and CockroachDB run 2PC over Paxos/Raft groups, so any single coordinator failure is recovered from the replicated log by a new leader — no permanent block.</p></div>
+    <div class="qa"><p class="q">"When would you use a Saga instead?"</p><p class="a">Across microservices/services with separate databases, where holding distributed locks is unacceptable. Sagas do local commits with compensating transactions and accept eventual consistency — trading isolation for availability.</p></div>
+    <div class="qa"><p class="q">"Is 2PC consistent or available (CAP)?"</p><p class="a">Consistent — it's a CP protocol. It sacrifices availability by blocking rather than risk two participants diverging.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "Two-Phase Commit gives atomic all-or-nothing commit across nodes. Phase 1 the coordinator asks everyone to prepare and vote; a Yes is a durable promise. Phase 2 it commits iff everyone voted Yes. The fatal flaw is blocking: if the coordinator dies after the votes, prepared participants are in-doubt and freeze holding locks. Three-Phase Commit adds a pre-commit phase to become non-blocking, but breaks under partitions — so real systems use consensus like Raft, or the Saga pattern for microservices."</div>
+    <ul>
+      <li><strong>Two phases:</strong> Prepare/Vote → Commit/Complete. Yes vote = binding, durable promise.</li>
+      <li><strong>Blocking problem:</strong> coordinator crash after votes ⇒ in-doubt participants block, holding locks. No safe timeout.</li>
+      <li><strong>2PC is CP:</strong> prefers consistency, sacrifices availability.</li>
+      <li><strong>3PC</strong> = +pre-commit phase ⇒ non-blocking under fail-stop, but unsafe under partitions.</li>
+      <li><strong>Modern answer:</strong> consensus-backed commit (Spanner/CockroachDB on Paxos/Raft) or <strong>Sagas</strong> (compensating transactions) for microservices.</li>
+      <li><strong>AWS:</strong> Step Functions Sagas + transactional Outbox + idempotency, not cross-service 2PC.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://en.wikipedia.org/wiki/Two-phase_commit_protocol">Two-phase commit protocol — Wikipedia</a></li>
+      <li><a href="https://en.wikipedia.org/wiki/Three-phase_commit_protocol">Three-phase commit protocol — Wikipedia</a></li>
+      <li><a href="https://microservices.io/patterns/data/saga.html">Saga pattern — microservices.io (Chris Richardson)</a></li>
+      <li><a href="https://cloud.google.com/spanner/docs/true-time-external-consistency">Google Spanner — 2PC over Paxos, TrueTime</a></li>
+      <li>Bernstein, Hadzilacos &amp; Goodman — "Concurrency Control and Recovery in Database Systems" (atomic commit).</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

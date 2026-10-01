@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ZooKeeper &amp; the Watch Mechanism — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c;   --scenario-bg: #fff0f4;
+    --laymen: #ffd166;     --laymen-bg: #fffaeb;
+    --reqs: #f4a259;       --reqs-bg: #fff7ed;
+    --arch: #4361ee;       --arch-bg: #eef2ff;
+    --anim: #00b4d8;       --anim-bg: #eef9fc;
+    --dsa: #7048e8;        --dsa-bg: #f3effe;
+    --aws: #ff9900;        --aws-bg: #fff6e6;
+    --code-bg: #1e2430;    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%); color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.12rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); color: #7c5c00; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .93rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; line-height: 1.5; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; }
+  .faq-item .q::before { content: "Q "; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] { transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease; transform-box: fill-box; }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+  .znode { padding: 4px 10px; border-radius: 6px; font-family: monospace; font-size: .85em; }
+  .znode.pers { background: rgba(67,97,238,.15); color: #4361ee; }
+  .znode.eph  { background: rgba(247,86,124,.15); color: #f7567c; }
+  .znode.seq  { background: rgba(112,72,232,.15); color: #7048e8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Apache ZooKeeper &amp; the Watch Mechanism</h1>
+    <p>The reactive nervous system of Kafka, HBase, Solr, and every "pre-Raft" distributed cluster — how a tiny file-system-like store powers service discovery, leader election, and push-style config updates.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>Why ZooKeeper matters &amp; where it runs today</h2>
+    <p>ZooKeeper is a small, strongly-consistent, in-memory hierarchical key-value store that solves the single hardest problem in distributed systems: <strong>"how do dozens of processes on different machines agree on shared state — and get pushed a notification the moment it changes?"</strong> It was born at Yahoo! in 2007 for coordinating Yahoo!'s crawler and message broker, and became the coordination layer under a large fraction of the big-data ecosystem: <strong>Apache Kafka</strong> (controller election, topic metadata, ISR tracking — until KIP-500 replaced it with KRaft), <strong>Apache HBase</strong> (master election, RegionServer discovery), <strong>Apache Solr Cloud</strong> (collection state, shard leaders), <strong>Apache Storm</strong>, <strong>Apache Hadoop YARN HA</strong>, <strong>Apache Mesos</strong>, and many older microservice stacks.</p>
+    <p>What makes it an interview darling is the <strong>watch mechanism</strong> — a pull-then-push model that lets a client register interest in a "znode" (ZooKeeper's word for a node in its tree) and receive a <em>single asynchronous callback</em> the instant that znode is created, deleted, or modified. This one primitive, layered on top of ZooKeeper's ZAB consensus, is what makes elegant, reactive designs for <em>service discovery</em>, <em>dynamic configuration</em>, <em>leader election</em>, and <em>distributed locks</em> possible. Understanding it well signals that a candidate can reason about push-vs-pull, session lifecycle, thundering-herd, and the gap between "eventually notified" and "strictly ordered."</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The office noticeboard that texts you when it changes</h2>
+    <p><strong>Imagine a big company with fifty offices in different cities, all working on the same project.</strong> Every office needs to know: <em>who is the current CEO? which supplier are we using this week? which fifteen offices are actually open today?</em> If each office had to phone every other office each morning to find out, work would grind to a halt.</p>
+    <p>Instead, the company puts up one <strong>central noticeboard</strong> in a special coordination room. It's not a big board — just a tree of little slots. One slot says "current CEO". Another slot says "today's supplier". A folder called <code>/open-offices</code> holds one small note per office that's open today. Every morning, each open office <em>puts a sticky note</em> in that folder with its name on it — and that sticky note is <strong>magical</strong>: if the office closes or loses connection, its note falls off automatically. This is how everyone can see, at a glance, exactly which offices are alive right now.</p>
+    <p>Now here's the clever bit. Any office can walk up to a slot and say <strong>"tell me the moment this changes."</strong> The coordination room writes that request on a little side-list. When the slot changes — someone updates the CEO, or a new sticky note falls off — the coordination room <strong>sends a text message to that office</strong>. The office doesn't have to keep walking back to check. This is called a <strong>watch</strong>.</p>
+    <p>Because the coordination room is so important, it's not a single room — it's <strong>three or five identical rooms</strong> in different buildings, all keeping the same board in sync. If the main one catches fire, the others take over in under a second. But they'll never disagree with each other, because before any note goes on the board, a <strong>majority</strong> of the rooms have to sign off on the change.</p>
+    <p><strong>Why is this hard?</strong> Because texts can get delayed, offices can go offline, and if two offices both try to claim "I'm the new CEO" at the same time, the system has to pick exactly one. It has to feel <em>instant</em> — under a second — and it has to be <em>correct</em>, even if half the coordination rooms are broken.</p>
+    <p><em>Concrete example.</em> Kafka (the giant messaging system used by LinkedIn, Uber, and Netflix) used ZooKeeper for a decade. Every Kafka broker on startup wrote an ephemeral sticky note under <code>/brokers/ids/</code>. When a broker crashed, its note vanished, ZooKeeper sent a watch notification to the Kafka "controller," and the controller reassigned that broker's work to healthy brokers — all in about 300 milliseconds. No polling. No wasted heartbeats. Just: <em>state changed → you get a text → you react</em>.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What ZooKeeper has to do — and how much</h2>
+    <h3>Functional</h3>
+    <ul>
+      <li><strong>Store</strong> small hierarchical key-value data (znodes) with strong consistency across the ensemble.</li>
+      <li><strong>Notify</strong> interested clients the moment a znode is created, deleted, or its data changes — the watch primitive.</li>
+      <li><strong>Elect a leader</strong> among a set of contenders using ephemeral+sequential znodes.</li>
+      <li><strong>Provide session lifecycle</strong> so ephemeral state is automatically cleaned up on client crash.</li>
+      <li><strong>Ordered, atomic writes</strong>: every write gets a global monotonically increasing transaction id (<code>zxid</code>).</li>
+      <li><strong>Serve reads locally</strong> from any follower for scale; provide <code>sync()</code> for read-your-writes when needed.</li>
+    </ul>
+    <h3>Non-functional targets</h3>
+    <table>
+      <tr><th>Metric</th><th>Target</th><th>Why / source</th></tr>
+      <tr><td>Write latency (p50)</td><td>1–10 ms LAN</td><td>Two disk fsyncs + a majority round-trip</td></tr>
+      <tr><td>Write throughput</td><td>10k–50k writes/sec</td><td>Bounded by leader disk fsync; reads scale linearly with followers</td></tr>
+      <tr><td>Read throughput</td><td>Up to 300k/sec</td><td>Served from every follower's in-memory replica</td></tr>
+      <tr><td>Leader-election recovery</td><td>&lt; 200 ms</td><td>Documented in ZooKeeper's overview</td></tr>
+      <tr><td>Watch delivery</td><td>&lt; 1 s typical</td><td>Docs say "tens of seconds" worst case for the client view</td></tr>
+      <tr><td>Data size per znode</td><td>≤ 1 MB (server checks); practically ≤ a few KB</td><td>ZK is <em>not</em> a data store — it's a coordination store</td></tr>
+      <tr><td>Ensemble size</td><td>3, 5, or 7 (odd)</td><td>Majority quorum arithmetic — no benefit to even sizes</td></tr>
+      <tr><td>Session timeout range</td><td>2× tickTime to 20× tickTime</td><td>tickTime defaults to 2000 ms, so 4–40 s</td></tr>
+      <tr><td>Total znodes</td><td>~100k practical, ~1M possible</td><td>All state lives in RAM; each znode ~ hundreds of bytes overhead</td></tr>
+    </table>
+    <h3>Back-of-the-envelope</h3>
+    <p>A 5-node ZooKeeper ensemble is enough to coordinate 1,000+ Kafka brokers or 10,000+ microservice instances. If your service-discovery load is 1,000 apps × 5 watches each = 5,000 watches, that's trivial — watches are lightweight and maintained on the follower the client is connected to. The <em>bottleneck</em> shows up when you push write rates past ~50k/s, when watch <em>churn</em> from ephemeral node flapping causes storms, or when total znode count crosses ~1M (RAM footprint + snapshot size).</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>An ensemble, a filesystem, and a watchlist per client</h2>
+    <p>ZooKeeper runs as an <strong>ensemble</strong> of 3, 5, or 7 servers. One is the <strong>leader</strong>, elected via a fast leader-election protocol at start-up. All writes flow through the leader; all reads can be served by any follower. The state is a rooted tree of <em>znodes</em> — think of it as a tiny, in-memory, replicated Linux filesystem where each file also has a version, an ACL, and can host <em>watches</em>.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 960 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ZooKeeper architecture">
+        <defs>
+          <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/></marker>
+          <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/></marker>
+          <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/></marker>
+        </defs>
+        <style>
+          .box { fill: #1a2340; stroke: #4361ee; stroke-width: 1.5; rx: 8; }
+          .box.leader { stroke: #f4a259; stroke-width: 2.5; }
+          .box.foll   { stroke: #2dc653; }
+          .box.client { stroke: #7048e8; }
+          .box.tree   { stroke: #00b4d8; fill: #0f1420; }
+          .lbl { fill: #e7ecf3; font: 700 12px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .sub { fill: #a0aec0; font: 10px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .fl  { stroke: #7fa2ff; stroke-width: 2; fill: none; }
+          .fl.write { stroke: #f4a259; }
+          .fl.watch { stroke: #2dc653; stroke-dasharray: 5 3; }
+          .pl  { fill: #7fa2ff; font: 700 10px monospace; text-anchor: middle; }
+          .pl.write { fill: #f4a259; }
+          .pl.watch { fill: #2dc653; }
+        </style>
+
+        <!-- Clients -->
+        <rect class="box client" x="20"  y="60"  width="130" height="52" rx="8"/>
+        <text class="lbl" x="85" y="82">Kafka Broker</text>
+        <text class="sub" x="85" y="100">watches /brokers</text>
+
+        <rect class="box client" x="20"  y="140" width="130" height="52" rx="8"/>
+        <text class="lbl" x="85" y="162">Kafka Controller</text>
+        <text class="sub" x="85" y="180">holds /controller</text>
+
+        <rect class="box client" x="20"  y="220" width="130" height="52" rx="8"/>
+        <text class="lbl" x="85" y="242">App instance</text>
+        <text class="sub" x="85" y="260">watches /config</text>
+
+        <rect class="box client" x="20"  y="300" width="130" height="52" rx="8"/>
+        <text class="lbl" x="85" y="322">Service consumer</text>
+        <text class="sub" x="85" y="340">watches /services</text>
+
+        <!-- Ensemble -->
+        <rect class="box foll"   x="240" y="60"  width="150" height="60" rx="8"/>
+        <text class="lbl" x="315" y="84">Follower 1</text>
+        <text class="sub" x="315" y="100">serves reads · dispatches</text>
+        <text class="sub" x="315" y="112">watch events</text>
+
+        <rect class="box leader" x="240" y="200" width="150" height="60" rx="8"/>
+        <text class="lbl" x="315" y="224">Leader</text>
+        <text class="sub" x="315" y="240">serializes writes</text>
+        <text class="sub" x="315" y="252">ZAB proposals</text>
+
+        <rect class="box foll"   x="240" y="340" width="150" height="60" rx="8"/>
+        <text class="lbl" x="315" y="364">Follower 2</text>
+        <text class="sub" x="315" y="380">serves reads · dispatches</text>
+        <text class="sub" x="315" y="392">watch events</text>
+
+        <!-- Znode tree -->
+        <rect class="box tree" x="470" y="60" width="440" height="360" rx="10"/>
+        <text class="lbl" x="690" y="86">In-memory znode tree · replicated on every node</text>
+
+        <text x="500" y="120" fill="#e7ecf3" font-family="monospace" font-size="13">/</text>
+        <text x="530" y="145" fill="#7fa2ff" font-family="monospace" font-size="12">/brokers</text>
+        <text x="560" y="168" fill="#f7567c" font-family="monospace" font-size="11">/ids/1  (ephemeral)</text>
+        <text x="560" y="188" fill="#f7567c" font-family="monospace" font-size="11">/ids/2  (ephemeral)</text>
+        <text x="560" y="208" fill="#f7567c" font-family="monospace" font-size="11">/ids/3  (ephemeral)</text>
+        <text x="530" y="240" fill="#7fa2ff" font-family="monospace" font-size="12">/controller  (ephemeral · single owner)</text>
+        <text x="530" y="270" fill="#7fa2ff" font-family="monospace" font-size="12">/config</text>
+        <text x="560" y="292" fill="#e7ecf3" font-family="monospace" font-size="11">/app-cache-ttl = "300"</text>
+        <text x="560" y="312" fill="#e7ecf3" font-family="monospace" font-size="11">/feature-x     = "on"</text>
+        <text x="530" y="342" fill="#7fa2ff" font-family="monospace" font-size="12">/services/order-api</text>
+        <text x="560" y="364" fill="#7048e8" font-family="monospace" font-size="11">/inst-0000000001  (eph+seq · 10.0.1.4)</text>
+        <text x="560" y="384" fill="#7048e8" font-family="monospace" font-size="11">/inst-0000000002  (eph+seq · 10.0.1.5)</text>
+        <text x="560" y="404" fill="#7048e8" font-family="monospace" font-size="11">/inst-0000000003  (eph+seq · 10.0.1.6)</text>
+
+        <!-- Client → follower arrows -->
+        <path class="fl" d="M150,86  L240,86"  marker-end="url(#a1)"/>
+        <text class="pl" x="195" y="76">read + set watch</text>
+        <path class="fl write" d="M150,166 L240,220" marker-end="url(#a3)"/>
+        <text class="pl write" x="195" y="180">write (forwarded)</text>
+        <path class="fl watch" d="M240,246 L150,246" marker-end="url(#a2)"/>
+        <text class="pl watch" x="195" y="238">watch event</text>
+        <path class="fl" d="M150,326 L240,376" marker-end="url(#a1)"/>
+        <text class="pl" x="195" y="356">getChildren + watch</text>
+
+        <!-- Leader replicates to followers -->
+        <path class="fl write" d="M315,200 L315,120" marker-end="url(#a3)"/>
+        <text class="pl write" x="360" y="160">ZAB propose</text>
+        <path class="fl write" d="M315,260 L315,340" marker-end="url(#a3)"/>
+        <text class="pl write" x="360" y="300">ZAB commit</text>
+
+        <!-- Followers push watch events into tree conceptually -->
+        <path class="fl watch" d="M390,90  L470,90"  marker-end="url(#a2)"/>
+        <path class="fl watch" d="M390,370 L470,370" marker-end="url(#a2)"/>
+      </svg>
+    </div>
+
+    <p>Two flows dominate. <strong style="color:#f4a259">Writes (amber)</strong> are always forwarded to the leader, which broadcasts a ZAB proposal, waits for a majority to ack the disk fsync, and commits — that's why write latency has a floor of one disk sync + one majority round-trip. <strong style="color:#2dc653">Watch notifications (green dashed)</strong> flow back from the follower a client is connected to, in strict order relative to the client's other events. Reads are served straight from the follower's in-memory replica, which is why ZooKeeper scales reads by <em>adding followers</em>.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Service discovery + reactive config update via watches</h2>
+    <p>Press <strong>▶ Play</strong>. Two microservice instances register themselves as ephemeral znodes under <code>/services/order-api</code>. A consumer watches the children of that path. Then an operator changes <code>/config/cache-ttl</code>. Watch every step: registration, watch delivery, ephemeral cleanup on crash, and a reactive config push.</p>
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg" role="img">
+        <style>
+          .n { fill: #1a2340; stroke: #4361ee; stroke-width: 1.5; rx: 8; }
+          .n.zk { stroke: #ff9900; }
+          .n.svc { stroke: #7048e8; }
+          .n.cons{ stroke: #2dc653; }
+          .n.op  { stroke: #f7567c; }
+          .txt { fill: #e7ecf3; font: 700 11px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .sub { fill: #a0aec0; font: 10px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .znlbl { fill: #e7ecf3; font: 700 10px monospace; }
+          .pkt { r: 8; }
+          .pkt.reg { fill: #7048e8; }
+          .pkt.ev  { fill: #2dc653; }
+          .pkt.cfg { fill: #f7567c; }
+        </style>
+
+        <rect class="n svc"  x="20"  y="30"  width="130" height="48" rx="8"/>
+        <text class="txt" x="85" y="52">order-api · A</text>
+        <text class="sub" x="85" y="68">10.0.1.4</text>
+
+        <rect class="n svc"  x="20"  y="110" width="130" height="48" rx="8"/>
+        <text class="txt" x="85" y="132">order-api · B</text>
+        <text class="sub" x="85" y="148">10.0.1.5</text>
+
+        <rect class="n cons" x="20"  y="230" width="130" height="48" rx="8"/>
+        <text class="txt" x="85" y="252">Consumer</text>
+        <text class="sub" x="85" y="268">reads &amp; watches</text>
+
+        <rect class="n op"   x="20"  y="310" width="130" height="48" rx="8"/>
+        <text class="txt" x="85" y="332">Operator (kubectl)</text>
+        <text class="sub" x="85" y="348">setData /config</text>
+
+        <!-- ZK cluster -->
+        <rect class="n zk"   x="360" y="60"  width="150" height="52" rx="8"/>
+        <text class="txt" x="435" y="82">ZK Follower</text>
+        <text class="sub" x="435" y="98">holds watches</text>
+
+        <rect class="n zk"   x="360" y="170" width="150" height="52" rx="8"/>
+        <text class="txt" x="435" y="192">ZK Leader</text>
+        <text class="sub" x="435" y="208">ZAB · serializes</text>
+
+        <rect class="n zk"   x="360" y="280" width="150" height="52" rx="8"/>
+        <text class="txt" x="435" y="302">ZK Follower</text>
+        <text class="sub" x="435" y="318">replica</text>
+
+        <!-- znode tree panel -->
+        <rect x="580" y="30" width="300" height="360" rx="10" fill="#0f1420" stroke="#00b4d8" stroke-width="1.5"/>
+        <text x="730" y="52" fill="#e7ecf3" font-size="12" text-anchor="middle" font-weight="700">Znode tree</text>
+        <text x="600" y="80" class="znlbl">/services/order-api</text>
+        <text x="620" y="105" id="zn-a" class="znlbl a-el a-hidden" fill="#f7567c">└ inst-0001 (eph)  = 10.0.1.4</text>
+        <text x="620" y="125" id="zn-b" class="znlbl a-el a-hidden" fill="#f7567c">└ inst-0002 (eph)  = 10.0.1.5</text>
+        <text x="600" y="170" class="znlbl">/config</text>
+        <text x="620" y="195" id="zn-cfg" class="znlbl">└ cache-ttl = "300"</text>
+        <text x="620" y="220" id="zn-cfg-new" class="znlbl a-el a-hidden" fill="#f7567c">└ cache-ttl = "600"</text>
+
+        <!-- packets -->
+        <circle class="pkt reg a-el a-hidden" id="p-regA" cx="85"  cy="54"/>
+        <circle class="pkt reg a-el a-hidden" id="p-regB" cx="85"  cy="134"/>
+        <circle class="pkt ev  a-el a-hidden" id="p-ev"   cx="85"  cy="254"/>
+        <circle class="pkt cfg a-el a-hidden" id="p-cfg"  cx="85"  cy="334"/>
+
+        <text class="sub" id="cap-crash" x="85" y="90" fill="#f7567c" opacity="0">☠ crash</text>
+        <text class="sub" id="cap-tick"  x="235" y="70" fill="#7048e8" opacity="0">registered</text>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+    <script>
+      (function () {
+        const root = document.getElementById('anim1'); if (!root) return;
+        const $ = s => root.querySelector(s), $$ = s => root.querySelectorAll(s);
+        const label = $('.anim-step-label'), cap = $('.anim-step-caption');
+        const btnP = root.querySelector('[data-act="play"]');
+        const btnN = root.querySelector('[data-act="next"]');
+        const btnB = root.querySelector('[data-act="prev"]');
+        const btnR = root.querySelector('[data-act="reset"]');
+        function set(sel,x,y){ const e=$(sel); if(!e) return; e.setAttribute('cx',x); e.setAttribute('cy',y); e.classList.remove('a-hidden'); }
+        function hide(sel){ $(sel)?.classList.add('a-hidden'); }
+        function show(sel){ $(sel)?.classList.remove('a-hidden'); }
+        function txt(sel,t){ const e=$(sel); if(e){ e.textContent=t; e.setAttribute('opacity','1'); } }
+        function clr(sel){ const e=$(sel); if(e){ e.setAttribute('opacity','0'); } }
+
+        const CFG = {
+          intro: 'Two order-api instances register, a consumer watches, one crashes, config changes — all reactively.',
+          interval: 1900,
+          reset: (r) => {
+            ['#p-regA','#p-regB','#p-ev','#p-cfg','#zn-a','#zn-b','#zn-cfg-new'].forEach(hide);
+            $('#p-regA').setAttribute('cx',85);  $('#p-regA').setAttribute('cy',54);
+            $('#p-regB').setAttribute('cx',85);  $('#p-regB').setAttribute('cy',134);
+            $('#p-ev').setAttribute('cx',85);    $('#p-ev').setAttribute('cy',254);
+            $('#p-cfg').setAttribute('cx',85);   $('#p-cfg').setAttribute('cy',334);
+            clr('#cap-crash'); clr('#cap-tick');
+          },
+          steps: [
+            { caption: '1. Instance A boots. It opens a ZK session and calls create("/services/order-api/inst-", ephemeral+sequential, "10.0.1.4"). Packet travels to a follower.',
+              apply: (r,$) => set('#p-regA', 435, 86) },
+            { caption: '2. Follower forwards to leader. Leader proposes via ZAB, majority acks, znode is created as inst-0001. Replicated to all followers.',
+              apply: (r,$) => { set('#p-regA', 435, 196); show('#zn-a'); } },
+            { caption: '3. Instance B does the same, becomes inst-0002. Both ephemeral znodes now live in the tree.',
+              apply: (r,$) => { set('#p-regB', 435, 196); show('#zn-b'); } },
+            { caption: '4. Consumer calls getChildren("/services/order-api", watch=true). It receives ["inst-0001","inst-0002"] and the follower records the watch.',
+              apply: (r,$) => set('#p-ev', 435, 254) },
+            { caption: '5. Instance A crashes. Its TCP session breaks; after the session timeout, the leader deletes inst-0001 automatically.',
+              apply: (r,$) => { txt('#cap-crash','☠ session expired'); hide('#zn-a'); } },
+            { caption: '6. Deletion of a child under /services/order-api fires the consumer\'s child watch. Follower dispatches ONE watch event to the consumer.',
+              apply: (r,$) => set('#p-ev', 85, 254) },
+            { caption: '7. Consumer re-reads getChildren with a fresh watch, sees only inst-0002, updates its target list, and stops routing to 10.0.1.4.',
+              apply: (r,$) => { hide('#p-ev'); } },
+            { caption: '8. Operator issues setData /config/cache-ttl = "600" — the "reactive config" flow.',
+              apply: (r,$) => set('#p-cfg', 435, 196) },
+            { caption: '9. ZK commits, replicates. Every client that has a data watch on /config/cache-ttl gets a single NodeDataChanged event.',
+              apply: (r,$) => { show('#zn-cfg-new'); set('#p-cfg', 85, 334); } },
+            { caption: '10. Each app instance re-reads and re-arms the watch. From write → all apps updated: sub-second. No polling, no restart.',
+              apply: (r,$) => { hide('#p-cfg'); } }
+          ]
+        };
+
+        let idx=-1, playing=false, timer=null;
+        function goto(i){ if(i<0||i>=CFG.steps.length) return; CFG.reset(root); for(let k=0;k<=i;k++) CFG.steps[k].apply(root,$,$$); idx=i; label.textContent=`Step ${i+1}/${CFG.steps.length}`; cap.textContent=CFG.steps[i].caption; }
+        function reset(){ idx=-1; playing=false; if(timer){clearTimeout(timer); timer=null;} CFG.reset(root); label.textContent='Ready'; cap.textContent=CFG.intro; btnP.textContent='▶ Play'; }
+        function play(){ if(playing){ playing=false; if(timer)clearTimeout(timer); btnP.textContent='▶ Play'; return; } if(idx>=CFG.steps.length-1) reset(); playing=true; btnP.textContent='⏸ Pause'; function tick(){ if(!playing) return; if(idx+1<CFG.steps.length) goto(idx+1); if(idx<CFG.steps.length-1) timer=setTimeout(tick, CFG.interval); else { playing=false; btnP.textContent='▶ Replay'; } } timer=setTimeout(tick, 400); }
+        btnP.addEventListener('click', play);
+        btnR.addEventListener('click', reset);
+        btnN.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnP.textContent='▶ Play';} goto(idx+1); });
+        btnB.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnP.textContent='▶ Play';} goto(idx-1); });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. The znode — a "file that's also a directory"</h3>
+    <p>The ZooKeeper data model is a rooted tree of <em>znodes</em>. Each znode has a <strong>name</strong>, up to ~1 MB of opaque <strong>byte-data</strong>, an ACL, a stat structure with version numbers and timestamps, and zero or more <em>child</em> znodes. Every path is absolute: <code>/kafka/brokers/ids/1</code>. There are three important flavours:</p>
+    <ul>
+      <li><span class="znode pers">persistent</span> <strong>Persistent znode</strong> — the default; lives until explicitly deleted. Used for durable config: <code>/config/cache-ttl</code>.</li>
+      <li><span class="znode eph">ephemeral</span> <strong>Ephemeral znode</strong> — tied to the session that created it. When that session times out or the client crashes, ZooKeeper <em>deletes it automatically</em>. This is the trick behind service discovery — the znode itself is the liveness signal.</li>
+      <li><span class="znode seq">sequential</span> <strong>Sequential suffix</strong> — when creating a znode, you can ask for a monotonically-increasing 10-digit counter to be appended by the server. So <code>create("/lock/-", EPH+SEQ)</code> yields <code>/lock/-0000000001</code>, then <code>-0000000002</code>, and so on. Combined with ephemeral, this is the entire basis of ZooKeeper's classic leader-election recipe.</li>
+    </ul>
+
+    <h3>2. Watches — the pull-then-push notification primitive</h3>
+    <p>All three read operations — <code>getData</code>, <code>getChildren</code>, and <code>exists</code> — accept a <strong>boolean flag</strong> that says "also set a watch." Setting a watch is essentially free: it's a small entry recorded on the follower the client is talking to. When the target znode changes, the follower fires <em>exactly one</em> event to the client and forgets about the watch. The client must <strong>re-read to re-arm</strong> if it wants to keep watching. This "one-shot" semantics is what keeps ZooKeeper's memory bounded even under a fleet of thousands of clients.</p>
+    <p>There are three logical <strong>watch types</strong>, and mutations fire them selectively:</p>
+    <table>
+      <tr><th>Mutation</th><th>Fires on target znode</th><th>Fires on parent</th></tr>
+      <tr><td><code>create</code></td><td>data watch (from <code>exists</code>)</td><td>child watch (from <code>getChildren</code>)</td></tr>
+      <tr><td><code>setData</code></td><td>data watch (from <code>getData</code>/<code>exists</code>)</td><td>—</td></tr>
+      <tr><td><code>delete</code></td><td>data watch + child watch</td><td>child watch</td></tr>
+    </table>
+    <p>Watches carry two <strong>guarantees</strong> that make reactive designs correct: <em>(1)</em> the client sees the watch event <em>before</em> it can see the new data — so if your callback re-reads, it's guaranteed to see the state that fired the event; and <em>(2)</em> watch order matches the global update order for that client. That's what lets you build a state machine driven by a stream of events without racing.</p>
+    <p><strong>Persistent / recursive watches</strong> (ZooKeeper 3.6+) — set with <code>addWatch()</code> — are the newer option: they don't clear after firing, and can recursively cover an entire subtree. They're perfect for a <em>configuration bus</em>: point one recursive watch at <code>/config</code> and get every child change as long as your session is alive.</p>
+
+    <h3>3. Session lifecycle — the heartbeat that keeps ephemerals alive</h3>
+    <p>A ZooKeeper session is a stateful connection between a client and the ensemble. The client sends <strong>heartbeats</strong> (technically "pings") every third of a session timeout by default. If the ensemble stops hearing pings for the full session timeout, the leader <em>expires</em> the session and deletes all ephemeral znodes it owned — and fires all corresponding watches. This is the "sticky note falls off automatically" magic. Session IDs are opaque 64-bit values; on TCP failure the client can transparently <strong>reconnect to a different server</strong> as long as it presents the same session ID before the timeout, keeping the ephemeral state alive. <em>This is why proper session-timeout tuning is the #1 source of production incidents on ZooKeeper</em> — too low and you flap, too high and you don't notice dead brokers fast enough.</p>
+
+    <h3>4. ZAB — the consensus protocol under the hood</h3>
+    <p>ZooKeeper's writes go through <strong>ZAB — ZooKeeper Atomic Broadcast</strong>. It's Paxos-adjacent, purpose-built for the "one leader, ordered log of transactions" pattern. Every transaction gets a globally unique 64-bit <strong>zxid</strong> where the high 32 bits are the "epoch" (bumped on every leader election) and the low 32 bits are the counter within that epoch. When a client writes, the leader (a) picks the next zxid, (b) sends a PROPOSE to every follower, (c) waits for ACKs from a quorum (majority), (d) sends COMMIT. Every follower fsyncs the proposal to its transaction log before ack'ing. That double disk sync is why writes cost a few milliseconds even on LAN — and why running the transaction log on <em>a dedicated SSD</em> is the classic ZooKeeper performance tune.</p>
+    <p>When the leader dies, followers run a fast leader election (documented at &lt; 200 ms), the new leader gathers highest-zxid state from the quorum, and the ensemble resumes. Because of ZAB's ordering, <em>every follower sees every commit in the same order</em>, which is the mathematical foundation of the "single system image" guarantee.</p>
+
+    <h3>5. The four canonical use-cases you'll be asked about</h3>
+    <p><strong>Service discovery.</strong> Each instance creates an ephemeral child under <code>/services/&lt;name&gt;/</code>. Consumers <code>getChildren</code> with a watch. Instance crashes ⇒ session expires ⇒ znode auto-deleted ⇒ child watch fires ⇒ consumer re-reads ⇒ dead instance dropped from routing. Latency from crash to reaction: session-timeout + ~1 network hop.</p>
+    <p><strong>Leader election.</strong> Each contender creates <code>/election/n-</code> with ephemeral+sequential. Everyone lists the children; whoever holds the <em>lowest number</em> is the leader. Every non-leader watches <em>only the znode immediately above theirs</em> — this avoids the <em>thundering herd</em> where all N contenders wake up when the leader dies. When the current leader crashes, only <em>one</em> node's watch fires, that node checks if it's now the lowest, and if so becomes leader.</p>
+    <p><strong>Distributed lock.</strong> Same recipe as leader election — the "leader" is the lock holder. Release is deleting your znode. Fair-queued because the sequential suffix orders contenders in creation order.</p>
+    <p><strong>Reactive configuration.</strong> Store config as data on <code>/config/&lt;key&gt;</code>. Every app instance does <code>getData</code> with a watch on startup. On <code>NodeDataChanged</code>, re-read (which delivers the new bytes and re-arms the watch). Config rollout from operator write to entire fleet updated: sub-second.</p>
+
+    <h3>6. The mapping / reactive-update pattern explicitly</h3>
+    <p>Your question was specifically about "watches for mapping and reactive updates." Here's the canonical pattern: model the mapping as a znode subtree — say <code>/routes/{tenantId} = "backendPool-3"</code> — and let each edge process hold a persistent recursive watch (3.6+) on <code>/routes</code>. Any operator change (add tenant, move tenant to a different pool) is a single <code>setData</code>. ZooKeeper pushes the event to every watching edge in sub-second, and the edges re-read <em>only the changed subtree</em> to update their local routing map. No poll loop, no config reload restart, no external message bus. This is exactly how <strong>Solr Cloud</strong> propagates cluster state, how <strong>HBase</strong> tracks the current master, and how Kafka's controller tracked ISR changes for a decade.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <table>
+      <tr><th>Component</th><th>Structure / algorithm</th><th>Why chosen</th><th>Complexity</th></tr>
+      <tr><td>Znode tree</td><td>In-memory trie / hash-map-of-children indexed by path</td><td>Fast lookup by absolute path; hierarchical iteration for children</td><td>O(depth) get; O(1) child add/remove</td></tr>
+      <tr><td>Watch table</td><td>Hash map <code>path → Set&lt;client&gt;</code>, one per server</td><td>O(1) fire on write; kept per-server to avoid cross-node fanout</td><td>O(1) register/fire</td></tr>
+      <tr><td>Transaction log</td><td>Append-only sequential file with fsync</td><td>Durability; replay-on-recovery</td><td>O(1) append</td></tr>
+      <tr><td>Snapshot</td><td>Serialized tree dump written periodically</td><td>Bounds log replay time on restart</td><td>O(n) tree</td></tr>
+      <tr><td>Session table</td><td>Hash map <code>sessionId → expiryTimestamp</code> + bucketed expiry ring</td><td>O(1) heartbeat update; batch-expire per tick</td><td>O(1) update, O(k) expire</td></tr>
+      <tr><td>Leader election within ensemble</td><td>Fast leader election over vote messages (a Paxos-adjacent algorithm)</td><td>&lt;200 ms recovery time documented</td><td>O(n) messages</td></tr>
+      <tr><td>ZAB</td><td>Atomic broadcast: propose → majority ack → commit; totally ordered log</td><td>Sequential consistency + atomicity</td><td>O(n) per write, 1 round-trip</td></tr>
+      <tr><td>zxid generation</td><td>Monotonic 64-bit: (epoch &lt;&lt; 32) | counter</td><td>Global ordering across leader changes</td><td>O(1)</td></tr>
+      <tr><td>Sequential suffix</td><td>Signed 32-bit counter per parent znode</td><td>Fair ordering of contenders</td><td>O(1)</td></tr>
+      <tr><td>Client → server routing</td><td>Random pick from connection string + reconnect on failure</td><td>Load spreading; session id reused on reconnect</td><td>O(1)</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Deploying ZooKeeper (or its cloud replacements) on AWS</h2>
+    <p>ZooKeeper isn't a managed AWS service, but its role — a strongly-consistent coordination store with watches — has several first-class replacements. Here's how to deploy the real thing plus the alternatives.</p>
+    <table>
+      <tr><th>Layer</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Self-managed ZooKeeper ensemble</td><td>EC2 (m5/m6i) × 3 or 5, spread across AZs</td><td>Native ZooKeeper — required if you're running old Kafka, HBase, Solr</td></tr>
+      <tr><td>Storage for transaction log</td><td>Dedicated <strong>io2 gp3 EBS volume</strong> — separate from OS disk</td><td>Fsync latency dominates write path; never share the log disk with anything else</td></tr>
+      <tr><td>Amazon MSK (managed Kafka)</td><td>Amazon MSK</td><td>Historically ran ZK for you; newer MSK Serverless uses KRaft (no ZK)</td></tr>
+      <tr><td>Coordination as a service</td><td><strong>Amazon MemoryDB</strong> or <strong>DynamoDB conditional writes</strong></td><td>Simple mutex/leader-election if you don't need watches per se</td></tr>
+      <tr><td>Alternative coordinator</td><td><strong>etcd on EKS</strong> or <strong>Consul</strong></td><td>Raft-based, HTTP+gRPC API, native watches; the modern default</td></tr>
+      <tr><td>Reactive config bus (managed)</td><td><strong>AWS AppConfig</strong> + <strong>SNS/EventBridge</strong></td><td>If you only need "config changed → notify all instances," this is simpler than running ZK</td></tr>
+      <tr><td>Service discovery (managed)</td><td><strong>AWS Cloud Map</strong> or <strong>Route 53 private hosted zones</strong></td><td>Auto-registration for ECS/EKS with health-check-driven eviction</td></tr>
+      <tr><td>Distributed lock (managed)</td><td>DynamoDB conditional-update lock table</td><td>Well-known pattern; simpler than ZK for single-purpose locks</td></tr>
+      <tr><td>Observability</td><td>CloudWatch, ZK 4-letter commands (mntr, stat, cons) exposed via a sidecar</td><td>Watch counts, request latency, pending requests, log size</td></tr>
+    </table>
+    <p><strong>Reality check for greenfield systems.</strong> Unless you're bound to ZooKeeper by an existing dependency (old Kafka, HBase, Solr, Storm), most 2024+ deployments use <strong>etcd</strong> (Raft consensus, gRPC watches, native in Kubernetes) or a managed service like <strong>AWS Cloud Map</strong>, <strong>AWS AppConfig</strong>, or <strong>HashiCorp Consul</strong>. Kafka itself is now shipping KRaft mode which retires ZooKeeper entirely. Interviewers still ask about ZooKeeper because the <em>concepts</em> — ephemeral state, watches, consensus quorum, session leases — are shared across all coordination systems.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — reactive config &amp; service registration</h2>
+    <p>Below is idiomatic C# using the <code>ZooKeeperNetEx</code> NuGet package (the maintained .NET client). It shows the two patterns you'll be asked to whiteboard: (1) an app instance that registers itself as an ephemeral znode and (2) a consumer that watches config for reactive updates.</p>
+<pre><span class="cmt">// dotnet add package ZooKeeperNetEx
+// Two patterns: (a) ephemeral-service registration, (b) reactive config with re-arming watch.</span>
+
+<span class="kw">using</span> org.apache.zookeeper;
+<span class="kw">using</span> org.apache.zookeeper.data;
+
+<span class="cmt">// -----------------------------------------------------------------
+// (a) Register this instance as an ephemeral+sequential znode. When
+// this process dies, the znode is auto-removed and consumers get a
+// watch event. Zero cleanup logic required.
+// -----------------------------------------------------------------</span>
+<span class="kw">public class</span> <span class="typ">ServiceRegistrar</span> : <span class="typ">Watcher</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">ZooKeeper</span> _zk;
+    <span class="kw">public string</span> RegisteredPath { <span class="kw">get</span>; <span class="kw">private set</span>; } = <span class="str">""</span>;
+
+    <span class="kw">public</span> <span class="fn">ServiceRegistrar</span>(<span class="typ">string</span> connectString)
+        =&gt; _zk = <span class="kw">new</span> <span class="typ">ZooKeeper</span>(connectString, sessionTimeout: <span class="str">10000</span>, watcher: <span class="kw">this</span>);
+
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">RegisterAsync</span>(<span class="typ">string</span> serviceName, <span class="typ">string</span> endpoint)
+    {
+        <span class="cmt">// Make sure the parent path exists (persistent).</span>
+        <span class="kw">await</span> <span class="fn">EnsurePathAsync</span>(_zk, <span class="str">$"/services/{</span>serviceName<span class="str">}"</span>);
+
+        <span class="cmt">// Ephemeral+Sequential — the "10.0.1.4" bytes are the payload.</span>
+        RegisteredPath = <span class="kw">await</span> _zk.createAsync(
+            path:  <span class="str">$"/services/{</span>serviceName<span class="str">}/inst-"</span>,
+            data:  <span class="typ">Encoding</span>.UTF8.GetBytes(endpoint),
+            acl:   <span class="typ">ZooDefs</span>.Ids.OPEN_ACL_UNSAFE,
+            createMode: <span class="typ">CreateMode</span>.EPHEMERAL_SEQUENTIAL);
+    }
+
+    <span class="cmt">// Watcher callback — used to react to session events (Disconnected, Expired).</span>
+    <span class="kw">public override</span> <span class="typ">Task</span> <span class="fn">process</span>(<span class="typ">WatchedEvent</span> ev) =&gt; <span class="typ">Task</span>.CompletedTask;
+}
+
+<span class="cmt">// -----------------------------------------------------------------
+// (b) Reactive config watcher — re-arms itself after every event.
+// Call ttl() from anywhere in the app; it always returns the freshest
+// value that ZooKeeper has committed for the app instance.
+// -----------------------------------------------------------------</span>
+<span class="kw">public class</span> <span class="typ">ReactiveConfig</span> : <span class="typ">Watcher</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">ZooKeeper</span> _zk;
+    <span class="kw">private readonly string</span> _path;
+    <span class="kw">private volatile</span> <span class="typ">string</span> _current = <span class="str">""</span>;
+
+    <span class="kw">public</span> <span class="fn">ReactiveConfig</span>(<span class="typ">ZooKeeper</span> zk, <span class="typ">string</span> path) { _zk = zk; _path = path; }
+
+    <span class="kw">public string</span> <span class="fn">Current</span>() =&gt; _current;
+
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">StartAsync</span>()
+    {
+        <span class="cmt">// getData with watch=true: fetches value AND arms the data watch atomically.</span>
+        <span class="kw">var</span> res = <span class="kw">await</span> _zk.getDataAsync(_path, watcher: <span class="kw">this</span>);
+        _current = <span class="typ">Encoding</span>.UTF8.GetString(res.Data);
+    }
+
+    <span class="cmt">// Fired once when the znode data changes. We MUST re-read to re-arm.</span>
+    <span class="kw">public override async</span> <span class="typ">Task</span> <span class="fn">process</span>(<span class="typ">WatchedEvent</span> ev)
+    {
+        <span class="kw">if</span> (ev.get_Type() == <span class="typ">Event</span>.EventType.NodeDataChanged &amp;&amp; ev.getPath() == _path)
+        {
+            <span class="kw">var</span> res = <span class="kw">await</span> _zk.getDataAsync(_path, watcher: <span class="kw">this</span>);
+            _current = <span class="typ">Encoding</span>.UTF8.GetString(res.Data);
+            <span class="cmt">// Optionally fire OnChanged event, invalidate caches, refresh a policy...</span>
+        }
+        <span class="cmt">// Note: on Disconnected / Expired session events, ZK re-registers watches
+        // for you on reconnect. On Expired you must recreate the session.</span>
+    }
+}
+
+<span class="cmt">// -----------------------------------------------------------------
+// Wire-up in Program.cs:
+// -----------------------------------------------------------------</span>
+<span class="kw">var</span> zk  = <span class="kw">new</span> <span class="typ">ZooKeeper</span>(<span class="str">"zk1:2181,zk2:2181,zk3:2181"</span>, <span class="str">10000</span>, <span class="kw">new</span> <span class="typ">NoopWatcher</span>());
+<span class="kw">var</span> reg = <span class="kw">new</span> <span class="typ">ServiceRegistrar</span>(<span class="str">"zk1:2181,zk2:2181,zk3:2181"</span>);
+<span class="kw">await</span> reg.RegisterAsync(<span class="str">"order-api"</span>, <span class="str">"10.0.1.4:8080"</span>);
+
+<span class="kw">var</span> cfg = <span class="kw">new</span> <span class="typ">ReactiveConfig</span>(zk, <span class="str">"/config/cache-ttl"</span>);
+<span class="kw">await</span> cfg.StartAsync();
+<span class="typ">Console</span>.WriteLine(<span class="str">$"Initial TTL: {</span>cfg.Current()<span class="str">}"</span>);
+<span class="cmt">// Later — any operator setData on /config/cache-ttl will update cfg.Current() automatically.</span>
+</pre>
+    <p>Two things this snippet gets right that most demos miss: (1) The watch is <strong>re-armed inside the callback</strong>, immediately after re-reading; skipping this is the #1 bug in ZooKeeper client code — you get the <em>first</em> change and then silently stop hearing about further ones. (2) The service registration uses <code>EPHEMERAL_SEQUENTIAL</code> so the znode both auto-cleans on crash and gets a globally-ordered position, which is what lets you build fair leader election on the exact same primitive by watching <em>only the znode immediately preceding yours</em>.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Where it actually breaks</h3>
+    <p><strong>Watch storms.</strong> If 10,000 clients all watch <code>/services/order-api</code> and one flap creates+deletes children repeatedly, the follower delivers 10,000 events per flap. Mitigation: partition the tree, use persistent recursive watches sparingly, and rate-limit flapping instances at the client layer. <strong>Session timeout tuning.</strong> Too low and a GC pause on the client causes false failover; too high and dead instances linger in your routing table. The sweet spot is usually 10-30 seconds. <strong>Log disk fsync latency.</strong> Sharing the transaction-log disk with anything else is the classic cause of degraded ZK. Always dedicate an SSD. <strong>Large znodes.</strong> ZK is a coordination store, not a data store; bytes over ~a few KB slow snapshotting and replication. <strong>Split-brain.</strong> Impossible on paper (majority quorum), but wildly asymmetric AZ partitions have caused real outages. Deploy across ≥3 AZs.</p>
+
+    <h3>Consistency vs. availability</h3>
+    <p>ZooKeeper picks <strong>C over A</strong> in CAP terms. If the ensemble loses quorum (e.g., 2 of 3 nodes down), it stops accepting writes and even reads become stale by definition — the safe behavior. This makes it correct-first, and is why every operational playbook says "size your ensemble to survive the number of failures you actually plan for." See the <a href="../cap-theorem/index.html">CAP theorem</a> page for the fuller reasoning.</p>
+
+    <h3>Interviewer follow-ups (with crisp answers)</h3>
+    <div class="qa">
+      <p class="q">Q. What exactly is an ephemeral znode?</p>
+      <p class="a">A. A znode whose lifetime is tied to the ZooKeeper session that created it. When the session ends — whether by clean close or timeout — the ensemble automatically deletes the znode and fires any watches on it. That's what makes ZooKeeper's service-discovery elegant: presence itself becomes a first-class primitive.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. Watches are one-shot — how do you not miss changes?</p>
+      <p class="a">A. You re-arm the watch in the same call that reads the new data (<code>getData(path, watch=true)</code>). ZooKeeper guarantees the watch event arrives before the client can observe the new state, and events are ordered globally per client, so if you always re-read on the event and re-set the watch, you can't miss an <em>eventual state</em> — you might collapse rapid consecutive changes into one, but that's usually fine because you're reading the current state each time anyway. If you truly need every change, use ZK 3.6+ persistent watches or move to a real event log (Kafka).</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. How does leader election work with sequential ephemeral znodes?</p>
+      <p class="a">A. Every contender creates <code>/election/n-</code> as <code>EPHEMERAL_SEQUENTIAL</code>, resulting in <code>-0000000001</code>, <code>-0000000002</code>, and so on. All read <code>getChildren</code>. Whoever holds the lowest-numbered znode is leader. Non-leaders each set an <em>exists</em> watch on <em>only the znode immediately below theirs</em> — not on the whole list — so a leader crash wakes up exactly one node, avoiding a thundering herd. That node checks if it's now the lowest, and if so becomes leader.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. Why odd ensemble sizes (3, 5, 7)?</p>
+      <p class="a">A. A 4-node ensemble tolerates only 1 failure (needs 3 for majority), same as a 3-node ensemble. But 4 nodes are more expensive and have <em>more</em> failure modes than 3 (twice the chance of any one being down). So even sizes are strictly worse than the odd size below them.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. What replaced ZooKeeper for modern Kafka?</p>
+      <p class="a">A. KRaft mode — Kafka's own built-in Raft implementation. It embeds a metadata quorum into the Kafka controller itself, eliminating the ZK dependency, reducing operational surface, and letting Kafka scale metadata to millions of partitions. Introduced in KIP-500, GA in Kafka 3.3, and default for new clusters from Kafka 3.5+.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. Why not just use Redis for service discovery?</p>
+      <p class="a">A. Redis has no built-in "notify when this key changes" primitive that's session-safe (keyspace notifications are best-effort, fire-and-forget, and don't survive Redis restarts). Redis also isn't strongly consistent across replicas by default. ZooKeeper's ephemeral-znode-plus-watch is a purpose-built primitive; Redis + Lua + expiry can approximate it but with weaker guarantees. For coordination, use a coordination store.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "ZooKeeper is a small, strongly-consistent, hierarchical, in-memory key-value store — a coordination service — running as an odd-sized ensemble that agrees on writes via <em>ZAB</em>, a Paxos-adjacent atomic broadcast protocol. Clients build higher-level primitives on top of three basic ingredients: <em>ephemeral znodes</em> that auto-delete when the session dies, <em>sequential znodes</em> for fair ordering, and <em>watches</em> — one-shot asynchronous notifications on read operations that turn ZooKeeper into a reactive push system. Service discovery, leader election, distributed locks, and dynamic configuration are all recipes built from those three ingredients. Kafka, HBase, and Solr used it as their coordination layer for a decade before Raft-based alternatives like etcd and KRaft displaced it — but the concepts live on."</p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Leader-election recovery: <strong>&lt; 200 ms</strong>.</li>
+      <li>Write throughput: <strong>10k–50k/sec</strong>, bounded by disk fsync.</li>
+      <li>Read throughput: <strong>up to 300k/sec</strong>, scales linearly with followers.</li>
+      <li>Znode size limit: <strong>1 MB server-side, KB in practice</strong>.</li>
+      <li>Session timeout range: <strong>2× to 20× tickTime</strong>, tickTime defaults to 2 s.</li>
+      <li>Ensemble sizes: <strong>3, 5, or 7</strong> — always odd.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li>Draw the znode tree explicitly — persistent, ephemeral, sequential — with real paths like <code>/brokers/ids/1</code>.</li>
+      <li>Say "one-shot watch" and explain re-arming; then contrast with 3.6+ persistent watches.</li>
+      <li>Show the leader-election recipe with the "watch only the predecessor" trick — this is the anti-thundering-herd move interviewers listen for.</li>
+      <li>Name ZAB and describe it as "atomic broadcast, majority-ack, totally ordered log with zxid."</li>
+      <li>Call out CAP: ZK sacrifices availability under partition, and that's correct for a coordinator.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://zookeeper.apache.org/doc/current/zookeeperProgrammers.html">Apache ZooKeeper — Programmer's Guide (watches, semantics, guarantees)</a></li>
+      <li><a href="https://zookeeper.apache.org/doc/current/zookeeperOver.html">Apache ZooKeeper — Overview (data model, ZAB, session)</a></li>
+      <li><a href="https://zookeeper.apache.org/doc/current/recipes.html">Apache ZooKeeper — Recipes (leader election, locks, barriers)</a></li>
+      <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum">Kafka KIP-500 — Replacing ZooKeeper with KRaft</a></li>
+      <li><a href="https://static.googleusercontent.com/media/research.google.com/en//archive/paxos_made_live.pdf">Paxos Made Live — Google (context for ZAB-style protocols)</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

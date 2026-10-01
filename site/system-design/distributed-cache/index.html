@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Distributed Cache — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --layman: #2dc653;
+    --layman-bg: #eaf9ee;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 50%, #7f1d1d 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.layman   { border-left: 6px solid var(--layman);   background: var(--layman-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .layman .badge   { background: var(--layman); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #dc2626; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Distributed Cache</h1>
+    <p>Millions of ops per second, sub-millisecond reads, and — when a node dies at 3 AM — only 1/N of the keys move, not the whole cluster. The design pattern behind Redis Cluster, Memcached at Facebook, and DynamoDB DAX.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#layman">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>We're designing a <strong>distributed in-memory cache</strong> — the fast, forgetful layer that sits between the application and the database. It's the class of system that powers <strong>Redis Cluster, Memcached (as used at Facebook, Twitter, Netflix, Reddit, Pinterest), Amazon ElastiCache, Amazon DynamoDB DAX, and TAO's cache tier at Meta</strong>. When a service needs to look up a user profile, a session, a feed page, or a hot product listing, the answer should come back in under <em>1 ms</em>, not the 20–50 ms of a database round trip. A distributed cache lets us keep terabytes of hot data in RAM across dozens of nodes, spread the load evenly, survive individual node failures, and add or remove nodes at 2 AM without moving 99% of the keys.</p>
+    <p>Interviewers reach for this scenario because it forces you to defend the two hardest ideas in distributed systems in <em>one</em> conversation: <strong>partitioning (how do you split N keys across M servers?)</strong> and <strong>fault tolerance (what happens when one of those servers dies?)</strong>. The right answer — <strong>consistent hashing with virtual nodes, plus replication and gossip-based failure detection</strong> — is the same pattern that underpins Amazon Dynamo, Cassandra, Riak, Discord's chat routing, and Akamai's CDN. Nail it here and you can defend it everywhere.</p>
+  </section>
+
+  <section id="layman" class="card layman">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The whole thing, without any jargon</h2>
+    <p>Imagine a giant library that gets so busy that every question — "where's the biography section?" "what time do you close?" — takes three minutes for a librarian to answer because they have to walk to the archive every single time. So the library builds a <strong>whiteboard right at the front desk</strong> and writes down the most-asked answers. When someone asks a common question, the receptionist just glances at the whiteboard and answers in two seconds. That whiteboard is a <em>cache</em>.</p>
+    <p>Now imagine the library grows to <strong>ten million visitors a day</strong>. One whiteboard isn't enough — even reading it becomes a queue. So we buy twenty whiteboards, line them up along the wall, and split up the answers: whiteboard 1 holds anything about music, whiteboard 2 holds anything about history, whiteboard 3 holds cookbooks, and so on. Now twenty receptionists can answer twenty questions at the same time. This is <strong>partitioning</strong> — splitting the data so each server only handles its slice.</p>
+    <p>Here's the tricky part. What if we simply said <em>"take the question, count the letters, divide by 20, use the remainder to pick a whiteboard"</em>? It works — until one whiteboard breaks, or we buy a new one. Suddenly the formula changes to <em>"divide by 19"</em> or <em>"divide by 21"</em>, and <strong>almost every answer is now on the wrong whiteboard</strong>. All the librarians spend the whole night rewriting everything. Chaos.</p>
+    <p>The clever fix is to arrange the whiteboards <strong>in a circle</strong> around the room, and give each question a spot on that circle based on its name. When someone asks a question, they just walk clockwise from their spot until they hit a whiteboard — that one holds their answer. If a whiteboard <em>breaks</em>, only the questions that pointed to <em>that</em> whiteboard have to move; they simply walk one more step clockwise to the next one. If we <em>add</em> a whiteboard, it only takes over a little slice of the circle. This trick — the <strong>hash ring</strong> — means node changes only move a small fraction of the data, never the whole library.</p>
+    <p>Two more tricks. First, we write each answer on <em>three</em> whiteboards in a row, so if one dies mid-shift the next one already knows. That's <strong>replication</strong>. Second, the whiteboards constantly whisper to each other — "still here! still here!" — and if one goes silent for a few seconds, the others agree it's out and someone else takes over its slice. That's <strong>failure detection</strong>. Put it all together and you get the cache behind <strong>WhatsApp's contact lookups, Netflix's viewer sessions, Instagram's feed, and Uber's driver locations</strong> — all served from RAM in about a millisecond.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>GET(key)</strong>, <strong>PUT(key, value, ttl)</strong>, <strong>DELETE(key)</strong> — the classic three.</li>
+      <li>Values up to a few MB (typically KB); millions of keys per node.</li>
+      <li>TTL-based expiration + eviction policy (LRU, LFU, or TinyLFU).</li>
+      <li>Add/remove nodes online without downtime.</li>
+      <li>Optional: pub/sub, transactions, scripting, atomic counters (Redis-shaped) vs pure KV (Memcached-shaped).</li>
+    </ul>
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Latency</strong>: p99 GET &lt; 1 ms within a datacenter, p999 &lt; 5 ms.</li>
+      <li><strong>Throughput</strong>: 100K – 1M ops/sec per node; cluster scales linearly.</li>
+      <li><strong>Availability</strong>: 99.99% — survive single-node failures without losing recent writes (with replication).</li>
+      <li><strong>Rebalancing cost</strong>: adding/removing a node moves ~1/N of keys, not all of them.</li>
+      <li><strong>Consistency</strong>: usually eventual (cache is by nature a best-effort projection of the database).</li>
+    </ul>
+
+    <h3>Back-of-the-envelope estimates</h3>
+    <table>
+      <tr><th>Metric</th><th>Estimate</th><th>How we got it</th></tr>
+      <tr><td>Read QPS (typical Web app)</td><td>~1 M reads/sec</td><td>50K RPS front-end × 20 cache hits per request.</td></tr>
+      <tr><td>Write QPS</td><td>~50 – 100 K writes/sec</td><td>~10:1 read:write ratio.</td></tr>
+      <tr><td>Total dataset</td><td>~1 TB hot working set</td><td>Common for a large web/service tier.</td></tr>
+      <tr><td>Per-node RAM</td><td>~64 – 256 GB</td><td>Modern cache instances: r7g.4xlarge / r6i.8xlarge.</td></tr>
+      <tr><td>Nodes needed</td><td>~10 – 20 primaries + replicas</td><td>1 TB ÷ 64 GB usable per node.</td></tr>
+      <tr><td>Ops/sec per node</td><td>~100 K – 1 M</td><td>Single-threaded Redis: ~100K; multi-threaded/Memcached: ~1M.</td></tr>
+      <tr><td>Replication factor</td><td>N = 3</td><td>Survive one full node failure, keep read quorum.</td></tr>
+      <tr><td>Virtual nodes per physical</td><td>~100 – 200</td><td>Enough to smooth key distribution (see High Scalability blog).</td></tr>
+      <tr><td>Key rebalanced on 1 node loss</td><td>~1/N (5–10%)</td><td>vs 100% with modulo hashing.</td></tr>
+      <tr><td>Gossip interval / failure detect</td><td>1 s / ~5 s</td><td>Redis Cluster defaults.</td></tr>
+    </table>
+    <p>The two anchor facts to memorise for the interview: <strong>consistent hashing moves only K/N keys on a scale event</strong> (vs 100% for modulo), and <strong>virtual nodes are what make the distribution actually smooth</strong> — a single point per node gives you a bad, lumpy ring.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The client library (or a proxy) holds the <strong>hash ring</strong> — a sorted structure mapping <em>positions on a 2<sup>32</sup> or 2<sup>64</sup> ring</em> to physical nodes, with each node placed at ~100–200 virtual positions. When the app calls <code>GET(user:42)</code>, the client hashes the key (MurmurHash3 / xxHash), walks the ring clockwise, and finds the first virtual node — that's the primary. The <strong>next N-1 unique physical nodes clockwise</strong> are the replicas. The client sends the request straight to the primary (one network hop). Writes go to the primary and are replicated to the followers either synchronously (strong-ish) or asynchronously (fast).</p>
+    <p>A background <strong>gossip protocol</strong> (Redis Cluster's approach) or a central <strong>configuration store</strong> like ZooKeeper (Memcached-mcrouter's approach) keeps everyone's view of "which nodes are alive" in agreement. When a node dies, gossip flags it "PFAIL → FAIL", the cluster elects one of its replicas as the new primary, and the ring position transparently switches over. When you <em>add</em> a node, it slots into the ring at 100–200 virtual positions and pulls in the small slice of keys that now belong to it — a bounded, background migration.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 860 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Distributed cache architecture">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#8ea3ff"/>
+          </marker>
+          <marker id="arrR" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/>
+          </marker>
+        </defs>
+        <style>
+          .box { fill:#1b2940; stroke:#2a3652; stroke-width:1.5; rx:10; }
+          .lbl { fill:#e7ecf3; font: 700 12px -apple-system,sans-serif; }
+          .sub { fill:#8ea3ff; font: 400 10px -apple-system,sans-serif; }
+          .flow { stroke:#8ea3ff; stroke-width:2; fill:none; }
+          .repl { stroke:#f4a259; stroke-width:2; stroke-dasharray:5 4; fill:none; }
+          .ring { fill:none; stroke:#4361ee; stroke-width:2; stroke-dasharray:3 4; }
+          .node { fill:#dc2626; stroke:#fff; stroke-width:2; }
+          .vnode { fill:#7048e8; stroke:#fff; stroke-width:1.5; }
+        </style>
+
+        <!-- Client -->
+        <rect class="box" x="20" y="200" width="130" height="60"/>
+        <text class="lbl" x="85" y="228" text-anchor="middle">Client / App</text>
+        <text class="sub" x="85" y="246" text-anchor="middle">holds hash ring</text>
+
+        <!-- Ring -->
+        <g transform="translate(430,230)">
+          <circle class="ring" r="120"/>
+          <!-- primaries -->
+          <circle class="node" cx="0" cy="-120" r="14"/>
+          <text class="lbl" x="0" y="-140" text-anchor="middle">N1</text>
+          <circle class="node" cx="114" cy="-38" r="14"/>
+          <text class="lbl" x="134" y="-38" text-anchor="middle">N2</text>
+          <circle class="node" cx="70" cy="98" r="14"/>
+          <text class="lbl" x="88" y="118" text-anchor="middle">N3</text>
+          <circle class="node" cx="-70" cy="98" r="14"/>
+          <text class="lbl" x="-88" y="118" text-anchor="middle">N4</text>
+          <circle class="node" cx="-114" cy="-38" r="14"/>
+          <text class="lbl" x="-134" y="-38" text-anchor="middle">N5</text>
+          <!-- virtual nodes -->
+          <circle class="vnode" cx="60" cy="-104" r="5"/>
+          <circle class="vnode" cx="105" cy="-58" r="5"/>
+          <circle class="vnode" cx="120" cy="20" r="5"/>
+          <circle class="vnode" cx="95" cy="80" r="5"/>
+          <circle class="vnode" cx="20" cy="118" r="5"/>
+          <circle class="vnode" cx="-40" cy="115" r="5"/>
+          <circle class="vnode" cx="-95" cy="80" r="5"/>
+          <circle class="vnode" cx="-118" cy="20" r="5"/>
+          <circle class="vnode" cx="-105" cy="-58" r="5"/>
+          <circle class="vnode" cx="-60" cy="-104" r="5"/>
+          <!-- Key landing -->
+          <circle cx="45" cy="-112" r="6" fill="#25D366"/>
+          <text class="sub" fill="#25D366" x="55" y="-115">user:42</text>
+        </g>
+        <text class="lbl" x="430" y="380" text-anchor="middle">Hash Ring (2³² positions · 5 nodes × 100 vnodes)</text>
+
+        <!-- Gossip -->
+        <rect class="box" x="700" y="60" width="140" height="60"/>
+        <text class="lbl" x="770" y="88" text-anchor="middle">Gossip / ZooKeeper</text>
+        <text class="sub" x="770" y="106" text-anchor="middle">membership · failure detect</text>
+
+        <!-- Replicas -->
+        <rect class="box" x="700" y="200" width="140" height="60"/>
+        <text class="lbl" x="770" y="228" text-anchor="middle">Replicas</text>
+        <text class="sub" x="770" y="246" text-anchor="middle">next N-1 nodes CW</text>
+
+        <!-- DB -->
+        <rect class="box" x="20" y="360" width="130" height="60"/>
+        <text class="lbl" x="85" y="388" text-anchor="middle">Origin DB</text>
+        <text class="sub" x="85" y="406" text-anchor="middle">read-through on miss</text>
+
+        <!-- flows -->
+        <path class="flow" d="M150 230 L310 230" marker-end="url(#arr)"/>
+        <path class="flow" d="M85 260 L85 360" marker-end="url(#arr)" stroke-dasharray="3 4"/>
+        <path class="repl" d="M550 230 L700 230" marker-end="url(#arrR)"/>
+        <path class="flow" d="M770 200 Q770 150 770 120" marker-end="url(#arr)"/>
+        <text class="sub" x="220" y="216" text-anchor="middle">hash(k) → ring → node</text>
+        <text class="sub" x="625" y="216" text-anchor="middle">replicate</text>
+        <text class="sub" x="112" y="315" text-anchor="middle">miss</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#dc2626"></span>Physical node</span>
+        <span><span class="dot" style="background:#7048e8"></span>Virtual node</span>
+        <span><span class="dot" style="background:#8ea3ff"></span>Client request</span>
+        <span><span class="dot" style="background:#f4a259"></span>Replication (async)</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a key land on the ring — then watch a node die</h2>
+    <p>Five cache nodes on the ring, each holding some keys. We hash <code>user:42</code>, land it on N2. Then N2 fails — see what happens to <em>its</em> keys, and see that keys on N1, N3, N4, N5 <strong>don't move at all</strong>. That's the whole point of consistent hashing.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 820 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Consistent hashing animation">
+        <style>
+          .a-ring { fill:none; stroke:#4361ee; stroke-width:2; stroke-dasharray:3 4; }
+          .a-node { fill:#dc2626; stroke:#fff; stroke-width:2; }
+          .a-node.replica { fill:#f4a259; }
+          .a-node.dead { fill:#3a3f4b; stroke:#ff5252; stroke-dasharray:3 3; }
+          .a-key { fill:#25D366; stroke:#fff; stroke-width:1.5; }
+          .a-lbl { fill:#e7ecf3; font: 700 12px -apple-system,sans-serif; }
+          .a-sub { fill:#8ea3ff; font: 400 10px -apple-system,sans-serif; }
+        </style>
+
+        <!-- Ring centered at (400,200), r=140 -->
+        <circle class="a-ring" cx="400" cy="200" r="140"/>
+
+        <!-- 5 physical nodes at 12, 2:30, 5, 7, 9:30 positions -->
+        <g id="n1" class="a-el">
+          <circle class="a-node" cx="400" cy="60" r="18"/>
+          <text class="a-lbl" x="400" y="40" text-anchor="middle">N1</text>
+        </g>
+        <g id="n2" class="a-el">
+          <circle class="a-node" cx="533" cy="156" r="18"/>
+          <text class="a-lbl" x="560" y="150" text-anchor="middle">N2</text>
+        </g>
+        <g id="n3" class="a-el">
+          <circle class="a-node" cx="482" cy="313" r="18"/>
+          <text class="a-lbl" x="510" y="335" text-anchor="middle">N3</text>
+        </g>
+        <g id="n4" class="a-el">
+          <circle class="a-node" cx="318" cy="313" r="18"/>
+          <text class="a-lbl" x="290" y="335" text-anchor="middle">N4</text>
+        </g>
+        <g id="n5" class="a-el">
+          <circle class="a-node" cx="267" cy="156" r="18"/>
+          <text class="a-lbl" x="240" y="150" text-anchor="middle">N5</text>
+        </g>
+
+        <!-- N2's replica: next node clockwise = N3 (highlighted amber when replicating) -->
+        <g id="n2Repl" class="a-el a-hidden">
+          <circle cx="482" cy="313" r="24" fill="none" stroke="#f4a259" stroke-width="3" stroke-dasharray="4 3"/>
+          <text class="a-sub" fill="#f4a259" x="530" y="278" text-anchor="middle">replica of N2</text>
+        </g>
+
+        <!-- Keys as green dots -->
+        <g id="k1" class="a-el a-hidden"><circle class="a-key" cx="450" cy="90" r="6"/><text class="a-sub" x="450" y="80" text-anchor="middle">user:42</text></g>
+        <g id="k2" class="a-el a-hidden"><circle class="a-key" cx="510" cy="115" r="5"/></g>
+        <g id="k3" class="a-el a-hidden"><circle class="a-key" cx="525" cy="140" r="5"/></g>
+        <g id="k4" class="a-el a-hidden"><circle class="a-key" cx="510" cy="185" r="5"/></g>
+        <g id="k5" class="a-el a-hidden"><circle class="a-key" cx="490" cy="215" r="5"/></g>
+
+        <!-- Hash arrow -->
+        <g id="hashArrow" class="a-el a-hidden">
+          <path d="M120 200 L280 200" stroke="#8ea3ff" stroke-width="2" fill="none" marker-end="url(#arrAnim)"/>
+          <text class="a-sub" x="200" y="188" text-anchor="middle">hash(user:42) = 0x7a3f...</text>
+        </g>
+        <defs>
+          <marker id="arrAnim" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#8ea3ff"/>
+          </marker>
+        </defs>
+
+        <!-- caption box -->
+        <text class="a-sub" x="60" y="30" font-size="11">Hash ring · 2³² positions</text>
+
+        <!-- Failure X on N2 -->
+        <g id="n2Dead" class="a-el a-hidden">
+          <line x1="518" y1="141" x2="548" y2="171" stroke="#ff5252" stroke-width="4"/>
+          <line x1="548" y1="141" x2="518" y2="171" stroke="#ff5252" stroke-width="4"/>
+        </g>
+
+        <!-- Arrow: keys moving from N2 → N3 -->
+        <g id="migArrow" class="a-el a-hidden">
+          <path d="M540 175 Q560 240 500 305" stroke="#f4a259" stroke-width="3" fill="none" marker-end="url(#arrMig)" stroke-dasharray="6 4"/>
+        </g>
+        <defs>
+          <marker id="arrMig" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/>
+          </marker>
+        </defs>
+
+        <!-- N6 new node insertion -->
+        <g id="n6" class="a-el a-hidden">
+          <circle class="a-node" style="fill:#25D366" cx="200" cy="120" r="18"/>
+          <text class="a-lbl" x="180" y="105" text-anchor="middle">N6 (new)</text>
+        </g>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: '5 cache nodes on a hash ring. We\'ll place a key, kill a node, watch only 1/N of the keys move, then add a new node.',
+          interval: 2000,
+          reset: (r) => {
+            ['#k1','#k2','#k3','#k4','#k5','#hashArrow','#n2Dead','#n2Repl','#migArrow','#n6'].forEach(id => {
+              r.querySelector(id)?.classList.add('a-hidden');
+            });
+            ['#n1','#n2','#n3','#n4','#n5','#n6'].forEach(id => {
+              const el = r.querySelector(id);
+              if (!el) return;
+              el.classList.remove('a-glow','a-dim');
+              const circ = el.querySelector('circle');
+              if (circ) circ.classList.remove('dead');
+            });
+          },
+          steps: [
+            { caption: 'Five cache nodes sit at positions on the hash ring. Each owns the arc of keys between the previous node (counter-clockwise) and itself.',
+              apply: (r, $) => {
+                ['#n1','#n2','#n3','#n4','#n5'].forEach(id => $(id).classList.add('a-glow'));
+              }},
+            { caption: 'Client wants GET(user:42). It hashes the key with MurmurHash → a position on the ring.',
+              apply: (r, $) => {
+                $('#hashArrow').classList.remove('a-hidden');
+              }},
+            { caption: 'Walking clockwise from that hash position, the first node we hit is N2 — that\'s the primary owner. The client sends the request straight there.',
+              apply: (r, $) => {
+                $('#k1').classList.remove('a-hidden');
+                $('#n2').classList.add('a-glow');
+                ['#n1','#n3','#n4','#n5'].forEach(id => $(id).classList.remove('a-glow'));
+              }},
+            { caption: 'For durability, N2 replicates its keys to the next N-1 nodes clockwise. Here N=2 → N3 holds a replica of N2\'s data.',
+              apply: (r, $) => {
+                $('#n2Repl').classList.remove('a-hidden');
+                $('#n3').classList.add('a-glow');
+                ['#k2','#k3','#k4','#k5'].forEach(id => $(id).classList.remove('a-hidden'));
+              }},
+            { caption: 'N2 crashes! Gossip protocol propagates PFAIL → FAIL across the cluster within a few seconds.',
+              apply: (r, $) => {
+                $('#n2Dead').classList.remove('a-hidden');
+                $('#n2').querySelector('circle').classList.add('dead');
+              }},
+            { caption: 'Failover: the replica on N3 is promoted to primary. Only N2\'s slice of keys is affected — everything on N1, N4, N5 is untouched.',
+              apply: (r, $) => {
+                $('#migArrow').classList.remove('a-hidden');
+                $('#n3').classList.add('a-glow');
+                ['#n1','#n4','#n5'].forEach(id => $(id).classList.add('a-dim'));
+              }},
+            { caption: 'When cluster scales UP: a new node N6 slots into the ring at ~100 virtual positions. It steals a small slice of keys from its clockwise neighbours — only ~1/N keys move.',
+              apply: (r, $) => {
+                $('#n6').classList.remove('a-hidden');
+                $('#n6').classList.add('a-glow');
+                ['#n1','#n4','#n5'].forEach(id => $(id).classList.remove('a-dim'));
+              }},
+            { caption: 'The lesson: consistent hashing turns a rebalance into a local repair, not a cluster-wide rehash. That is why every serious distributed system uses it.',
+              apply: (r, $) => {
+                ['#n1','#n3','#n4','#n5','#n6'].forEach(id => $(id).classList.add('a-glow'));
+              }},
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. Partitioning — why modulo hashing fails</h3>
+    <p>The naïve approach is <code>node = hash(key) % N</code>. It's dead simple and O(1). It also <em>utterly breaks</em> the moment N changes: going from 10 nodes to 11 causes roughly 10/11 of all keys to relocate. Every ounce of hot cache goes cold in one autoscale event. That's why every real distributed cache uses <strong>consistent hashing</strong>: nodes and keys both hash onto a large ring (typically 2<sup>32</sup> or 2<sup>64</sup> positions), and each key is owned by the first node clockwise. Adding or removing a node touches only the arc between the neighbour and the affected node — statistically <strong>K/N keys</strong> vs modulo's ~K.</p>
+
+    <h3>2. Virtual nodes — smoothing the ring</h3>
+    <p>Placing a physical node at a single ring position gives you terrible variance: one node might own 30% of the keyspace, another 3%. The fix is to hash each physical node's identity <em>multiple times</em> (e.g. <code>hash("n2#0"), hash("n2#1"), ..., hash("n2#199")</code>) and place all those virtual positions on the ring. Two benefits: <strong>(1)</strong> load smooths out — with ~100–200 vnodes per physical, the largest node owns roughly 1.05× the average vs 2–3× without vnodes; <strong>(2)</strong> when a node dies, its arc is broken into ~200 pieces which get absorbed by many neighbours instead of doubling the load on a single unlucky one.</p>
+
+    <h3>3. Replication — what happens when a node dies</h3>
+    <p>Each key is stored on the primary <em>and</em> the next N-1 unique <strong>physical</strong> nodes clockwise (walking past virtual duplicates). With N=3 you survive one full node loss without data loss and any single-node loss without unavailability. Replication can be:</p>
+    <ul>
+      <li><strong>Async (Redis default)</strong> — write acknowledged after primary; replicas catch up in ~ms. Small window of data loss on primary crash, but sub-ms writes.</li>
+      <li><strong>Sync</strong> — write acknowledged only after M replicas ack (<code>WAIT M timeout</code> in Redis). Safe but slower.</li>
+      <li><strong>Quorum (Dynamo-style, N/W/R)</strong> — the client picks W (write quorum) and R (read quorum). If <code>W + R &gt; N</code> you get read-your-writes; typical picks are N=3, W=R=2.</li>
+    </ul>
+    <p>On failure, gossip detects the dead node in ~5 s. One of its replicas is elected primary (via a mini-Raft or gossip vote), the ring's <em>owner-of-that-slot</em> flips to the new primary, and clients transparently retry through the client library. Meanwhile the cluster spawns a <strong>hinted handoff</strong> or a fresh replica to restore N=3.</p>
+
+    <h3>4. Rebalancing — the migration protocol</h3>
+    <p>When you add node N6, it registers on the ring at ~200 vnode positions. Each of those positions "steals" the arc between itself and the counter-clockwise neighbour. The cluster runs a <strong>slot migration</strong> in the background: for each stolen slot, N6 pulls keys from the old owner (Redis Cluster uses <code>CLUSTER SETSLOT</code> + <code>MIGRATE</code>). During migration the old node keeps serving while the new one is filling up; when the arc is fully moved, a single atomic slot handoff switches ownership. This is why cluster resize is a <strong>bounded, background operation</strong> — the app never sees a stampede.</p>
+
+    <h3>5. Fault tolerance — gossip, quorum, and self-healing</h3>
+    <p>Every node picks a few random peers every second and exchanges a heartbeat table (Cassandra, Redis Cluster, Dynamo all do this). If node A hasn't seen a heartbeat from B in <em>timeout</em>, A marks B "PFAIL" (probably failed) and gossips this. When a quorum of nodes agree, B is marked "FAIL" and failover triggers. This decentralised approach avoids the single-point-of-failure of a central coordinator, at the cost of a few-second detection window. For tighter windows you use ZooKeeper or etcd to hold the membership authoritative — that's what Memcached-mcrouter and Twemproxy do.</p>
+
+    <h3>6. Cache patterns — the four you have to know</h3>
+    <ul>
+      <li><strong>Cache-aside (lazy loading)</strong> — app checks cache; on miss, reads DB, writes back. Simplest, most common. Downsides: cold-start latency and thundering herd on cache expire.</li>
+      <li><strong>Read-through</strong> — cache library owns the "on miss, fetch from DB" logic. Cleaner abstraction, but couples cache and DB.</li>
+      <li><strong>Write-through</strong> — writes hit cache and DB synchronously. Strong consistency, slower writes.</li>
+      <li><strong>Write-back / write-behind</strong> — writes hit cache; async flush to DB. Blazing writes, risk of data loss on crash.</li>
+    </ul>
+
+    <h3>7. Hot keys, thundering herd, and stampedes</h3>
+    <p>Two failure modes that always come up:</p>
+    <ul>
+      <li><strong>Hot key</strong> — e.g. a viral tweet's like-count. Every request slams one physical node. Fix: replicate hot keys to multiple nodes (client picks randomly), or use <em>request coalescing</em> — the first miss fetches, everyone else waits.</li>
+      <li><strong>Thundering herd on TTL expiry</strong> — a hot key expires; 10K threads simultaneously miss and hit the DB. Fixes: <strong>probabilistic early recomputation</strong> (refresh at expected miss time − ε), <strong>lease-based single-flight</strong> (Facebook's Memcached leases — first miss gets a lease token, everyone else waits), or <strong>stale-while-revalidate</strong> (return stale data while asynchronously refreshing).</li>
+    </ul>
+
+    <h3>8. Eviction policies</h3>
+    <p>When RAM fills up, something has to go. The classics:</p>
+    <ul>
+      <li><strong>LRU</strong> — evict the least-recently-used. O(1) with a hashmap + doubly-linked list. Good general default.</li>
+      <li><strong>LFU</strong> — evict the least-frequently-used. Better for stable working sets, worse for changing ones.</li>
+      <li><strong>TinyLFU / W-TinyLFU (Caffeine's default)</strong> — sketch-based frequency admission + LRU eviction. State-of-the-art hit ratio.</li>
+      <li><strong>TTL</strong> — evict on time, not on space. Complementary to the others.</li>
+      <li><strong>Random / FIFO</strong> — trivial, surprisingly close to LRU for uniform workloads (Redis <code>allkeys-random</code>).</li>
+    </ul>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Most of the difficulty in a distributed cache is <em>picking the right structure</em>, not implementing anything clever. Here's the shortlist an interviewer will probe:</p>
+    <table>
+      <tr><th>Where</th><th>Structure / algo</th><th>Why</th><th>Complexity</th></tr>
+      <tr><td>Ring lookup: hash(k) → node</td><td>Sorted map (TreeMap / std::map / SkipList) or sorted array + binary search</td><td>O(log V) to find the first vnode ≥ hash(k). V = total vnodes.</td><td>O(log V)</td></tr>
+      <tr><td>Key hashing</td><td>MurmurHash3, xxHash, or SipHash</td><td>Fast (~GB/s), well-distributed, non-cryptographic. Avoid MD5 (slow).</td><td>O(len(k))</td></tr>
+      <tr><td>Alternative: bucketed lookup</td><td>Jump consistent hashing</td><td>Google's O(1)-memory algorithm; zero data structure, just an arithmetic recurrence. Downside: buckets must be numbered 0..N-1 (no arbitrary keys).</td><td>O(log N) time, O(1) space</td></tr>
+      <tr><td>Alternative: rendezvous hashing</td><td>Highest Random Weight (HRW)</td><td>For each key, compute hash(k, node_i) for all nodes; pick the max. Simpler than a ring, better distribution, but O(N) per lookup.</td><td>O(N)</td></tr>
+      <tr><td>LRU eviction</td><td>HashMap + doubly-linked list</td><td>O(1) get + move-to-front + evict-from-tail.</td><td>O(1)</td></tr>
+      <tr><td>LFU eviction</td><td>HashMap + min-heap of frequencies, or "buckets by count"</td><td>Approximate LFU (Redis) uses a decaying counter — cheaper than a real heap.</td><td>O(log N) / O(1) approx</td></tr>
+      <tr><td>TinyLFU admission filter</td><td>Count-Min Sketch + LRU</td><td>Reject writes for keys unlikely to be re-accessed; retain the truly hot ones.</td><td>O(1)</td></tr>
+      <tr><td>Membership check "is key possibly here?"</td><td>Bloom filter</td><td>Cut DB reads for keys we know are absent.</td><td>O(k) hashes</td></tr>
+      <tr><td>Failure detection</td><td>Gossip protocol / SWIM</td><td>Constant background bandwidth, ~log N rounds to reach everyone. SWIM adds indirect probes for accuracy.</td><td>O(log N) convergence</td></tr>
+      <tr><td>Anti-entropy across replicas</td><td>Merkle trees</td><td>Compare root hashes first, drill down only where they differ. Bandwidth proportional to divergence, not dataset size.</td><td>O(log N) I/O to detect divergence</td></tr>
+      <tr><td>Conflict resolution (multi-writer)</td><td>Vector clocks / LWW timestamps</td><td>Vector clocks detect concurrent writes; LWW just takes the highest timestamp (simpler, lossy).</td><td>O(N) size for N nodes</td></tr>
+    </table>
+    <p>The two that always come up: <strong>the sorted-map ring lookup</strong> (why not a hash-of-hashes? because you need "next node ≥ x", which is a range query), and <strong>Merkle trees</strong> for repair after a node comes back — a beautiful log-scale trick that syncs terabytes without shipping terabytes.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Managed cache cluster</td><td><strong>ElastiCache for Redis (cluster mode enabled)</strong></td><td>Consistent hashing across 16,384 slots, primary + up to 5 replicas per shard, Multi-AZ failover in ~15 s.</td></tr>
+      <tr><td>Multi-threaded alternative</td><td><strong>ElastiCache for Memcached</strong> or MemoryDB for Redis</td><td>Memcached wins on raw ops/sec/core; MemoryDB adds durable multi-AZ transaction log for stronger durability.</td></tr>
+      <tr><td>DynamoDB acceleration</td><td><strong>DAX</strong></td><td>A distributed write-through cache in front of DynamoDB; item cache + query cache; sub-ms reads at DynamoDB scale.</td></tr>
+      <tr><td>Serverless caching layer</td><td>Momento Cache / ElastiCache Serverless</td><td>Autoscales without you sizing shards; pay-per-request.</td></tr>
+      <tr><td>Client library</td><td>StackExchange.Redis, AWS SDK, aws-elasticache-cluster-client-memcached-for-java</td><td>Handles the ring, retries, and cluster topology refresh.</td></tr>
+      <tr><td>Discovery / topology</td><td>ElastiCache configuration endpoint + Route 53</td><td>Clients pull the current ring from the config endpoint; Route 53 for DR.</td></tr>
+      <tr><td>Failure monitoring</td><td>CloudWatch metrics + Alarms</td><td><code>ReplicationLag</code>, <code>CPUUtilization</code>, <code>SwapUsage</code>, <code>CurrConnections</code> — page on outliers.</td></tr>
+      <tr><td>Snapshots / durability</td><td>ElastiCache automatic RDB + AOF snapshots to S3</td><td>Recover a shard after cascading failure; not a substitute for the source-of-truth DB.</td></tr>
+      <tr><td>Cross-region</td><td>ElastiCache Global Datastore (Redis)</td><td>Async replication across regions with &lt; 1 s lag; failover for DR.</td></tr>
+      <tr><td>VPC networking</td><td>Cluster in private subnets, security group per client tier</td><td>Never expose Redis to the public internet.</td></tr>
+    </table>
+    <p>Deployment shape: an <strong>ElastiCache Redis Cluster</strong> with 10 shards × 3 nodes (1 primary + 2 replicas per shard) across 3 AZs. AWS partitions the 16 384 hash slots evenly across the shards — that's their form of consistent hashing (technically <em>slot-based</em>: <code>slot = CRC16(key) mod 16384</code>). When a primary dies, ElastiCache promotes a replica within ~15 s, updates DNS, and the client library refreshes topology. To scale, you add a shard — ElastiCache moves ~1/N of the slots to the new shard online, no downtime.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>A minimal, correct <strong>consistent-hash client</strong> in C#. It maintains a sorted map of <em>virtual node positions → physical nodes</em>, looks up "the first vnode ≥ hash(key)" with a binary search, and supports adding/removing nodes online. This is the trickiest part of a real client library — the network I/O is the easy bit.</p>
+
+    <pre><span class="cmt">// ConsistentHashRing.cs — virtual-node ring with binary-search lookup</span>
+<span class="kw">using</span> System.Collections.Concurrent;
+<span class="kw">using</span> System.Security.Cryptography;
+<span class="kw">using</span> System.Text;
+
+<span class="kw">public</span> <span class="kw">sealed</span> <span class="kw">class</span> <span class="typ">ConsistentHashRing</span>&lt;<span class="typ">TNode</span>&gt; <span class="kw">where</span> <span class="typ">TNode</span> : <span class="kw">notnull</span>
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="typ">int</span> _vnodesPerNode;
+    <span class="kw">private</span> <span class="kw">readonly</span> SortedDictionary&lt;<span class="typ">uint</span>, <span class="typ">TNode</span>&gt; _ring = <span class="kw">new</span>();
+    <span class="kw">private</span> <span class="typ">uint</span>[] _sortedHashes = Array.Empty&lt;<span class="typ">uint</span>&gt;();
+    <span class="kw">private</span> <span class="kw">readonly</span> ReaderWriterLockSlim _lock = <span class="kw">new</span>();
+
+    <span class="kw">public</span> ConsistentHashRing(<span class="typ">int</span> vnodesPerNode = 150) =&gt;
+        _vnodesPerNode = vnodesPerNode;
+
+    <span class="kw">public</span> <span class="typ">void</span> AddNode(<span class="typ">TNode</span> node)
+    {
+        _lock.EnterWriteLock();
+        <span class="kw">try</span>
+        {
+            <span class="kw">for</span> (<span class="typ">int</span> i = 0; i &lt; _vnodesPerNode; i++)
+                _ring[Hash(<span class="str">$"{node}#{i}"</span>)] = node;
+            _sortedHashes = _ring.Keys.ToArray();      <span class="cmt">// already sorted (SortedDictionary)</span>
+        }
+        <span class="kw">finally</span> { _lock.ExitWriteLock(); }
+    }
+
+    <span class="kw">public</span> <span class="typ">void</span> RemoveNode(<span class="typ">TNode</span> node)
+    {
+        _lock.EnterWriteLock();
+        <span class="kw">try</span>
+        {
+            <span class="kw">for</span> (<span class="typ">int</span> i = 0; i &lt; _vnodesPerNode; i++)
+                _ring.Remove(Hash(<span class="str">$"{node}#{i}"</span>));
+            _sortedHashes = _ring.Keys.ToArray();
+        }
+        <span class="kw">finally</span> { _lock.ExitWriteLock(); }
+    }
+
+    <span class="cmt">// The primary owner of `key` = first vnode clockwise from hash(key)</span>
+    <span class="kw">public</span> <span class="typ">TNode</span> GetNode(<span class="typ">string</span> key)
+    {
+        _lock.EnterReadLock();
+        <span class="kw">try</span>
+        {
+            <span class="kw">if</span> (_sortedHashes.Length == 0) <span class="kw">throw</span> <span class="kw">new</span> InvalidOperationException(<span class="str">"empty ring"</span>);
+            <span class="kw">var</span> h  = Hash(key);
+            <span class="kw">var</span> ix = Array.BinarySearch(_sortedHashes, h);
+            <span class="kw">if</span> (ix &lt; 0) ix = ~ix;                            <span class="cmt">// insertion point</span>
+            <span class="kw">if</span> (ix == _sortedHashes.Length) ix = 0;           <span class="cmt">// wrap around</span>
+            <span class="kw">return</span> _ring[_sortedHashes[ix]];
+        }
+        <span class="kw">finally</span> { _lock.ExitReadLock(); }
+    }
+
+    <span class="cmt">// The next N unique physical nodes clockwise — for replication.</span>
+    <span class="kw">public</span> List&lt;<span class="typ">TNode</span>&gt; GetNodesForReplication(<span class="typ">string</span> key, <span class="typ">int</span> replicationFactor)
+    {
+        _lock.EnterReadLock();
+        <span class="kw">try</span>
+        {
+            <span class="kw">var</span> result = <span class="kw">new</span> List&lt;<span class="typ">TNode</span>&gt;(replicationFactor);
+            <span class="kw">var</span> seen   = <span class="kw">new</span> HashSet&lt;<span class="typ">TNode</span>&gt;();
+            <span class="kw">var</span> h  = Hash(key);
+            <span class="kw">var</span> ix = Array.BinarySearch(_sortedHashes, h);
+            <span class="kw">if</span> (ix &lt; 0) ix = ~ix;
+
+            <span class="kw">for</span> (<span class="typ">int</span> step = 0; step &lt; _sortedHashes.Length &amp;&amp; result.Count &lt; replicationFactor; step++)
+            {
+                <span class="kw">var</span> node = _ring[_sortedHashes[(ix + step) % _sortedHashes.Length]];
+                <span class="kw">if</span> (seen.Add(node)) result.Add(node);           <span class="cmt">// skip virtual-duplicate</span>
+            }
+            <span class="kw">return</span> result;
+        }
+        <span class="kw">finally</span> { _lock.ExitReadLock(); }
+    }
+
+    <span class="cmt">// Fast, well-distributed 32-bit hash. MurmurHash3 would be even better; MD5 is used for clarity.</span>
+    <span class="kw">private</span> <span class="kw">static</span> <span class="typ">uint</span> Hash(<span class="typ">string</span> key)
+    {
+        Span&lt;<span class="typ">byte</span>&gt; buf = <span class="kw">stackalloc</span> <span class="typ">byte</span>[16];
+        MD5.HashData(Encoding.UTF8.GetBytes(key), buf);
+        <span class="kw">return</span> BitConverter.ToUInt32(buf);
+    }
+}
+
+<span class="cmt">// ---- Wiring it up as a cache client ----</span>
+<span class="kw">public</span> <span class="kw">sealed</span> <span class="kw">class</span> <span class="typ">DistributedCacheClient</span>
+{
+    <span class="kw">private</span> <span class="kw">readonly</span> <span class="typ">ConsistentHashRing</span>&lt;<span class="typ">string</span>&gt; _ring = <span class="kw">new</span>();
+    <span class="kw">private</span> <span class="kw">readonly</span> ConcurrentDictionary&lt;<span class="typ">string</span>, ICacheNode&gt; _connections = <span class="kw">new</span>();
+    <span class="kw">private</span> <span class="kw">const</span> <span class="typ">int</span> N = 3;
+
+    <span class="kw">public</span> <span class="kw">async</span> Task&lt;<span class="typ">string</span>?&gt; GetAsync(<span class="typ">string</span> key)
+    {
+        <span class="kw">var</span> nodes = _ring.GetNodesForReplication(key, N);
+        <span class="kw">foreach</span> (<span class="kw">var</span> id <span class="kw">in</span> nodes)                             <span class="cmt">// try primary, fall through on failure</span>
+        {
+            <span class="kw">try</span> { <span class="kw">return</span> <span class="kw">await</span> _connections[id].GetAsync(key); }
+            <span class="kw">catch</span> (NodeUnavailableException) { <span class="kw">continue</span>; }
+        }
+        <span class="kw">return</span> <span class="kw">null</span>;                                          <span class="cmt">// all replicas down</span>
+    }
+
+    <span class="kw">public</span> <span class="kw">async</span> Task PutAsync(<span class="typ">string</span> key, <span class="typ">string</span> value, TimeSpan ttl, <span class="typ">int</span> writeQuorum = 2)
+    {
+        <span class="kw">var</span> nodes = _ring.GetNodesForReplication(key, N);
+        <span class="kw">var</span> tasks = nodes.Select(id =&gt; _connections[id].PutAsync(key, value, ttl)).ToList();
+        <span class="typ">int</span> acked = 0;
+        <span class="kw">while</span> (tasks.Count &gt; 0 &amp;&amp; acked &lt; writeQuorum)
+        {
+            <span class="kw">var</span> done = <span class="kw">await</span> Task.WhenAny(tasks);
+            tasks.Remove(done);
+            <span class="kw">if</span> (done.IsCompletedSuccessfully) acked++;
+        }
+        <span class="kw">if</span> (acked &lt; writeQuorum) <span class="kw">throw</span> <span class="kw">new</span> QuorumException(acked, writeQuorum);
+    }
+}</pre>
+
+    <p>What to point out in an interview when walking through this: <strong>(1)</strong> <code>GetNodesForReplication</code> skips virtual-node duplicates via the <code>seen</code> set — otherwise you'd "replicate" the key to the same physical node three times; <strong>(2)</strong> writes use a <code>WhenAny</code> quorum loop so the call returns as soon as W replicas ack, not after all N; <strong>(3)</strong> reads try replicas in ring order so a single dead node just adds a few microseconds; <strong>(4)</strong> the <code>ReaderWriterLockSlim</code> keeps GET lock-free-ish under load — writes to the ring (rare) block; reads (billions) don't. In production you'd swap MD5 for MurmurHash3/xxHash and use <code>ImmutableSortedDictionary</code> for lock-free reads.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Scaling bottlenecks</h3>
+    <p>The first bottleneck is <strong>hot keys</strong> — no amount of consistent hashing helps if 40% of all requests target one key on one shard. The fix is <em>hot-key replication</em> (put the same key on multiple shards, client picks randomly) or <em>request coalescing</em> in the client. The second is <strong>network</strong> — a single Redis shard on a c7g.4xlarge can push ~2 Gbps; beyond that you're fanning out across shards. The third is <strong>memory fragmentation</strong> — Redis's jemalloc allocator can end up with 20–30% wasted RAM under heavy churn; sizing needs a safety margin.</p>
+
+    <h3>Consistency trade-off</h3>
+    <p>Cache is fundamentally an <strong>AP</strong> system (CAP). We accept eventual consistency: a write may take a few ms to propagate to replicas, and cross-region replication is asynchronous. If your app needs read-your-writes, you either use <em>tunable quorum</em> (W=R=2, N=3, so W+R&gt;N) or read from the primary only. The trickiest bug in this space is <strong>cache-DB consistency</strong> — updating both non-atomically causes stale reads. The idiomatic fix is <em>write-through</em> or <em>delete-then-DB-write</em> (invalidate first) rather than <em>update-then-update</em>.</p>
+
+    <h3>Follow-ups you should expect</h3>
+    <div class="qa"><p class="q">Why consistent hashing and not just <code>hash(k) % N</code>?</p>
+    <p class="a">Modulo hashing moves <em>almost all</em> keys when N changes (going from 10→11 relocates ~10/11 of the ring). Consistent hashing moves only ~K/N. That's the difference between "add a node in the afternoon" and "add a node at 2 AM Sunday."</p></div>
+
+    <div class="qa"><p class="q">Why virtual nodes? Doesn't one hash per node work?</p>
+    <p class="a">One point per node gives you dreadful variance — the largest shard can end up 2–3× the average. With ~100–200 virtual points per physical, the largest shard is only ~1.05× average. Vnodes also spread the recovery load: on a failure, the dead node's arcs get absorbed by many neighbours instead of doubling one.</p></div>
+
+    <div class="qa"><p class="q">What happens when a cache node dies mid-request?</p>
+    <p class="a">Gossip flags PFAIL → FAIL in ~5 s. A replica is promoted primary via a mini-election. Client library retries the in-flight request against the next replica in the ring. Meanwhile a fresh replica is spun up to restore N=3. All told, availability blip is a few seconds and no data is lost (assuming N ≥ 3 with quorum writes).</p></div>
+
+    <div class="qa"><p class="q">How do you keep the cache in sync with the source DB?</p>
+    <p class="a">Two patterns. <em>Write-through</em> — every DB write goes through the cache client, keeping them coupled. <em>Invalidation</em> — the DB (via CDC / Kafka / Debezium) emits change events; a consumer deletes affected cache keys. Facebook's mcsqueal does the second at scale. The rule to memorise: <strong>delete, don't update</strong> — an invalidation is idempotent, an update-write can race.</p></div>
+
+    <div class="qa"><p class="q">What's the thundering-herd fix for a hot key expiring?</p>
+    <p class="a">Three viable answers: (1) <em>single-flight / lease</em> — first miss gets a "recomputing" lease, everyone else waits; (2) <em>probabilistic early refresh</em> — some fraction of requests before TTL trigger a background refresh; (3) <em>stale-while-revalidate</em> — return stale data instantly, refresh in background.</p></div>
+
+    <div class="qa"><p class="q">Alternatives to a hash ring?</p>
+    <p class="a"><strong>Jump consistent hashing</strong> (Google, 2014) — O(1) memory, O(log N) time, arithmetic-only, no data structure. Downside: buckets are 0..N-1, not arbitrary. <strong>Rendezvous hashing (HRW)</strong> — hash(k, node) for every node, take the max. Slightly better distribution, O(N) per lookup. <strong>Maglev</strong> (Google) — populates a fixed table with permutations; O(1) lookup, minimal disruption. Pick based on cluster size and lookup budget.</p></div>
+
+    <div class="qa"><p class="q">How do you handle a cache-DB consistency race?</p>
+    <p class="a">Classic race: thread A reads DB, thread B writes DB and deletes cache, thread A writes stale value to cache. Fixes: (1) <em>double-delete</em> pattern (invalidate before AND after DB write, with a small delay); (2) versioned writes (only overwrite cache if incoming version &gt; stored); (3) Facebook's <em>lease tokens</em> — cache hands out a lease on miss; only a client with the current lease can populate that key.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "I'd partition keys with <strong>consistent hashing on a 2³² ring using ~150 virtual nodes per physical node</strong> — that gives smooth distribution and moves only ~K/N keys on any scale event, versus 100% for modulo. Each key is replicated to the next N-1 unique physical nodes clockwise, with tunable N/W/R quorum. A <strong>gossip protocol</strong> detects node failures in ~5 s, promotes a replica, and rebalances only the affected arc. Cache-DB consistency uses <em>delete-on-write</em> invalidation via a CDC stream. Hot keys get single-flight leases to prevent stampedes. On AWS this is ElastiCache Redis Cluster or DAX in front of DynamoDB."</p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Read QPS ~1M/s cluster-wide; p99 &lt; 1 ms in-DC; single-node ~100K–1M ops/sec.</li>
+      <li>~150 vnodes per physical node; K/N keys move on rebalance vs ~K for modulo.</li>
+      <li>N=3 replicas with W=R=2 gives read-your-writes and 1-node fault tolerance.</li>
+      <li>Gossip: heartbeat every 1s, fail after ~5s, failover ~15s (ElastiCache).</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li><strong>Consistent hashing + vnodes</strong> — the pair, not just one. Vnodes are what make it actually work.</li>
+      <li><strong>K/N keys move</strong> — quote this fraction; it's the whole reason for the technique.</li>
+      <li><strong>Quorum N/W/R</strong> — W+R&gt;N gives read-your-writes; picks are workload-dependent.</li>
+      <li><strong>Failure detection is gossip, not a coordinator</strong> — no SPOF, ~5s convergence.</li>
+      <li><strong>Delete-on-write for DB consistency</strong> — never "update cache after update DB"; delete or version.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://en.wikipedia.org/wiki/Consistent_hashing" target="_blank" rel="noreferrer">Consistent Hashing — Wikipedia</a> — hash ring, virtual nodes, K/N remapping proof, applications (Dynamo, Cassandra, Chord, Akamai).</li>
+      <li><a href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noreferrer">ByteByteGo — Design a Key-Value Store</a> — quorum N/W/R, vector clocks, sloppy quorum + hinted handoff, Merkle-tree anti-entropy.</li>
+      <li><a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noreferrer">Amazon Dynamo Paper (SOSP 2007)</a> — the canonical reference for consistent hashing + vnodes + gossip + sloppy quorum in production.</li>
+      <li><a href="https://redis.io/docs/reference/cluster-spec/" target="_blank" rel="noreferrer">Redis Cluster Specification</a> — 16 384 hash slots, gossip failure detection, replication, resharding protocol.</li>
+      <li><a href="https://research.google/pubs/pub44824/" target="_blank" rel="noreferrer">A Fast, Minimal Memory, Consistent Hash Algorithm (Jump Hash, Google 2014)</a> — O(1)-memory alternative to the ring.</li>
+      <li><a href="https://engineering.fb.com/2013/06/25/core-infra/scaling-memcache-at-facebook/" target="_blank" rel="noreferrer">Scaling Memcache at Facebook (NSDI 2013)</a> — leases, gutter pool, mcsqueal invalidation, regional design at trillion-op scale.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

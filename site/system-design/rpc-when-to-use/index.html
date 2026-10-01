@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RPC — When to Use It, When Not — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c; --scenario-bg: #fff0f4;
+    --reqs: #f4a259; --reqs-bg: #fff7ed;
+    --arch: #4361ee; --arch-bg: #eef2ff;
+    --anim: #00b4d8; --anim-bg: #eef9fc;
+    --dsa: #7048e8; --dsa-bg: #f3effe;
+    --aws: #ff9900; --aws-bg: #fff6e6;
+    --laymen: #ffd166; --laymen-bg: #fffbe6;
+    --good: #2dc653; --bad: #f7567c;
+    --code-bg: #1e2430; --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08); --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%); color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);  background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: #c99500; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  h4 { margin: 16px 0 6px; font-size: 1rem; color: var(--arch); }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] { transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease; transform-box: fill-box; }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  .box { border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; background: var(--card); }
+  .box h4 { margin: 0 0 8px; }
+  .box.use    { border-left: 5px solid var(--good); background: #e6f9ec; }
+  .box.avoid  { border-left: 5px solid var(--bad);  background: #fff0f4; }
+  .box.use h4    { color: #208b3a; }
+  .box.avoid h4  { color: var(--bad); }
+  .box ul { margin: 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Communication Patterns</div>
+    <h1>Remote Procedure Call — When to Use It, and When Not</h1>
+    <p>Sample scenarios, side-by-side architecture, gRPC vs REST vs messaging trade-offs, and a decision rubric a senior engineer can defend on a whiteboard.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#what">📋 What is RPC</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#examples">✅ Examples</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#compare">⚖️ RPC vs REST vs Async</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 Code</a>
+    <a href="#decision">🧭 Decision rubric</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>The "we made an order — should the cart service call the pricing service via gRPC?" question</h2>
+    <p>An architect on your team is designing a new microservice. They ask: "should this service call the next one via <strong>REST</strong>, <strong>gRPC</strong>, or a <strong>message queue</strong>?" Every serious system-design interview asks this. The wrong answer never gets you rejected outright, but a <em>weak</em> answer marks you as junior. The strong answer names the actual axes — <em>coupling, latency, evolution, browser reach, human debuggability, streaming needs, network topology</em> — and picks the tool that fits <em>this</em> call, not "the one we always use".</p>
+    <p>Remote Procedure Call (RPC) is not one thing. It's a family — from the original 1980s Sun RPC and DCE/Java RMI, through <strong>SOAP</strong>, <strong>Thrift</strong>, <strong>JSON-RPC</strong>, all the way to today's dominant flavour, <strong>gRPC</strong> (Google's open-source, HTTP/2 + Protobuf framework). RPC's promise is that <em>calling a function on another machine looks like calling one locally</em>. Its trap is that the network is not local — latency, partial failure, and versioning are all real, and pretending they aren't is how distributed monoliths are born.</p>
+    <p>This page shows two <strong>concrete sample cases</strong> — one where RPC is the right call, one where it is exactly wrong — and gives you an interview-defensible architecture, decision rubric, and code for both.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In plain English</span>
+    <h2>The story, told without jargon</h2>
+    <p>Imagine you work in a busy office. You need three things done to finish a task: <em>check the budget</em>, <em>get a signature</em>, and <em>notify the mailroom to send a letter</em>. Three colleagues can each do one of these.</p>
+    <p><strong>RPC is a phone call.</strong> You dial extension 42, ask "what's the budget for project X?", wait for the answer, hang up. It's quick, direct, and you get the answer <em>now</em>. That's great when you need the answer before you can move on. But phone calls have downsides: if the colleague isn't at their desk, you're blocked. If ten people call the same colleague, they can't answer anyone. If the phone line is bad, you get a wrong number and hear "I'm sorry, wrong department". You have to trust the phone system to work every time.</p>
+    <p><strong>A message queue is the office mail tray.</strong> You drop a note in the tray, walk away, get on with other work. Someone will pick it up when they're free. You never wait; the mail room never gets overwhelmed. But you don't get an <em>immediate answer</em> — and sometimes the note gets read twice by mistake, so your colleague has to know how to say "already done" when a duplicate arrives.</p>
+    <p><strong>REST is like a phone call to a receptionist</strong> who reads out a page from a well-published catalogue ("what are the details of order 42?"). It's a phone call too, but with a shared, self-describing format that anyone in any language can understand — even a stranger who has never been in this office.</p>
+    <p>So when do you pick which? <strong>Use the phone (RPC/gRPC)</strong> when you need an <em>immediate answer</em>, you're calling the <em>same office</em> (your own microservices in the same data centre), and both sides speak the same private shorthand for speed. <strong>Use the mail tray (queue)</strong> when the answer can wait, when the other side might be busy, or when you want to hand off work and forget about it. <strong>Use the receptionist (REST)</strong> when you're talking to strangers — customers, partners, other companies — who need a well-documented, human-readable interface. That's the whole idea.</p>
+  </section>
+
+  <section id="what" class="card reqs">
+    <span class="badge">📋 What RPC actually is</span>
+    <h2>Definitions and the modern lineup</h2>
+    <p><strong>Remote Procedure Call</strong> makes a call to a service on another machine <em>look like</em> a local function call. The client holds a "stub" that mirrors the server's methods; behind the stub, plumbing serialises the arguments, sends them over the network, deserialises the reply, and returns it as if it were local. The details differ, but the family is consistent.</p>
+    <table>
+      <thead><tr><th>Flavour</th><th>Wire protocol</th><th>Payload</th><th>Where it lives today</th></tr></thead>
+      <tbody>
+        <tr><td><strong>gRPC</strong> (Google, CNCF)</td><td>HTTP/2</td><td>Protobuf (binary)</td><td>Modern default for internal microservice RPC — Google, Netflix, Uber, Square, Cloudflare</td></tr>
+        <tr><td><strong>Apache Thrift</strong> (Facebook)</td><td>TCP / HTTP</td><td>Thrift IDL binary</td><td>Meta internal services; older polyglot stacks</td></tr>
+        <tr><td><strong>SOAP</strong></td><td>HTTP + XML</td><td>XML/WSDL</td><td>Legacy enterprise (banks, insurance, WCF)</td></tr>
+        <tr><td><strong>JSON-RPC</strong></td><td>HTTP or WebSocket</td><td>JSON</td><td>Ethereum node APIs, Bitcoin, some pubsub</td></tr>
+        <tr><td><strong>Java RMI / .NET Remoting</strong></td><td>proprietary</td><td>Java/.NET binary</td><td>Legacy; rarely used in greenfield</td></tr>
+        <tr><td><strong>WebSocket / SignalR RPC</strong></td><td>WebSocket</td><td>JSON / binary</td><td>Real-time UI ↔ server RPC (Blazor, Teams)</td></tr>
+        <tr><td><strong>tRPC</strong> (TypeScript)</td><td>HTTP</td><td>JSON, schema-inferred</td><td>Full-stack TypeScript apps (Next.js)</td></tr>
+      </tbody>
+    </table>
+    <p>Whenever a modern architect says "RPC", they usually mean <strong>gRPC</strong> — HTTP/2 for multiplexing, Protobuf for compact schema-first payloads, generated client + server code, native support for four streaming modes (unary, server-stream, client-stream, bidi). It is <strong>up to 8× faster than JSON REST</strong> and payloads are <strong>60–80% smaller</strong> (Microsoft's numbers). We'll use gRPC as the concrete stand-in for "RPC" throughout the rest of the page.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ Architecture — two sample designs</span>
+    <h2>Sample A (RPC is right) vs Sample B (RPC is wrong)</h2>
+
+    <h3>Sample A — RPC is right: <em>Checkout aggregator calls Pricing, Inventory, and Tax services in real time</em></h3>
+    <p>The user has clicked "Place Order". The <strong>Checkout Aggregator</strong> (a Backend-For-Frontend service) needs three answers to compute the cart total: <em>the current price</em>, <em>stock availability</em>, and <em>tax rate for this jurisdiction</em>. All three answers are needed <strong>before</strong> the client can be told the final total. The three services live in the same VPC, are all owned by the same team, and can all speak Protobuf. This is <strong>the</strong> textbook case for gRPC.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 340" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="a-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="a-rep" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/>
+          </marker>
+        </defs>
+        <rect x="40" y="130" width="150" height="60" rx="10" fill="#2a3652" stroke="#7f8aa0"/>
+        <text x="115" y="160" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">Browser</text>
+        <text x="115" y="178" text-anchor="middle" fill="#c6d0e0" font-size="10">REST call (JSON)</text>
+
+        <rect x="220" y="130" width="200" height="60" rx="10" fill="#4361ee"/>
+        <text x="320" y="158" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Checkout Aggregator (BFF)</text>
+        <text x="320" y="175" text-anchor="middle" fill="#fff" font-size="10">converts REST → gRPC fan-out</text>
+
+        <rect x="490" y="30" width="200" height="60" rx="10" fill="#7048e8"/>
+        <text x="590" y="58" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Pricing Service</text>
+        <text x="590" y="76" text-anchor="middle" fill="#fff" font-size="10">gRPC · Protobuf</text>
+
+        <rect x="490" y="130" width="200" height="60" rx="10" fill="#7048e8"/>
+        <text x="590" y="158" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Inventory Service</text>
+        <text x="590" y="176" text-anchor="middle" fill="#fff" font-size="10">gRPC · Protobuf</text>
+
+        <rect x="490" y="230" width="200" height="60" rx="10" fill="#7048e8"/>
+        <text x="590" y="258" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Tax Service</text>
+        <text x="590" y="276" text-anchor="middle" fill="#fff" font-size="10">gRPC · Protobuf</text>
+
+        <line x1="190" y1="160" x2="220" y2="160" stroke="#7fa2ff" stroke-width="2" marker-end="url(#a-arr)"/>
+        <line x1="420" y1="150" x2="490" y2="60" stroke="#7fa2ff" stroke-width="2" marker-end="url(#a-arr)"/>
+        <line x1="420" y1="160" x2="490" y2="160" stroke="#7fa2ff" stroke-width="2" marker-end="url(#a-arr)"/>
+        <line x1="420" y1="170" x2="490" y2="260" stroke="#7fa2ff" stroke-width="2" marker-end="url(#a-arr)"/>
+
+        <line x1="490" y1="80"  x2="420" y2="140" stroke="#2dc653" stroke-width="2" marker-end="url(#a-rep)"/>
+        <line x1="490" y1="180" x2="420" y2="180" stroke="#2dc653" stroke-width="2" marker-end="url(#a-rep)"/>
+        <line x1="490" y1="240" x2="420" y2="190" stroke="#2dc653" stroke-width="2" marker-end="url(#a-rep)"/>
+
+        <text x="765" y="55" fill="#c6d0e0" font-size="11">price</text>
+        <text x="765" y="155" fill="#c6d0e0" font-size="11">stock</text>
+        <text x="765" y="255" fill="#c6d0e0" font-size="11">tax rate</text>
+
+        <text x="115" y="220" text-anchor="middle" fill="#7f8aa0" font-size="10">outside → REST/JSON</text>
+        <text x="590" y="315" text-anchor="middle" fill="#7f8aa0" font-size="10">inside → gRPC/Protobuf, ~1 ms each, same VPC</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#4361ee"></span> Aggregator</span>
+        <span><span class="dot" style="background:#7048e8"></span> Backend gRPC service</span>
+        <span><span class="dot" style="background:#7fa2ff"></span> Request</span>
+        <span><span class="dot" style="background:#2dc653"></span> Reply</span>
+      </div>
+    </div>
+    <p><strong>Why gRPC wins here:</strong> internal, same-VPC hops; needs <em>immediate</em> answer to complete the parent request; polyglot backend teams; strict schema is a plus (breaking the shape breaks the compile). This is exactly the Microsoft eShopOnContainers pattern — a REST edge, gRPC inside. Under 4 KB per Protobuf frame, HTTP/2 multiplexes 100 concurrent calls on one TCP connection. Total P95 for the three parallel calls sits in the 3–8 ms range.</p>
+
+    <h3>Sample B — RPC is wrong: <em>Order placed → warehouse pick, invoice email, loyalty points, analytics</em></h3>
+    <p>The user has already been told "order placed successfully". Now four downstream things must happen: (1) the warehouse must pick and pack, (2) an invoice email must be sent, (3) loyalty points must be credited, (4) the analytics data warehouse must ingest the order. None of these need to happen <em>before</em> the response returns; some may take minutes. Some downstream systems (warehouse) may be temporarily offline. Two more downstream consumers will be added next quarter. <strong>Every one of those signals points at asynchronous messaging</strong>, not RPC.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="b-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/>
+          </marker>
+        </defs>
+        <rect x="40" y="150" width="180" height="60" rx="10" fill="#4361ee"/>
+        <text x="130" y="180" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Order Service</text>
+        <text x="130" y="196" text-anchor="middle" fill="#fff" font-size="10">publishes OrderPlaced</text>
+
+        <rect x="270" y="150" width="200" height="60" rx="10" fill="#0f1a30" stroke="#f4a259"/>
+        <text x="370" y="180" text-anchor="middle" fill="#f4a259" font-weight="700" font-size="13">Message Bus</text>
+        <text x="370" y="196" text-anchor="middle" fill="#c6d0e0" font-size="10">SNS / SQS · EventBridge · Kafka</text>
+
+        <rect x="530" y="30"  width="200" height="55" rx="10" fill="#7048e8"/>
+        <text x="630" y="58" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Warehouse Service</text>
+        <text x="630" y="74" text-anchor="middle" fill="#fff" font-size="10">picks &amp; packs</text>
+
+        <rect x="530" y="105" width="200" height="55" rx="10" fill="#7048e8"/>
+        <text x="630" y="132" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Email / Invoice Service</text>
+        <text x="630" y="148" text-anchor="middle" fill="#fff" font-size="10">sends email async</text>
+
+        <rect x="530" y="180" width="200" height="55" rx="10" fill="#7048e8"/>
+        <text x="630" y="207" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Loyalty Service</text>
+        <text x="630" y="223" text-anchor="middle" fill="#fff" font-size="10">credit points</text>
+
+        <rect x="530" y="255" width="200" height="55" rx="10" fill="#7048e8"/>
+        <text x="630" y="282" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Analytics ETL</text>
+        <text x="630" y="298" text-anchor="middle" fill="#fff" font-size="10">Kinesis Firehose → Redshift</text>
+
+        <line x1="220" y1="180" x2="270" y2="180" stroke="#f4a259" stroke-width="2" marker-end="url(#b-arr)"/>
+        <line x1="470" y1="170" x2="530" y2="60"  stroke="#f4a259" stroke-width="2" marker-end="url(#b-arr)"/>
+        <line x1="470" y1="180" x2="530" y2="130" stroke="#f4a259" stroke-width="2" marker-end="url(#b-arr)"/>
+        <line x1="470" y1="190" x2="530" y2="205" stroke="#f4a259" stroke-width="2" marker-end="url(#b-arr)"/>
+        <line x1="470" y1="195" x2="530" y2="280" stroke="#f4a259" stroke-width="2" marker-end="url(#b-arr)"/>
+
+        <text x="130" y="240" text-anchor="middle" fill="#7f8aa0" font-size="10">returns immediately to user</text>
+        <text x="370" y="255" text-anchor="middle" fill="#7f8aa0" font-size="10">Order Service never blocks on consumers</text>
+        <text x="630" y="345" text-anchor="middle" fill="#7f8aa0" font-size="10">Each consumer scales independently · new consumers plug in without changing the publisher</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#4361ee"></span> Publisher</span>
+        <span><span class="dot" style="background:#f4a259"></span> Event flow (async)</span>
+        <span><span class="dot" style="background:#7048e8"></span> Subscribers</span>
+      </div>
+    </div>
+    <p><strong>Why gRPC would be wrong here:</strong> the Order Service does not need any of the four responses to continue. If it made four synchronous gRPC calls, one slow subscriber (say, the email SMTP gateway is degraded) would slow every checkout. Adding a fifth consumer next quarter would mean editing the Order Service. Retries and dead-letter queues would have to be reinvented in code. <em>Publishing an event once and letting subscribers pull</em> is dramatically simpler and more resilient.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a gRPC unary call versus a fan-out queue</h2>
+    <p>Two lanes: on the left, a gRPC unary call (single request → single reply on HTTP/2). On the right, an OrderPlaced event fanning out to four subscribers via a message bus.</p>
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="an-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <!-- gRPC lane -->
+        <rect x="20" y="30" width="420" height="400" rx="14" fill="#1a2340" stroke="#2a3652"/>
+        <text x="230" y="55" text-anchor="middle" fill="#7fa2ff" font-weight="700" font-size="14">gRPC UNARY (sync)</text>
+        <rect id="g-client" x="40" y="80" width="180" height="46" rx="8" fill="#2a3652" stroke="#4361ee" data-anim/>
+        <text x="130" y="108" text-anchor="middle" fill="#c6d0e0" font-size="12">Checkout Aggregator</text>
+        <rect id="g-server" x="240" y="80" width="180" height="46" rx="8" fill="#2a3652" stroke="#7048e8" data-anim/>
+        <text x="330" y="108" text-anchor="middle" fill="#c6d0e0" font-size="12">Pricing Service</text>
+        <text x="230" y="150" text-anchor="middle" fill="#c6d0e0" font-size="11">HTTP/2 · one TCP connection</text>
+        <circle id="g-req" cx="140" cy="180" r="10" fill="#7fa2ff" data-anim class="a-hidden"/>
+        <text x="230" y="235" text-anchor="middle" fill="#c6d0e0" font-size="11">Protobuf frame (60-80% smaller than JSON)</text>
+        <text id="g-stat" x="230" y="290" text-anchor="middle" fill="#7fa2ff" font-size="12">idle</text>
+        <text id="g-lat" x="230" y="315" text-anchor="middle" fill="#c6d0e0" font-size="11">P95 latency: —</text>
+        <text x="230" y="380" text-anchor="middle" fill="#7f8aa0" font-size="10">Client is BLOCKED until reply comes back</text>
+        <text x="230" y="400" text-anchor="middle" fill="#7f8aa0" font-size="10">One slow server = slow client</text>
+
+        <!-- Event bus lane -->
+        <rect x="460" y="30" width="420" height="400" rx="14" fill="#1a2340" stroke="#2a3652"/>
+        <text x="670" y="55" text-anchor="middle" fill="#f4a259" font-weight="700" font-size="14">EVENT BUS (async)</text>
+        <rect id="e-pub" x="480" y="80" width="160" height="46" rx="8" fill="#2a3652" stroke="#4361ee" data-anim/>
+        <text x="560" y="108" text-anchor="middle" fill="#c6d0e0" font-size="12">Order Service</text>
+        <rect id="e-bus" x="670" y="80" width="180" height="46" rx="8" fill="#0f1a30" stroke="#f4a259" data-anim/>
+        <text x="760" y="108" text-anchor="middle" fill="#f4a259" font-size="12" font-weight="700">SNS / EventBridge</text>
+        <circle id="e-msg" cx="640" cy="105" r="8" fill="#f4a259" data-anim class="a-hidden"/>
+
+        <rect id="e-sub1" x="470" y="160" width="90" height="40" rx="6" fill="#2a3652" stroke="#7048e8" data-anim/>
+        <text x="515" y="184" text-anchor="middle" fill="#c6d0e0" font-size="10">Warehouse</text>
+        <rect id="e-sub2" x="570" y="160" width="90" height="40" rx="6" fill="#2a3652" stroke="#7048e8" data-anim/>
+        <text x="615" y="184" text-anchor="middle" fill="#c6d0e0" font-size="10">Email</text>
+        <rect id="e-sub3" x="670" y="160" width="90" height="40" rx="6" fill="#2a3652" stroke="#7048e8" data-anim/>
+        <text x="715" y="184" text-anchor="middle" fill="#c6d0e0" font-size="10">Loyalty</text>
+        <rect id="e-sub4" x="770" y="160" width="90" height="40" rx="6" fill="#2a3652" stroke="#7048e8" data-anim/>
+        <text x="815" y="184" text-anchor="middle" fill="#c6d0e0" font-size="10">Analytics</text>
+
+        <text id="e-stat" x="670" y="240" text-anchor="middle" fill="#f4a259" font-size="12">idle</text>
+        <text id="e-lat" x="670" y="265" text-anchor="middle" fill="#c6d0e0" font-size="11">Publisher latency: —</text>
+        <text x="670" y="380" text-anchor="middle" fill="#7f8aa0" font-size="10">Publisher NEVER blocks on subscribers</text>
+        <text x="670" y="400" text-anchor="middle" fill="#7f8aa0" font-size="10">New subscribers plug in without touching publisher</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next" class="secondary">Step →</button>
+        <button data-act="prev" class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+    <script>
+    (function(){
+      const root=document.getElementById('anim1'); if(!root) return;
+      const $=(s)=>root.querySelector(s);
+      const label=$('.anim-step-label'); const cap=$('.anim-step-caption');
+      const btnPlay=root.querySelector('[data-act="play"]');
+      const btnNext=root.querySelector('[data-act="next"]');
+      const btnPrev=root.querySelector('[data-act="prev"]');
+      const btnReset=root.querySelector('[data-act="reset"]');
+      function show(id){ $('#'+id).classList.remove('a-hidden'); }
+      function hide(id){ $('#'+id).classList.add('a-hidden'); }
+      function glow(id){ $('#'+id).classList.add('a-glow'); }
+      function txt(id,t,color){ const el=$('#'+id); el.textContent=t; if(color) el.setAttribute('fill',color); }
+      function move(id,x,y){ $('#'+id).setAttribute('transform',`translate(${x},${y})`); }
+      const CFG = {
+        intro: 'Left: gRPC unary — sync request/reply. Right: event bus — publish once, fan out to N.',
+        interval: 1800,
+        reset:(r)=>{
+          r.querySelectorAll('[data-anim]').forEach(el => { el.classList.remove('a-glow'); el.removeAttribute('transform'); });
+          hide('g-req'); hide('e-msg');
+          txt('g-stat','idle','#7fa2ff'); txt('g-lat','P95 latency: —','#c6d0e0');
+          txt('e-stat','idle','#f4a259'); txt('e-lat','Publisher latency: —','#c6d0e0');
+        },
+        steps: [
+          { caption: 'gRPC: aggregator sends unary request (Protobuf, HTTP/2 frame). Event bus: Order Service commits and publishes OrderPlaced.',
+            apply:(r)=>{ glow('g-client'); show('g-req'); move('g-req',0,0); txt('g-stat','request sent','#7fa2ff'); glow('e-pub'); show('e-msg'); txt('e-stat','publishing','#f4a259'); } },
+          { caption: 'gRPC: frame in flight. Event bus: bus receives event; publisher already returned to caller.',
+            apply:(r)=>{ move('g-req',100,-80); glow('e-bus'); txt('e-stat','event stored on bus','#f4a259'); txt('e-lat','Publisher latency: ~5 ms','#2dc653'); } },
+          { caption: 'gRPC: Pricing runs local function, prepares reply. Event bus: fan-out — bus delivers to 4 subscribers in parallel.',
+            apply:(r)=>{ glow('g-server'); move('g-req',180,-70); txt('g-stat','server computing','#7fa2ff'); glow('e-sub1'); glow('e-sub2'); glow('e-sub3'); glow('e-sub4'); } },
+          { caption: 'gRPC: reply frame comes back on the same HTTP/2 stream. Event bus: each subscriber processes at its own pace.',
+            apply:(r)=>{ move('g-req',-100,0); txt('g-stat','reply received','#2dc653'); txt('g-lat','P95 ~ 3-8 ms','#2dc653'); } },
+          { caption: 'gRPC: aggregator got its answer, moves on. Event bus: Warehouse temporarily slow — but Email/Loyalty/Analytics already done.',
+            apply:(r)=>{ glow('g-client'); txt('e-stat','one slow subscriber, others fine','#2dc653'); } },
+          { caption: 'Add a 5th subscriber next quarter (fraud detection). Event bus: plug it in. gRPC: refactor the publisher.',
+            apply:(r)=>{ txt('e-stat','+ FraudCheck subscribed (zero code change to publisher)','#2dc653'); txt('g-stat','tight coupling — client must know about new server','#f7567c'); } }
+        ]
+      };
+      let idx=-1, playing=false, timer=null;
+      function goto(i){ if(i<0||i>=CFG.steps.length) return; CFG.reset(root); for(let k=0;k<=i;k++) CFG.steps[k].apply(root); idx=i; label.textContent=`Step ${i+1}/${CFG.steps.length}`; cap.textContent=CFG.steps[i].caption; }
+      function reset(){ idx=-1; playing=false; if(timer){clearTimeout(timer); timer=null;} CFG.reset(root); label.textContent='Ready'; cap.textContent=CFG.intro; btnPlay.textContent='▶ Play'; }
+      function play(){ if(playing){ playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play'; return; } if(idx>=CFG.steps.length-1) reset(); playing=true; btnPlay.textContent='⏸ Pause'; function tick(){ if(!playing) return; if(idx+1<CFG.steps.length) goto(idx+1); if(idx<CFG.steps.length-1) timer=setTimeout(tick,CFG.interval); else{playing=false; btnPlay.textContent='▶ Replay';} } timer=setTimeout(tick,400); }
+      btnPlay.addEventListener('click', play); btnReset.addEventListener('click', reset);
+      btnNext && btnNext.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx+1); });
+      btnPrev && btnPrev.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx-1); });
+      reset();
+    })();
+    </script>
+  </section>
+
+  <section id="examples" class="card">
+    <h2>✅ When to reach for RPC — and when not to</h2>
+    <div class="grid2">
+      <div class="box use">
+        <h4>✅ Great fit for RPC (gRPC)</h4>
+        <ul>
+          <li><strong>Internal microservice-to-microservice</strong> calls where an immediate answer is required — pricing, tax, geocoding, auth, feature-flag checks.</li>
+          <li><strong>Polyglot backend teams</strong> — schemas defined in <code>.proto</code>, code generated for every language.</li>
+          <li><strong>Low-latency, high-throughput</strong> hot paths — binary Protobuf + HTTP/2 multiplexing beats JSON/REST by up to 8×.</li>
+          <li><strong>Streaming</strong> — real-time telemetry, chat, log tail, ML inference, live game state (gRPC bidirectional streaming).</li>
+          <li><strong>Bandwidth-constrained</strong> environments — mobile, IoT, embedded devices where every byte matters.</li>
+          <li><strong>Backend-for-Frontend aggregators</strong> — client-facing REST/JSON at the edge, gRPC to internal services (the eShop pattern).</li>
+          <li><strong>Service mesh (Istio, Linkerd, App Mesh)</strong> — mesh sidecars natively speak gRPC; retries, mTLS, canary, load-balancing all first-class.</li>
+        </ul>
+      </div>
+      <div class="box avoid">
+        <h4>❌ Wrong tool — avoid RPC here</h4>
+        <ul>
+          <li><strong>Fire-and-forget or fan-out</strong> — <em>OrderPlaced</em>, <em>UserSignedUp</em>, <em>PaymentReceived</em> — anywhere N unknown consumers care about the event. Use pub/sub.</li>
+          <li><strong>Long-running work</strong> — video encoding, report generation, batch import. Use a queue + workers.</li>
+          <li><strong>Cross-organisation / public APIs</strong> — third-party developers expect JSON REST or GraphQL, not a Protobuf toolchain. RPC couples too tightly.</li>
+          <li><strong>Browser-facing traffic</strong> — modern browsers cannot open native gRPC; you need gRPC-Web or a JSON gateway.</li>
+          <li><strong>Human-debuggable traffic</strong> — you want to be able to <code>curl</code> the endpoint or read logs raw. Binary Protobuf is invisible to <code>tcpdump</code>.</li>
+          <li><strong>Highly evolving contracts</strong> where you cannot force clients to re-generate stubs — REST + JSON schema is more forgiving.</li>
+          <li><strong>When one side may be offline</strong> — sync RPC fails immediately; queues buffer for hours or days.</li>
+          <li><strong>Cross-region &amp; unreliable networks</strong> — high tail-latency makes sync calls costly; async with retries is safer.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Worked interview examples</h3>
+    <table>
+      <thead><tr><th>Scenario</th><th>Pick</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Uber's rider app asks "who's the nearest driver?" — dispatch service calls the geo-index service</td><td><strong>gRPC</strong></td><td>Same VPC, needs immediate answer, tight P99 budget, polyglot teams, streaming updates as driver moves</td></tr>
+        <tr><td>Netflix "playback started" event → analytics + recommendations + billing</td><td><strong>Kafka pub/sub</strong></td><td>Multiple consumers, don't block playback, need durable replay, new consumers added freely</td></tr>
+        <tr><td>Stripe public API — merchant server creates a charge</td><td><strong>REST + JSON</strong></td><td>Public, polyglot, human-debuggable, must work from any language/tool including curl</td></tr>
+        <tr><td>Real-time collaborative doc (Google Docs / Figma) — client to server cursor + edits</td><td><strong>WebSocket / gRPC bidi</strong></td><td>Streaming, low latency, live push both directions</td></tr>
+        <tr><td>Payment webhook to your server ("customer refunded")</td><td><strong>HTTPS POST webhook (REST)</strong></td><td>Cross-org boundary, must be simple for the sender, retriable</td></tr>
+        <tr><td>Internal ML inference — Python model behind Go API gateway</td><td><strong>gRPC</strong></td><td>Polyglot, protobuf tensor payloads, streaming inference results, bandwidth matters</td></tr>
+        <tr><td>Batch overnight report generation triggered by "close of business"</td><td><strong>SQS queue → worker fleet</strong></td><td>No immediate answer needed; failure means retry, not user-visible error; workers auto-scale</td></tr>
+        <tr><td>Front-end (Angular) → back-end (.NET) query</td><td><strong>REST/JSON or gRPC-Web</strong></td><td>Browser cannot speak native gRPC; use REST or the gRPC-Web bridge if you want typed clients</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Deep-dive — how gRPC actually works</h2>
+
+    <h3>1. The wire — HTTP/2 with Protobuf frames</h3>
+    <p>gRPC runs on HTTP/2 (2015). HTTP/2 changes everything vs HTTP/1.1: <strong>binary framing, header compression (HPACK), stream multiplexing on one TCP connection, bidirectional flow</strong>. gRPC uses these to send 30 or 300 parallel requests over <em>one</em> TCP socket with no head-of-line blocking above the transport. The payload is a Protobuf-encoded binary message — 60-80% smaller than the equivalent JSON, no field names on the wire (just tag numbers).</p>
+
+    <h3>2. The IDL — .proto files</h3>
+    <p>Every gRPC service is defined in a <code>.proto</code> file:</p>
+<pre><span class="cmt">// pricing.proto</span>
+<span class="kw">syntax</span> = <span class="str">"proto3"</span>;
+<span class="kw">package</span> pricing.v1;
+
+<span class="kw">service</span> PricingService {
+  <span class="kw">rpc</span> <span class="fn">GetPrice</span>(GetPriceRequest) <span class="kw">returns</span> (GetPriceReply);
+  <span class="kw">rpc</span> <span class="fn">GetPrices</span>(GetPricesRequest) <span class="kw">returns</span> (stream PriceReply);
+}
+<span class="kw">message</span> GetPriceRequest { <span class="kw">string</span> sku = 1; <span class="kw">string</span> currency = 2; }
+<span class="kw">message</span> GetPriceReply   { <span class="kw">int64</span>  cents = 1; <span class="kw">string</span> currency = 2; }
+</pre>
+    <p>Run <code>protoc</code> and the compiler generates a strongly-typed client stub (<code>PricingClient</code>) and a server base class (<code>PricingBase</code>) in whichever language you like. C#, Go, Java, Python, JS, Kotlin, Swift — all interop over the same wire format.</p>
+
+    <h3>3. Four call modes</h3>
+    <ul>
+      <li><strong>Unary</strong> — one request, one reply (like a regular function call). 95% of gRPC traffic.</li>
+      <li><strong>Server-streaming</strong> — one request, N replies. e.g. price stream, log tail.</li>
+      <li><strong>Client-streaming</strong> — N requests, one reply. e.g. upload chunks, then done.</li>
+      <li><strong>Bidirectional streaming</strong> — N up, N down, independent. e.g. chat, collaborative editing, live ML inference.</li>
+    </ul>
+
+    <h3>4. Deadlines, cancellation, retries</h3>
+    <p>Every gRPC call carries a <strong>deadline</strong> — an absolute timestamp propagated through the call chain. When the deadline expires, all in-flight work in every downstream service is cancelled. Modern service meshes (Istio, Linkerd) enforce this automatically. This is a huge operational win over ad-hoc HTTP timeouts.</p>
+
+    <h3>5. Load balancing &amp; the connection-per-endpoint problem</h3>
+    <p>HTTP/2 multiplexes over one long-lived TCP connection. Naïve load balancers (L4/TCP) will pin all traffic to one backend. Solutions: (a) <strong>client-side load balancing</strong> (the gRPC client itself does round-robin across N sub-channels), (b) <strong>proxyless service mesh</strong> that steers each RPC, (c) <strong>Envoy / Linkerd sidecar</strong> that terminates and re-balances. This is a real production gotcha — a naïve ALB gRPC deployment can hot-spot on one pod.</p>
+
+    <h3>6. gRPC-Web — because browsers can't</h3>
+    <p>Native gRPC uses HTTP/2 features (trailers, binary frames) browsers cannot expose. <strong>gRPC-Web</strong> is a small protocol variant plus a proxy (usually Envoy) that translates browser-friendly requests to real gRPC upstream. You get typed clients and Protobuf payloads in Angular/React/Blazor; the proxy handles the plumbing.</p>
+
+    <h3>7. Failure model — "the network is not local"</h3>
+    <p>The RPC illusion is <em>the network looks like a local function</em>. The trap is <strong>partial failure</strong>. Local functions don't return "connection reset" or "deadline exceeded". Every RPC call must be treated as fallible: retry with backoff on transient errors, circuit-break on repeated failure, propagate the deadline, prefer idempotent methods, and use correlation-ids for tracing. The <em>Fallacies of Distributed Computing</em> (network is reliable, latency is zero, bandwidth is infinite, topology doesn't change) all bite you eventually. RPC does not fix them; it just makes the boilerplate easier.</p>
+
+    <h3>8. Contract evolution</h3>
+    <p>Protobuf has strong rules for forward/backward compatibility: never reuse a tag number, only add new fields at higher tags, mark deprecated fields (never delete), avoid changing types. If you follow the rules, old clients keep working against new servers and vice versa. This is one reason large orgs (Google, Meta) prefer Protobuf over JSON — the compiler enforces the rules.</p>
+  </section>
+
+  <section id="compare" class="card">
+    <h2>⚖️ RPC vs REST vs Async messaging — the three-way choice</h2>
+    <table>
+      <thead><tr><th>Concern</th><th>gRPC (RPC)</th><th>REST + JSON</th><th>Async messaging (SNS/SQS/Kafka)</th></tr></thead>
+      <tbody>
+        <tr><td>Coupling</td><td>Tight — shared <code>.proto</code>, generated stubs</td><td>Medium — shared schema (OpenAPI) but flexible</td><td>Loose — publisher never knows subscribers</td></tr>
+        <tr><td>Response latency</td><td>Very low, sync (~1-5 ms internal)</td><td>Low, sync (~5-20 ms JSON overhead)</td><td>None — fire-and-forget</td></tr>
+        <tr><td>Wire size</td><td>Very small (Protobuf binary)</td><td>Bigger (verbose JSON)</td><td>Whatever payload (JSON/Avro/Protobuf)</td></tr>
+        <tr><td>Streaming</td><td>Native (4 modes)</td><td>Weak (SSE / chunked)</td><td>Native (Kafka)</td></tr>
+        <tr><td>Browser support</td><td>Only via gRPC-Web + proxy</td><td>Native everywhere</td><td>Via WebSocket / SSE bridge</td></tr>
+        <tr><td>Human debuggable</td><td>No (binary — need tooling)</td><td>Yes (curl, browser, logs)</td><td>Depends on payload</td></tr>
+        <tr><td>Cross-org / public</td><td>Rare (SDK ships)</td><td>Standard</td><td>Webhook (REST) is the norm</td></tr>
+        <tr><td>Failure semantics</td><td>Synchronous — caller must handle immediately</td><td>Synchronous — same</td><td>At-least-once with retry &amp; DLQ built in</td></tr>
+        <tr><td>Fan-out to N</td><td>Bad — one RPC per subscriber</td><td>Same</td><td>Excellent — publish once</td></tr>
+        <tr><td>Ordering guarantees</td><td>None natively (call ordering only)</td><td>None</td><td>Yes (per-partition Kafka, FIFO SQS)</td></tr>
+        <tr><td>Backpressure</td><td>HTTP/2 flow-control</td><td>None</td><td>Broker buffering + consumer lag</td></tr>
+        <tr><td>Cost of new consumer</td><td>Change publisher</td><td>Change publisher</td><td>Zero — subscribe</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Rule of thumb from senior engineers:</strong> <em>synchronous when you need an answer; asynchronous when you need durability, decoupling, or fan-out; REST at the perimeter, RPC on the inside, events for anything downstream</em>.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 DSA — what's inside</span>
+    <h2>The data structures &amp; algorithms behind RPC</h2>
+    <table>
+      <thead><tr><th>Concept</th><th>Structure / algorithm</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Protobuf encoding</td><td>Varint + tag/type prefix (Base 128); ZigZag for signed ints</td><td>Compact — small numbers use 1 byte, huge numbers scale</td></tr>
+        <tr><td>Schema evolution</td><td>Tag numbers as stable field IDs; unknown fields preserved</td><td>Forward + backward compat</td></tr>
+        <tr><td>HTTP/2 multiplexing</td><td>Per-stream flow-control window; binary frame types (DATA, HEADERS, RST_STREAM)</td><td>N concurrent RPCs, one TCP socket, no HoL blocking</td></tr>
+        <tr><td>HPACK header compression</td><td>Static + dynamic Huffman-coded header table</td><td>Repeated headers = one byte reference</td></tr>
+        <tr><td>Client-side LB</td><td>Round-robin / EWMA over sub-channels; xDS (Envoy protocol) for service discovery</td><td>Even distribution across pods</td></tr>
+        <tr><td>Deadlines</td><td>Propagated timestamp; monotonic clock check at every hop</td><td>Bounded tail latency</td></tr>
+        <tr><td>Retry with backoff</td><td>Exponential + jitter; policy from service config</td><td>Avoid thundering herd on transient failures</td></tr>
+        <tr><td>Circuit breaker</td><td>Rolling error-rate counter; open/closed/half-open FSM</td><td>Stop hammering a failing dependency</td></tr>
+        <tr><td>Trace propagation</td><td>W3C traceparent header; correlation IDs</td><td>End-to-end observability</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Running gRPC on AWS</h2>
+    <table>
+      <thead><tr><th>Component</th><th>AWS service</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Service compute</td><td><strong>EKS</strong>, <strong>ECS Fargate</strong>, <strong>App Runner</strong></td><td>Container-native; Lambda has limited gRPC support (Function URLs are HTTP/1.1/2 buffered).</td></tr>
+        <tr><td>Load balancer</td><td><strong>Application Load Balancer</strong> (with HTTP/2 gRPC target group) or <strong>Network Load Balancer</strong> (TCP passthrough)</td><td>ALB supports gRPC natively since 2020; must set gRPC health check protocol.</td></tr>
+        <tr><td>Service mesh</td><td><strong>AWS App Mesh</strong>, <strong>Istio on EKS</strong>, <strong>Linkerd</strong></td><td>Sidecar handles retries, mTLS, canary, load-balancing per-RPC (not per-connection).</td></tr>
+        <tr><td>Async alternative</td><td><strong>SNS + SQS</strong>, <strong>EventBridge</strong>, <strong>MSK (Kafka)</strong>, <strong>Kinesis</strong></td><td>Use when RPC is the wrong tool — fan-out, decoupling, buffering.</td></tr>
+        <tr><td>Browser-facing gRPC</td><td><strong>Envoy proxy</strong> on ECS/EKS translating gRPC-Web ↔ gRPC</td><td>ALB alone can't do gRPC-Web today.</td></tr>
+        <tr><td>Tracing</td><td><strong>AWS X-Ray</strong>, <strong>OpenTelemetry → AWS Distro</strong></td><td>gRPC clients auto-instrument in most languages.</td></tr>
+        <tr><td>Managed API gateway</td><td><strong>API Gateway HTTP APIs</strong> (REST/HTTP), <strong>App Mesh Virtual Gateway</strong> for gRPC</td><td>API Gateway doesn't front raw gRPC — put an internal ALB in front.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 Code — same call, two ways</h2>
+
+    <h4>gRPC in .NET (Kestrel + <code>Grpc.AspNetCore</code>)</h4>
+<pre><span class="cmt">// pricing.proto  ─ shared schema</span>
+<span class="kw">syntax</span> = <span class="str">"proto3"</span>;
+<span class="kw">service</span> PricingService {
+  <span class="kw">rpc</span> <span class="fn">GetPrice</span>(GetPriceRequest) <span class="kw">returns</span> (GetPriceReply);
+}
+<span class="kw">message</span> GetPriceRequest { <span class="kw">string</span> sku = 1; }
+<span class="kw">message</span> GetPriceReply   { <span class="kw">int64</span> cents = 1; }
+
+<span class="cmt">// Server — Program.cs</span>
+<span class="kw">var</span> builder = WebApplication.<span class="fn">CreateBuilder</span>(args);
+builder.Services.<span class="fn">AddGrpc</span>();
+<span class="kw">var</span> app = builder.<span class="fn">Build</span>();
+app.<span class="fn">MapGrpcService</span>&lt;<span class="typ">PricingImpl</span>&gt;();
+app.<span class="fn">Run</span>();
+
+<span class="cmt">// Server — generated base class</span>
+<span class="kw">public class</span> <span class="typ">PricingImpl</span> : <span class="typ">PricingService.PricingServiceBase</span> {
+  <span class="kw">public override</span> <span class="typ">Task</span>&lt;<span class="typ">GetPriceReply</span>&gt; <span class="fn">GetPrice</span>(<span class="typ">GetPriceRequest</span> req, <span class="typ">ServerCallContext</span> ctx) {
+    <span class="kw">var</span> price = <span class="fn">Lookup</span>(req.Sku);           <span class="cmt">// local business logic</span>
+    <span class="kw">return</span> Task.<span class="fn">FromResult</span>(<span class="kw">new</span> <span class="typ">GetPriceReply</span> { Cents = price });
+  }
+}
+
+<span class="cmt">// Client — Checkout aggregator</span>
+<span class="kw">using var</span> channel = GrpcChannel.<span class="fn">ForAddress</span>(<span class="str">"https://pricing.internal:443"</span>);
+<span class="kw">var</span> client = <span class="kw">new</span> <span class="typ">PricingService.PricingServiceClient</span>(channel);
+<span class="kw">var</span> reply = <span class="kw">await</span> client.<span class="fn">GetPriceAsync</span>(<span class="kw">new</span> <span class="typ">GetPriceRequest</span> { Sku = <span class="str">"SKU-42"</span> },
+              deadline: DateTime.UtcNow.<span class="fn">AddMilliseconds</span>(50));   <span class="cmt">// deadline!</span>
+Console.<span class="fn">WriteLine</span>(reply.Cents);
+</pre>
+
+    <h4>Async event publisher (SNS) — the pattern that RPC would ruin</h4>
+<pre><span class="cmt">// Order Service — commit + publish, no synchronous waiting</span>
+<span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">PlaceOrder</span>(<span class="typ">CreateOrderCommand</span> cmd) {
+    <span class="kw">using var</span> tx = db.<span class="fn">BeginTransaction</span>();
+    <span class="kw">var</span> order = db.Orders.<span class="fn">Add</span>(<span class="kw">new</span> <span class="typ">Order</span>(cmd));
+    db.Outbox.<span class="fn">Add</span>(<span class="kw">new</span> <span class="typ">OutboxEvent</span>(<span class="str">"OrderPlaced"</span>, order));   <span class="cmt">// same transaction</span>
+    <span class="kw">await</span> tx.<span class="fn">CommitAsync</span>();
+    <span class="cmt">// A background worker ships outbox rows to SNS.</span>
+    <span class="cmt">// Warehouse, Email, Loyalty, Analytics — all subscribed. Zero coupling to Order.</span>
+}
+</pre>
+    <p>Note the shape: the <em>synchronous</em> call gets the answer in real time. The <em>asynchronous</em> event fans out to four subscribers who never block the caller. Same domain, opposite tools, both correct.</p>
+  </section>
+
+  <section id="decision" class="card">
+    <h2>🧭 Decision rubric — the two-question test</h2>
+    <p>When someone hands you a call to design, ask two questions before picking a transport:</p>
+    <ol>
+      <li><strong>"Does the caller need the answer <em>before</em> it can continue?"</strong>
+        <ul>
+          <li>Yes → synchronous. Then ask: <strong>"Public boundary or internal?"</strong> Public → <strong>REST</strong>. Internal → <strong>gRPC</strong>.</li>
+          <li>No → asynchronous. Use <strong>SNS/SQS/EventBridge/Kafka</strong>.</li>
+        </ul>
+      </li>
+      <li><strong>"How many consumers care about this signal, and can they change independently?"</strong>
+        <ul>
+          <li>One or few, tightly co-owned → sync (RPC or REST) is fine.</li>
+          <li>Many, or "we might add more later" → async pub/sub, always.</li>
+        </ul>
+      </li>
+    </ol>
+    <p>Those two questions correctly classify 95% of the design choices you'll face. The remaining 5% are streaming, real-time, or hybrid — where gRPC's bidi streaming or a WebSocket becomes the answer.</p>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "RPC — usually gRPC in modern systems — is the right choice for <em>internal microservice-to-microservice calls that need an immediate answer</em>: HTTP/2 multiplexes N parallel calls on one TCP connection, Protobuf keeps payloads 60-80% smaller than JSON, generated stubs give you type-safe polyglot clients, and streaming is first-class. It is the <em>wrong</em> choice for fire-and-forget, fan-out, long-running, browser-facing, cross-organisation, or heavily-evolving traffic — those want REST or async messaging instead. The rule of thumb: <em>REST at the perimeter, gRPC on the inside, events for anything downstream</em>. Every RPC call must still handle partial failure — deadlines, retries with backoff, circuit breakers, correlation IDs — because the network is never local, no matter how transparent the stub is."</p>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li><strong>"Sync when you need an answer, async when you need durability and decoupling."</strong></li>
+      <li><strong>"gRPC = HTTP/2 + Protobuf + generated stubs + streaming"</strong> — one-line definition.</li>
+      <li><strong>"Deadlines propagate down the call chain"</strong> — the operational win people forget to mention.</li>
+      <li><strong>"Browsers can't speak native gRPC"</strong> — you need gRPC-Web via Envoy for front-end.</li>
+      <li><strong>"Naïve L4 load-balancing pins traffic to one pod"</strong> — the production gotcha that shows you've operated it.</li>
+    </ul>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>gRPC up to <strong>8× faster</strong> than JSON REST; payloads <strong>60-80% smaller</strong>.</li>
+      <li>Internal gRPC P95 sits at <strong>1-5 ms</strong> in the same VPC.</li>
+      <li>HTTP/2 multiplexes <strong>100+ concurrent streams</strong> on one TCP socket.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://grpc.io/docs/what-is-grpc/introduction/">What is gRPC? — grpc.io</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/dotnet/architecture/cloud-native/grpc">gRPC — Microsoft Cloud Native .NET</a> (primary source for numbers, usage guidance, eShop pattern)</li>
+      <li><a href="https://cloud.google.com/blog/products/api-management/understanding-grpc-openapi-and-rest-and-when-to-use-them">Understanding gRPC, OpenAPI, and REST — Google Cloud</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/aspnet/core/grpc/">gRPC on ASP.NET Core — Microsoft Learn</a></li>
+      <li><a href="https://github.com/dotnet-architecture/eShopOnContainers">eShop on Containers (Microsoft reference architecture)</a></li>
+      <li><a href="https://developers.google.com/protocol-buffers/docs/overview">Protocol Buffers overview — Google</a></li>
+      <li><a href="https://http2.github.io/">HTTP/2 spec</a></li>
+      <li><a href="https://martinfowler.com/articles/microservice-trade-offs.html#communication">Martin Fowler — Microservice Trade-Offs (sync vs async)</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

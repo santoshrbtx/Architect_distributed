@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>H-Index — Explained</title>
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --card: #ffffff;
+    --ink: #1f2733;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --kid: #ff8c42;
+    --kid-bg: #fff6ee;
+    --pro: #4361ee;
+    --pro-bg: #eef2ff;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(31,39,51,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 40px 36px;
+    box-shadow: var(--shadow);
+    margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .92; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 28px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .9rem;
+    padding: 6px 12px; border-radius: 999px; transition: .15s;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 30px; margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+  section.kid { border-left: 6px solid var(--kid); background: var(--kid-bg); }
+  section.pro { border-left: 6px solid var(--pro); background: var(--pro-bg); }
+  .badge {
+    display: inline-block; font-size: .78rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .kid .badge { background: var(--kid); color: #fff; }
+  .pro .badge { background: var(--pro); color: #fff; }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.1rem; }
+  p, li { color: var(--ink); }
+  .kid p, .kid li { font-size: 1.08rem; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .95rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--pro); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .cells { display:flex; gap:6px; flex-wrap:wrap; margin:14px 0; align-items:flex-end; }
+  .cell {
+    min-width:48px; border-radius:8px; display:flex; flex-direction:column; align-items:center;
+    font-family:"SF Mono",Consolas,monospace; font-weight:700; padding:8px 6px;
+    background:#11203a; color:#c6d0e0; border:1px solid #25324a;
+  }
+  .cell.h { background:#2dc653; color:#04210f; border-color:#2dc653; }
+  .cell.cut { background:#ff8c42; color:#3a1d05; border-color:#ff8c42; }
+  .cell small { font-weight:600; font-size:.7rem; color:inherit; opacity:.8; margin-top:3px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 30px;
+    box-shadow: var(--shadow);
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; color: #fff; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>📊 H-Index</h1>
+    <p>One number that balances <strong>how much</strong> you've produced against <strong>how much it mattered</strong>: you have index <em>h</em> if <em>h</em> of your items each got at least <em>h</em> "votes."</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#kid">🧒 For a 10-year-old</a>
+    <a href="#pro">👨‍💻 For a veteran</a>
+    <a href="#steps">🔁 Step by step</a>
+    <a href="#real">🌍 Real-world uses</a>
+    <a href="#cheat">📌 Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+  </nav>
+
+  <section id="kid" class="card kid">
+    <span class="badge">🧒 Explain it like I'm 10</span>
+    <h2>The simple story</h2>
+    <p>Imagine you draw lots of pictures, and people give each picture <strong>stars</strong> if they like it. Some pictures get tons of stars, some get only one or two.</p>
+    <p>Now you want <strong>one number</strong> that shows you're <em>both</em> a busy artist <em>and</em> a good one. Just counting pictures isn't fair (you could scribble 100 bad ones). Just looking at your single best picture isn't fair either (one lucky hit). So we play a game.</p>
+    <p>Here's the game: <strong>"What is the biggest number <em>h</em> where I have at least <em>h</em> pictures that each got <em>h</em> or more stars?"</strong></p>
+    <ul>
+      <li>If you have <strong>3</strong> pictures with <strong>3 or more</strong> stars each → your number is at least 3.</li>
+      <li>Do you also have <strong>4</strong> pictures with <strong>4 or more</strong> stars? If not, then 4 is too big.</li>
+      <li>So your magic number — your <strong>h-index</strong> — is <strong>3</strong>.</li>
+    </ul>
+    <p>It's a "best of both worlds" score. To make it bigger you need <em>more</em> pictures <em>and</em> each of them needs <em>more</em> stars. One amazing picture can't carry you, and a pile of ignored pictures can't either.</p>
+    <h3>The rule a kid can follow</h3>
+    <ol>
+      <li>Line up your pictures from <strong>most stars to fewest</strong>.</li>
+      <li>Walk down the line counting: 1st, 2nd, 3rd…</li>
+      <li>Keep going as long as the picture you're standing on has <strong>at least as many stars as your count</strong>.</li>
+      <li>The last count that still works is your h-index!</li>
+    </ol>
+  </section>
+
+  <section id="pro" class="card pro">
+    <span class="badge">👨‍💻 For 15 years of IT experience</span>
+    <h2>The engineer's view</h2>
+    <p>The <strong>h-index</strong> (Hirsch index, 2005) is a single scalar that summarizes a distribution. Formally: given an array <code>citations[]</code> of size <code>n</code>, the h-index is the maximum value <code>h</code> such that <strong>at least <code>h</code> elements are ≥ <code>h</code></strong> (and the remaining <code>n − h</code> are ≤ <code>h</code>). It is exactly LeetCode <strong>#274 "H-Index"</strong>. It's a robust order-statistic: insensitive to a single huge outlier and to a long tail of zeros, which is why it's used as a balanced productivity-vs-impact measure.</p>
+    <p>Two canonical solutions: a <strong>sort-based</strong> one (O(n log n)) and a <strong>counting-sort / bucket</strong> one (O(n) time, O(n) space). If the input is already sorted, a third <strong>binary-search</strong> approach gives O(log n) — that's LeetCode #275 "H-Index II".</p>
+
+    <h3>Complexity</h3>
+    <table>
+      <tr><th>Approach</th><th>Time</th><th>Space</th><th>When to use</th></tr>
+      <tr><td>Sort + scan</td><td>O(n log n)</td><td>O(1) extra*</td><td>simplest; default choice</td></tr>
+      <tr><td>Counting / bucket</td><td>O(n)</td><td>O(n)</td><td>large n, want linear time</td></tr>
+      <tr><td>Binary search (pre-sorted)</td><td>O(log n)</td><td>O(1)</td><td>input already sorted (#275)</td></tr>
+    </table>
+    <p style="font-size:.85rem;color:var(--muted)">*ignoring the sort's own overhead / assuming in-place sort.</p>
+
+    <h3>Invariants, preconditions & edge cases</h3>
+    <ul>
+      <li><strong>Bounded answer:</strong> <code>0 ≤ h ≤ n</code>. The h-index can never exceed the number of papers, no matter how high any single citation count is.</li>
+      <li><strong>Counting-sort key insight:</strong> citations larger than <code>n</code> contribute nothing extra — clamp them into a bucket at index <code>n</code>. That keeps the bucket array size <code>n+1</code>.</li>
+      <li><strong>Monotonic suffix sum:</strong> scanning buckets from high to low, once the running count of papers with ≥ <code>i</code> citations reaches <code>i</code>, that <code>i</code> is achievable — return the largest such <code>i</code>.</li>
+      <li><strong>Edge cases:</strong> all zeros → <code>h = 0</code>; single paper with many citations → <code>h = 1</code>; <code>[n, n, … n]</code> → <code>h = n</code>; empty array → <code>0</code>.</li>
+      <li><strong>Ties</strong> are handled naturally by the ≥ comparison.</li>
+    </ul>
+
+    <h3>Trade-offs & when NOT to use it</h3>
+    <ul>
+      <li><strong>Sort vs counting:</strong> sorting is shorter and cache-friendly; counting sort wins only when <code>n</code> is large and you need guaranteed linear time. For typical inputs the constant factors make sorting competitive.</li>
+      <li><strong>As a metric (not the algorithm):</strong> the h-index <em>under-rewards</em> a few blockbuster hits, can't decrease over time, is field-dependent (biology vs math cite at very different rates), and is gameable via self-citation. Don't use it to compare across disciplines or seniority without normalization.</li>
+    </ul>
+
+    <h3>Reference implementation (C#)</h3>
+    <pre><code><span class="kw">public class</span> <span class="typ">Solution</span>
+{
+    <span class="cmt">// ---- Approach 1: counting sort — O(n) time, O(n) space ----</span>
+    <span class="kw">public int</span> <span class="fn">HIndex</span>(<span class="kw">int</span>[] citations)
+    {
+        <span class="kw">int</span> n = citations.Length;
+        <span class="kw">int</span>[] buckets = <span class="kw">new int</span>[n + <span class="str">1</span>];      <span class="cmt">// buckets[i] = #papers with exactly i citations</span>
+
+        <span class="kw">foreach</span> (<span class="kw">int</span> c <span class="kw">in</span> citations)
+            buckets[<span class="typ">Math</span>.<span class="fn">Min</span>(c, n)]++;        <span class="cmt">// clamp: anything > n lands in bucket n</span>
+
+        <span class="kw">int</span> count = <span class="str">0</span>;                         <span class="cmt">// running #papers with >= i citations</span>
+        <span class="kw">for</span> (<span class="kw">int</span> i = n; i &gt;= <span class="str">0</span>; i--)        <span class="cmt">// scan from high citations down</span>
+        {
+            count += buckets[i];
+            <span class="kw">if</span> (count &gt;= i) <span class="kw">return</span> i;          <span class="cmt">// h papers each with >= h citations</span>
+        }
+        <span class="kw">return</span> <span class="str">0</span>;
+    }
+
+    <span class="cmt">// ---- Approach 2: sort + scan — O(n log n) time, O(1) extra ----</span>
+    <span class="kw">public int</span> <span class="fn">HIndexSort</span>(<span class="kw">int</span>[] citations)
+    {
+        <span class="typ">Array</span>.<span class="fn">Sort</span>(citations);                <span class="cmt">// ascending</span>
+        <span class="kw">int</span> n = citations.Length;
+        <span class="kw">for</span> (<span class="kw">int</span> i = <span class="str">0</span>; i &lt; n; i++)
+        {
+            <span class="kw">int</span> h = n - i;                     <span class="cmt">// #papers from index i to end</span>
+            <span class="kw">if</span> (citations[i] &gt;= h) <span class="kw">return</span> h;     <span class="cmt">// these h papers all have >= h citations</span>
+        }
+        <span class="kw">return</span> <span class="str">0</span>;
+    }
+}</code></pre>
+  </section>
+
+  <section id="steps" class="card">
+    <h2>🔁 How it works, step by step</h2>
+    <p>Take the classic example <code>citations = [3, 0, 6, 1, 5]</code> (5 papers). The answer is <strong>h = 3</strong>. Let's see why with the <strong>sort &amp; scan</strong> method.</p>
+
+    <ol class="steps">
+      <li><strong>Sort descending:</strong> <code>[6, 5, 3, 1, 0]</code>. (We line papers up from most-cited to least.)</li>
+      <li><strong>Position 1</strong> (count = 1): paper has 6 citations. Is <code>6 ≥ 1</code>? Yes → h could be 1.</li>
+      <li><strong>Position 2</strong> (count = 2): paper has 5. Is <code>5 ≥ 2</code>? Yes → h could be 2.</li>
+      <li><strong>Position 3</strong> (count = 3): paper has 3. Is <code>3 ≥ 3</code>? Yes → h could be 3.</li>
+      <li><strong>Position 4</strong> (count = 4): paper has 1. Is <code>1 ≥ 4</code>? <strong>No</strong> → stop. The last value that worked was <strong>3</strong>.</li>
+    </ol>
+
+    <p>Visually, after sorting descending — green cells are the <em>h</em> papers that each clear the bar; the orange cell is where the rule breaks:</p>
+    <div class="cells">
+      <div class="cell h">6<small>#1 ≥1 ✓</small></div>
+      <div class="cell h">5<small>#2 ≥2 ✓</small></div>
+      <div class="cell h">3<small>#3 ≥3 ✓</small></div>
+      <div class="cell cut">1<small>#4 ≥4 ✗</small></div>
+      <div class="cell">0<small>#5</small></div>
+    </div>
+    <div class="viz">h = 3  →  "3 papers have at least 3 citations each (6, 5, 3),
+           and the remaining 2 papers have at most 3 (1, 0)."
+
+Counting-sort view (n = 5, clamp citations > 5 into bucket 5):
+  citation value : 0  1  2  3  4  5+
+  buckets[i]     : 1  1  0  1  0  2
+  scan i=5..0, running count of papers with >= i:
+     i=5: count=2  (2>=5? no)
+     i=4: count=2  (2>=4? no)
+     i=3: count=3  (3>=3? YES) → return 3 ✓</div>
+  </section>
+
+  <section id="real" class="card">
+    <h2>🌍 Real-world scenarios where the h-index pattern is used</h2>
+    <p>The core idea — <em>"the largest <code>h</code> where at least <code>h</code> items clear a threshold of <code>h</code>"</em> — shows up far beyond academia, anywhere you want a <strong>single balanced score of volume × quality</strong> that resists outliers:</p>
+    <ul>
+      <li><strong>Academia &amp; research (original use):</strong> Google Scholar, Scopus, and Web of Science show every researcher's h-index from their papers' citation counts to balance productivity against impact.</li>
+      <li><strong>Open source &amp; developer reputation:</strong> rank a maintainer by repos with at least <code>h</code> stars each, or a contributor by PRs with at least <code>h</code> reviews — a few viral repos or a pile of ignored ones don't dominate.</li>
+      <li><strong>Content platforms &amp; creators:</strong> a YouTuber/blogger "h-index" = <code>h</code> videos each with ≥ <code>h</code> thousand views; rewards consistent reach over a single viral fluke.</li>
+      <li><strong>E-commerce &amp; product ranking:</strong> score a seller by products that each have ≥ <code>h</code> positive reviews — filters out one-hit products and long tails of dead listings.</li>
+      <li><strong>App stores / marketplaces:</strong> rank a developer by apps with at least <code>h</code> thousand downloads each.</li>
+      <li><strong>Influencer / hiring analytics:</strong> a robust "track record" metric that's hard to game with a single spike, used to shortlist candidates or partners.</li>
+      <li><strong>Algorithmically:</strong> the underlying technique — <strong>counting sort + suffix-count threshold</strong> — is a reusable trick for "find the largest k satisfying a monotonic count condition" problems in O(n).</li>
+    </ul>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>📌 Cheat sheet</h2>
+    <ul>
+      <li><strong>Definition:</strong> max <code>h</code> such that at least <code>h</code> items each have value ≥ <code>h</code>.</li>
+      <li><strong>Bound:</strong> always <code>0 ≤ h ≤ n</code>.</li>
+      <li><strong>Sort method:</strong> sort, then find largest <code>h = n − i</code> with <code>citations[i] ≥ h</code> → O(n log n).</li>
+      <li><strong>Counting method:</strong> bucket counts (clamp &gt; n into bucket n), scan high→low, return first <code>i</code> where running count ≥ <code>i</code> → O(n).</li>
+      <li><strong>Pre-sorted input:</strong> binary search → O(log n) (LeetCode #275).</li>
+      <li><strong>Key trick:</strong> citations above <code>n</code> are wasted — clamp them.</li>
+      <li><strong>Meaning:</strong> a balanced volume × quality score that ignores single outliers.</li>
+      <li><strong>Watch out:</strong> field-dependent, can't decrease, gameable via self-citation — don't compare across domains blindly.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this algorithm</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this algorithm and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <footer>Generated by the <strong>explain-algo</strong> skill · open in your browser via localhost</footer>
+</div>
+  <script src="../../nav.js"></script>
+</body>
+</html>

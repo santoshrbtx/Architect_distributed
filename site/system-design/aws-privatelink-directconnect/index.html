@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AWS Networking — PrivateLink, Direct Connect, VPC Endpoints — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --laymen: #ffb703;
+    --laymen-bg: #fff8e6;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #ff9900 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); color: #4a3400; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  /* ---- Animation harness ---- */
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+  .compare { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:12px 0; }
+  .compare > div { background:#fafbff; border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .compare > div h4 { margin:0 0 6px; font-size:.98rem; }
+  @media(max-width:720px){ .compare{grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>AWS Networking — PrivateLink, Direct Connect &amp; VPC Endpoints</h1>
+    <p>How to keep traffic off the public internet — the four private paths every AWS architect must know, when to pick each, and how they work under the hood.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS map</a>
+    <a href="#code">💻 Code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're solving &amp; where it's used</h2>
+    <p>Any regulated or high-scale AWS customer — a bank, a hospital, an insurer, an e-commerce giant, or a SaaS vendor — hits the same wall the moment they leave a toy demo: <strong>they don't want their data going over the public internet</strong>. When your EC2 instance in a private subnet has to talk to S3, DynamoDB, or a partner's API, the naïve path is <em>NAT → Internet Gateway → the internet → back into AWS</em>. That's slow, costly (NAT + data-transfer fees), audit-unfriendly (traffic leaves your VPC), and forces you to punch outbound holes in firewalls. It also makes bandwidth unpredictable — you share the public internet with everyone else.</p>
+    <p>AWS solves this with four private-networking primitives you'll be expected to name and justify: <strong>Gateway VPC Endpoints</strong> (free, S3/DynamoDB only), <strong>Interface VPC Endpoints (PrivateLink)</strong> (ENI-based, for every other AWS service and third-party SaaS), <strong>Direct Connect</strong> (dedicated fiber from your data centre into AWS), and <strong>Site-to-Site VPN</strong> (encrypted tunnel over the internet, as fallback or first step). Netflix, Snowflake, Datadog, and Databricks all sell their services <em>through PrivateLink endpoints</em>, so customers consume them without ever leaving their own VPC. Capital One, ING, and Goldman rely on Direct Connect for the deterministic 10/100 Gbps circuits that make hybrid cloud actually work.</p>
+    <p>The interview question is almost always: <em>"Design the network for a company that wants zero public-internet exposure between their VPC and AWS services / on-prem data centre / a partner SaaS."</em> You win by picking the right tool for each traffic flow, explaining <em>why</em>, and knowing the trade-offs.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Explained like you've never touched a cloud console</h2>
+    <p>Imagine your company runs offices in a big secure building — that's your <strong>data centre or private cloud area</strong>. Amazon runs another giant building full of shared services (photo storage, address books, delivery trucks) — that's <strong>AWS</strong>. Most of the time your office needs to call Amazon's building to do things: <em>"please store this file"</em>, <em>"send this email"</em>, <em>"look up that customer"</em>.</p>
+    <p>The obvious way to call is <strong>through the public street</strong> — the internet. It works, but it's exposed: anyone can see the traffic go by (even if it's inside a sealed envelope), it costs money to hire messengers to walk through the street, and if the street is jammed everyone is stuck. For a bank or hospital that's not good enough.</p>
+    <p>So Amazon offers you <strong>four ways to talk without using the public street</strong>:</p>
+    <p><strong>1. A magic mail slot</strong> (Gateway Endpoint) — for two very common services (file storage and a big address book), Amazon punches a private mail slot right inside your office wall. You drop the letter in the slot; it teleports directly to Amazon's mailroom. It's free, but it only works for those two services.</p>
+    <p><strong>2. A private phone line to any Amazon service</strong> (PrivateLink) — Amazon runs a private phone cable into your office, wired to any of the hundreds of services they run (email, translation, payments…). You dial a normal-looking number and the call never enters the street. Vendors like Salesforce and Snowflake use the same wiring, so you can call <em>them</em> privately too.</p>
+    <p><strong>3. A dedicated fibre highway between your building and Amazon's</strong> (Direct Connect) — for companies moving huge amounts of data (a hospital's imaging system, an airline's reservation system), Amazon builds you a <em>literal glass fibre cable</em> that goes from your building into their nearest data centre. Massive bandwidth, predictable, private, but you have to pay to build the road.</p>
+    <p><strong>4. A secret encrypted tunnel through the street</strong> (Site-to-Site VPN) — cheapest fallback: your traffic still goes over the public street but it's in a locked armoured van (encrypted), so nobody can peek. Slower and less reliable than the fibre highway, but you can set it up in an afternoon.</p>
+    <p>Picture <strong>Netflix, Stripe, or Datadog</strong>: they built their whole service inside AWS, and they let their <em>customers</em> plug into it via method 2 (PrivateLink), so no customer's data ever touches the public internet on the way in. Big banks like <strong>JPMorgan</strong> use method 3 (Direct Connect) to move terabytes of trading data every day. That's why these primitives are the backbone of "the cloud" for anyone who actually cares about security.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What each mechanism gives you</h2>
+    <p><strong>Functional requirements</strong> we're solving: reach AWS services privately, reach on-premises data centres privately, reach partner SaaS privately, control which callers can reach which services, and give apps a normal-looking DNS name so no code changes are required. <strong>Non-functional</strong>: encryption at rest and in transit, predictable throughput and latency, high availability across AZs, and audit trails.</p>
+
+    <table>
+      <tr><th>Mechanism</th><th>Traffic path</th><th>Throughput / latency</th><th>Cost model</th><th>When to pick</th></tr>
+      <tr>
+        <td><strong>Gateway Endpoint</strong></td>
+        <td>VPC → route-table → AWS backbone → S3 or DynamoDB</td>
+        <td>Effectively unlimited, single-digit ms same-Region</td>
+        <td><strong>Free</strong> (no hourly, no data transfer)</td>
+        <td>Any EC2/Lambda in a VPC talking to S3 or DynamoDB in the same Region. First thing you add.</td>
+      </tr>
+      <tr>
+        <td><strong>Interface Endpoint (PrivateLink)</strong></td>
+        <td>ENI in your subnet → AWS Hyperplane → the service's NLB</td>
+        <td>10 Gbps per ENI burstable to 100 Gbps, ~sub-ms in-Region</td>
+        <td>~$0.01/hr per ENI/AZ + ~$0.01/GB processed</td>
+        <td>Any other AWS service (KMS, Secrets Manager, SQS, ECR, SSM…) or a third-party SaaS.</td>
+      </tr>
+      <tr>
+        <td><strong>Direct Connect</strong></td>
+        <td>Your router → cross-connect at DX location → AWS router → any VPC / public service</td>
+        <td>1 / 10 / 100 / 400 Gbps port; deterministic ~1–5 ms + geo distance</td>
+        <td>Port hour ($0.30–$22/hr) + $0.02–$0.03/GB egress</td>
+        <td>Hybrid workloads, large recurring egress, latency-sensitive apps, compliance mandates.</td>
+      </tr>
+      <tr>
+        <td><strong>Site-to-Site VPN</strong></td>
+        <td>Customer gateway → IPsec tunnel over internet → Virtual Private Gateway</td>
+        <td>~1.25 Gbps per tunnel (aggregate more with ECMP)</td>
+        <td>$0.05/hr per tunnel + normal AWS egress</td>
+        <td>Fallback or day-1 setup while DX is being provisioned.</td>
+      </tr>
+    </table>
+
+    <p><strong>Back-of-envelope numbers to volunteer:</strong> A single Direct Connect 10 Gbps port at ~70% utilization pushes ~5.5 TB/hour. An interface endpoint's ENI can push 10 Gbps and there is one ENI <em>per AZ</em>, so a 3-AZ deployment is a 30 Gbps aggregate. Gateway endpoints have no bandwidth limit imposed by the endpoint itself — you're bounded by the S3/DynamoDB service and your instance NIC. VPN tunnels max out around 1.25 Gbps each, and you can bond up to 4 with ECMP via Transit Gateway.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The mental model is one VPC in the middle, with <strong>four different doors</strong> leading out, each labeled with what it's optimized for. The default door (Internet Gateway + NAT) sends traffic to the public internet — you want to <em>avoid</em> that for anything sensitive. Everything else pulls specific traffic off the public path onto AWS's private backbone or your own dedicated circuit.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/>
+          </marker>
+          <marker id="arrOrange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#ff9900"/>
+          </marker>
+          <marker id="arrGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/>
+          </marker>
+          <marker id="arrPink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f7567c"/>
+          </marker>
+        </defs>
+
+        <!-- Central VPC -->
+        <rect x="270" y="150" width="360" height="220" rx="14" fill="#1a2540" stroke="#4361ee" stroke-width="2"/>
+        <text x="450" y="175" fill="#7fa2ff" font-size="14" font-weight="700" text-anchor="middle">YOUR VPC (10.0.0.0/16)</text>
+        <rect x="300" y="200" width="140" height="70" rx="10" fill="#233158" stroke="#7fa2ff"/>
+        <text x="370" y="230" fill="#e7ecf3" font-size="13" font-weight="700" text-anchor="middle">EC2 / Lambda /</text>
+        <text x="370" y="248" fill="#e7ecf3" font-size="13" font-weight="700" text-anchor="middle">ECS in private subnet</text>
+        <rect x="470" y="200" width="140" height="70" rx="10" fill="#233158" stroke="#7fa2ff"/>
+        <text x="540" y="230" fill="#e7ecf3" font-size="13" font-weight="700" text-anchor="middle">Route Table</text>
+        <text x="540" y="248" fill="#c6d0e0" font-size="11" text-anchor="middle">longest-prefix match</text>
+
+        <!-- Gateway endpoint (green) -->
+        <rect x="470" y="310" width="140" height="40" rx="8" fill="#2dc653" opacity=".9"/>
+        <text x="540" y="335" fill="#0f1420" font-size="12" font-weight="800" text-anchor="middle">Gateway Endpoint</text>
+        <line x1="540" y1="270" x2="540" y2="310" stroke="#2dc653" stroke-width="2" marker-end="url(#arrGreen)"/>
+
+        <!-- Interface endpoints (blue) -->
+        <rect x="300" y="310" width="140" height="40" rx="8" fill="#4361ee"/>
+        <text x="370" y="335" fill="#fff" font-size="12" font-weight="800" text-anchor="middle">Interface Endpoint</text>
+        <line x1="370" y1="270" x2="370" y2="310" stroke="#4361ee" stroke-width="2" marker-end="url(#arr)"/>
+
+        <!-- External buckets -->
+        <rect x="670" y="320" width="200" height="60" rx="10" fill="#0f2617" stroke="#2dc653"/>
+        <text x="770" y="345" fill="#7ff0a3" font-size="13" font-weight="700" text-anchor="middle">S3 / DynamoDB</text>
+        <text x="770" y="365" fill="#c6d0e0" font-size="11" text-anchor="middle">(via AWS backbone, prefix list)</text>
+        <line x1="610" y1="330" x2="670" y2="345" stroke="#2dc653" stroke-width="2" marker-end="url(#arrGreen)"/>
+
+        <rect x="30" y="230" width="200" height="80" rx="10" fill="#1c2440" stroke="#4361ee"/>
+        <text x="130" y="255" fill="#7fa2ff" font-size="13" font-weight="700" text-anchor="middle">Any AWS service</text>
+        <text x="130" y="273" fill="#c6d0e0" font-size="11" text-anchor="middle">KMS · Secrets · SQS · ECR</text>
+        <text x="130" y="290" fill="#c6d0e0" font-size="11" text-anchor="middle">or a SaaS vendor NLB</text>
+        <line x1="230" y1="270" x2="300" y2="330" stroke="#4361ee" stroke-width="2" marker-end="url(#arr)"/>
+
+        <!-- Direct Connect (orange) -->
+        <rect x="30" y="410" width="200" height="80" rx="10" fill="#2a1c00" stroke="#ff9900"/>
+        <text x="130" y="440" fill="#ffcc66" font-size="13" font-weight="700" text-anchor="middle">On-prem data centre</text>
+        <text x="130" y="460" fill="#c6d0e0" font-size="11" text-anchor="middle">Cross-connect · BGP · VLAN</text>
+        <path d="M230,450 C320,450 320,370 400,370" stroke="#ff9900" stroke-width="2" fill="none" marker-end="url(#arrOrange)"/>
+        <text x="230" y="400" fill="#ff9900" font-size="11" font-weight="700">Direct Connect (Private / Public / Transit VIF)</text>
+
+        <!-- VPN (pink) -->
+        <rect x="670" y="410" width="200" height="80" rx="10" fill="#2b0f18" stroke="#f7567c"/>
+        <text x="770" y="440" fill="#ffb0c4" font-size="13" font-weight="700" text-anchor="middle">Site-to-Site VPN</text>
+        <text x="770" y="460" fill="#c6d0e0" font-size="11" text-anchor="middle">IPsec over public internet</text>
+        <path d="M670,450 C580,450 580,370 500,370" stroke="#f7567c" stroke-width="2" fill="none" marker-end="url(#arrPink)"/>
+
+        <!-- Internet path (dim) -->
+        <rect x="360" y="20" width="180" height="55" rx="10" fill="#1a2540" stroke="#5b6677" stroke-dasharray="4 4"/>
+        <text x="450" y="45" fill="#7f8aa0" font-size="12" font-weight="700" text-anchor="middle">Public Internet</text>
+        <text x="450" y="63" fill="#5b6677" font-size="11" text-anchor="middle">(what we're avoiding)</text>
+        <line x1="450" y1="75" x2="450" y2="150" stroke="#5b6677" stroke-dasharray="4 4"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#2dc653"></span> Gateway Endpoint (free, S3/DDB)</span>
+        <span><span class="dot" style="background:#4361ee"></span> Interface Endpoint (PrivateLink)</span>
+        <span><span class="dot" style="background:#ff9900"></span> Direct Connect</span>
+        <span><span class="dot" style="background:#f7567c"></span> Site-to-Site VPN</span>
+        <span><span class="dot" style="background:#5b6677"></span> Public internet (avoid)</span>
+      </div>
+    </div>
+
+    <p>The <strong>route table</strong> is the traffic controller. When your instance sends a packet, the VPC picks the most-specific route: an S3 request matches the AWS-managed <em>prefix list</em> for S3 → routed to the Gateway Endpoint; a call to <code>kms.us-east-1.amazonaws.com</code> matches Private DNS → resolved to an Interface Endpoint's ENI in the same AZ; on-prem CIDR (<code>172.16.0.0/12</code>) matches the DX gateway → routed onto your fibre. Only unmatched traffic (e.g. arbitrary <code>0.0.0.0/0</code>) falls back to the Internet Gateway / NAT.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a request pick each private path</h2>
+    <p>Follow the same call from an EC2 instance to different destinations. Watch which door the packet takes and why — the animation makes the routing decisions visible.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="anArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/>
+          </marker>
+        </defs>
+
+        <!-- VPC container -->
+        <rect x="30" y="30" width="360" height="340" rx="14" fill="#1a2540" stroke="#4361ee" stroke-width="2"/>
+        <text x="210" y="55" fill="#7fa2ff" font-size="13" font-weight="700" text-anchor="middle">YOUR VPC</text>
+
+        <!-- EC2 -->
+        <rect id="ec2" x="70" y="80" width="100" height="60" rx="8" fill="#233158" stroke="#7fa2ff"/>
+        <text x="120" y="105" fill="#e7ecf3" font-size="12" font-weight="700" text-anchor="middle">EC2</text>
+        <text x="120" y="125" fill="#c6d0e0" font-size="10" text-anchor="middle">10.0.1.42</text>
+
+        <!-- Route table -->
+        <rect x="220" y="80" width="140" height="200" rx="10" fill="#1c2440" stroke="#7fa2ff"/>
+        <text x="290" y="102" fill="#7fa2ff" font-size="12" font-weight="700" text-anchor="middle">Route Table</text>
+        <rect id="rt-s3"   x="230" y="115" width="120" height="34" rx="6" fill="#0f2617" stroke="#2dc653"/>
+        <text x="290" y="132" fill="#7ff0a3" font-size="10" font-weight="700" text-anchor="middle">pl-s3 → gwe</text>
+        <text x="290" y="145" fill="#a5c9b3" font-size="9" text-anchor="middle">gateway endpoint</text>
+        <rect id="rt-kms"  x="230" y="158" width="120" height="34" rx="6" fill="#1c2440" stroke="#7fa2ff"/>
+        <text x="290" y="175" fill="#7fa2ff" font-size="10" font-weight="700" text-anchor="middle">kms.eni via DNS</text>
+        <text x="290" y="188" fill="#adc0e3" font-size="9" text-anchor="middle">interface endpoint</text>
+        <rect id="rt-dx"   x="230" y="201" width="120" height="34" rx="6" fill="#2a1c00" stroke="#ff9900"/>
+        <text x="290" y="218" fill="#ffcc66" font-size="10" font-weight="700" text-anchor="middle">172.16/12 → vgw</text>
+        <text x="290" y="231" fill="#e0c48a" font-size="9" text-anchor="middle">Direct Connect</text>
+        <rect id="rt-ig"   x="230" y="244" width="120" height="34" rx="6" fill="#2a1a1c" stroke="#f7567c"/>
+        <text x="290" y="261" fill="#ffb0c4" font-size="10" font-weight="700" text-anchor="middle">0.0.0.0/0 → igw</text>
+        <text x="290" y="274" fill="#e6a1b0" font-size="9" text-anchor="middle">internet fallback</text>
+
+        <!-- Destinations -->
+        <rect id="s3"  x="470" y="60"  width="150" height="55" rx="10" fill="#0f2617" stroke="#2dc653"/>
+        <text x="545" y="82"  fill="#7ff0a3" font-size="12" font-weight="700" text-anchor="middle">Amazon S3</text>
+        <text x="545" y="100" fill="#c6d0e0" font-size="10" text-anchor="middle">bucket.s3.amazonaws.com</text>
+
+        <rect id="kms" x="470" y="135" width="150" height="55" rx="10" fill="#1c2440" stroke="#7fa2ff"/>
+        <text x="545" y="157" fill="#7fa2ff" font-size="12" font-weight="700" text-anchor="middle">AWS KMS</text>
+        <text x="545" y="175" fill="#c6d0e0" font-size="10" text-anchor="middle">kms.us-east-1...</text>
+
+        <rect id="onprem" x="470" y="210" width="150" height="55" rx="10" fill="#2a1c00" stroke="#ff9900"/>
+        <text x="545" y="232" fill="#ffcc66" font-size="12" font-weight="700" text-anchor="middle">On-prem 172.16.5.10</text>
+        <text x="545" y="250" fill="#c6d0e0" font-size="10" text-anchor="middle">data centre</text>
+
+        <rect id="internet" x="470" y="285" width="150" height="55" rx="10" fill="#2a1a1c" stroke="#f7567c"/>
+        <text x="545" y="307" fill="#ffb0c4" font-size="12" font-weight="700" text-anchor="middle">Public Internet</text>
+        <text x="545" y="325" fill="#c6d0e0" font-size="10" text-anchor="middle">what we avoid</text>
+
+        <!-- Packet -->
+        <circle id="packet" cx="170" cy="110" r="10" fill="#ffb703" class="a-hidden"/>
+        <text id="packetLabel" x="170" y="90" fill="#ffb703" font-size="10" font-weight="700" text-anchor="middle" class="a-hidden">GET</text>
+
+        <!-- Path lines (invisible; used for reference only) -->
+        <line x1="360" y1="132" x2="470" y2="88"  stroke="#2dc653" stroke-width="1" stroke-dasharray="3 3" opacity=".3"/>
+        <line x1="360" y1="175" x2="470" y2="162" stroke="#7fa2ff" stroke-width="1" stroke-dasharray="3 3" opacity=".3"/>
+        <line x1="360" y1="218" x2="470" y2="237" stroke="#ff9900" stroke-width="1" stroke-dasharray="3 3" opacity=".3"/>
+        <line x1="360" y1="261" x2="470" y2="312" stroke="#f7567c" stroke-width="1" stroke-dasharray="3 3" opacity=".3"/>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const packet = $('#packet');
+        const packetLabel = $('#packetLabel');
+
+        function movePacket(x, y, text, color) {
+          packet.classList.remove('a-hidden');
+          packetLabel.classList.remove('a-hidden');
+          packet.setAttribute('cx', x);
+          packet.setAttribute('cy', y);
+          packet.setAttribute('fill', color || '#ffb703');
+          packetLabel.setAttribute('x', x);
+          packetLabel.setAttribute('y', y - 15);
+          packetLabel.setAttribute('fill', color || '#ffb703');
+          packetLabel.textContent = text || '';
+        }
+
+        const CFG = {
+          intro: 'Watch the same EC2 make four different calls — each takes a different private path based on the route table.',
+          interval: 2000,
+          reset: (r) => {
+            r.querySelectorAll('.a-glow, .a-dim').forEach(el => el.classList.remove('a-glow','a-dim'));
+            packet.classList.add('a-hidden');
+            packetLabel.classList.add('a-hidden');
+          },
+          steps: [
+            { caption: 'Call 1: EC2 makes a PutObject to S3. The packet leaves the instance.',
+              apply: (r, $) => {
+                $('#ec2').classList.add('a-glow');
+                movePacket(170, 110, 'PUT s3', '#2dc653');
+              }
+            },
+            { caption: 'Route table finds bucket IP in the S3 prefix list → longest-prefix match wins → send to Gateway Endpoint (free path).',
+              apply: (r, $) => {
+                $('#rt-s3').classList.add('a-glow');
+                $('#rt-kms').classList.add('a-dim');
+                $('#rt-dx').classList.add('a-dim');
+                $('#rt-ig').classList.add('a-dim');
+                movePacket(290, 132, 'S3', '#2dc653');
+              }
+            },
+            { caption: 'Packet traverses the AWS backbone directly to S3 — never touches the public internet. No NAT, no cost.',
+              apply: (r, $) => {
+                $('#s3').classList.add('a-glow');
+                movePacket(545, 88, 'S3 ✓', '#2dc653');
+              }
+            },
+            { caption: 'Call 2: EC2 asks KMS to decrypt a key. Private DNS resolves kms.us-east-1... to the endpoint ENI in this AZ.',
+              apply: (r, $) => {
+                $('#s3').classList.remove('a-glow');
+                $('#rt-s3').classList.remove('a-glow');
+                $('#rt-kms').classList.remove('a-dim');
+                $('#rt-kms').classList.add('a-glow');
+                movePacket(290, 175, 'kms', '#7fa2ff');
+              }
+            },
+            { caption: 'Traffic hits the ENI, is forwarded by AWS Hyperplane over PrivateLink to the KMS service NLB. Private, ~sub-ms.',
+              apply: (r, $) => {
+                $('#kms').classList.add('a-glow');
+                movePacket(545, 162, 'KMS ✓', '#7fa2ff');
+              }
+            },
+            { caption: 'Call 3: EC2 queries an internal database at 172.16.5.10 on-premises.',
+              apply: (r, $) => {
+                $('#kms').classList.remove('a-glow');
+                $('#rt-kms').classList.remove('a-glow');
+                $('#rt-dx').classList.remove('a-dim');
+                $('#rt-dx').classList.add('a-glow');
+                movePacket(290, 218, '172.16', '#ff9900');
+              }
+            },
+            { caption: 'Route table matches 172.16.0.0/12 to the Virtual Private Gateway → onto your Direct Connect fibre → to on-prem router.',
+              apply: (r, $) => {
+                $('#onprem').classList.add('a-glow');
+                movePacket(545, 237, 'DC ✓', '#ff9900');
+              }
+            },
+            { caption: 'Call 4: EC2 tries to reach an unknown IP on the internet. No specific route → 0.0.0.0/0 → Internet Gateway.',
+              apply: (r, $) => {
+                $('#onprem').classList.remove('a-glow');
+                $('#rt-dx').classList.remove('a-glow');
+                $('#rt-ig').classList.remove('a-dim');
+                $('#rt-ig').classList.add('a-glow');
+                movePacket(290, 261, '?', '#f7567c');
+              }
+            },
+            { caption: 'This is the fallback — pay for NAT, expose to public internet. The three earlier calls avoided it. That is the whole point.',
+              apply: (r, $) => {
+                $('#internet').classList.add('a-glow');
+                movePacket(545, 312, 'IGW', '#f7567c');
+              }
+            }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. Gateway VPC Endpoint (S3 &amp; DynamoDB only)</h3>
+    <p>Gateway endpoints are the oldest and simplest primitive — a <strong>route-table entry</strong>, not an ENI. When you attach a gateway endpoint to your route table, AWS injects a special route: the destination is an <strong>AWS-managed prefix list</strong> (<code>pl-63a5400a</code> for S3 in us-east-1, for example — a live-updating list of the service's IP ranges), and the target is the endpoint ID. Any packet whose destination matches the prefix list wins the longest-prefix-match contest against your <code>0.0.0.0/0 → igw</code> route and gets forwarded onto the AWS backbone instead of the internet. There's no ENI, no DNS trick, no additional charge — that's why it's the very first thing you add to any production VPC. Limitations: works only for S3 and DynamoDB, only <em>within the same Region</em> (cross-Region S3 still goes via the internet), and it does not work from on-prem or a peered VPC — so DX users must use the S3 interface endpoint instead.</p>
+
+    <h3>2. Interface VPC Endpoint (PrivateLink)</h3>
+    <p>An interface endpoint is a much richer construct: AWS creates one <strong>ENI (Elastic Network Interface) in each AZ you select</strong>, wires it into a global service called <strong>AWS Hyperplane</strong> (a stateless, distributed L4 shuffle service), and Hyperplane forwards the traffic to a Network Load Balancer sitting in front of the target service (KMS, SQS, SSM, ECR, an SaaS vendor's VPC, or your own VPC's NLB if you're publishing a service). You typically enable <strong>Private DNS</strong>, which lets AWS's DNS resolver override the public hostname (<code>kms.us-east-1.amazonaws.com</code>) to return the ENI's private IP — so <em>no code change is required</em>. Access control is layered: a security group on the ENI restricts <em>which sources</em> can reach it, and an <strong>endpoint policy</strong> (a JSON IAM-style document) restricts <em>which API actions and resources</em> can flow through. Cost is roughly $0.01/hour per ENI per AZ plus about $0.01/GB processed.</p>
+
+    <h3>3. AWS PrivateLink for third-party SaaS</h3>
+    <p>The same interface-endpoint machinery is what lets vendors like <strong>Snowflake, Datadog, Databricks, MongoDB Atlas, Salesforce, Confluent</strong> sell "PrivateLink" as a security feature. The vendor puts a Network Load Balancer in front of their service inside their own VPC, then creates a <em>VPC Endpoint Service</em> that exposes it. Their customers create an interface endpoint pointing to that service's ID and get a private ENI in their own VPC — traffic never traverses the internet in either direction. There's no VPC peering, no CIDR conflict, and the vendor's IPs stay private to them. This is the most under-appreciated networking primitive in AWS.</p>
+
+    <h3>4. AWS Direct Connect</h3>
+    <p>Direct Connect is the physical primitive: you (or a Direct Connect Partner) run a single-mode fibre cross-connect between your router in a colocation facility and an AWS router in the same facility. AWS calls these facilities <strong>Direct Connect locations</strong> — Equinix DC/LHR/AMS, CoreSite, Digital Realty, and dozens of others worldwide. Speeds are 1 Gbps, 10 Gbps, 100 Gbps, or 400 Gbps, and multiple ports can be bonded into a <strong>Link Aggregation Group (LAG)</strong> for capacity and redundancy. Optionally you turn on <strong>MACsec</strong> for line-rate L2 encryption on 10/100 Gbps ports.</p>
+    <p>On top of the physical circuit you carve <strong>Virtual Interfaces (VIFs)</strong>, each on a different 802.1Q VLAN tag: a <strong>Private VIF</strong> peers BGP with your VPC's Virtual Private Gateway (or a Direct Connect Gateway) so you can reach private IPs across any Region; a <strong>Public VIF</strong> gives you a BGP session that advertises AWS's public prefixes, so you can hit S3 or DynamoDB across the fibre without going through the internet; a <strong>Transit VIF</strong> connects to a Transit Gateway for hub-and-spoke topologies across many VPCs. All VIFs use BGP with MD5 auth; failover is via BGP path attributes (AS-path prepending, local-pref, MED) and BFD for sub-second dead-peer detection.</p>
+
+    <h3>5. Site-to-Site VPN &amp; Transit Gateway</h3>
+    <p><strong>Site-to-Site VPN</strong> is the pragmatic fallback: an IPsec tunnel over the public internet between your customer gateway (an on-prem router) and an AWS Virtual Private Gateway. Each tunnel maxes out around 1.25 Gbps; you get two tunnels per VPN connection for redundancy. Modern deployments hang everything off a <strong>Transit Gateway</strong>, which is essentially a regional cloud-scale router that terminates VPN, DX, and dozens of VPC attachments and lets them talk to each other via a routing domain of your design. TGW plus ECMP over multiple VPN connections can push tens of Gbps, and is the standard "day-one hybrid" while a Direct Connect port is being provisioned (typically 4–8 weeks of physical work).</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Routing algorithms, prefix trees &amp; BGP</h2>
+    <p>Under the polished console, the whole system is a routing algorithm — a decision tree that picks the outgoing interface for every packet. The core primitives:</p>
+
+    <table>
+      <tr><th>Concept</th><th>Data structure / algorithm</th><th>Why</th></tr>
+      <tr><td>Route table lookup</td><td><strong>Longest-Prefix Match (LPM)</strong> over a trie of CIDR blocks (Patricia / radix tree)</td><td>Constant number of steps per address bit → O(32) or O(128); most specific route wins.</td></tr>
+      <tr><td>AWS-managed prefix list</td><td>Live-updated list of /24-ish CIDRs for a service (S3, DynamoDB)</td><td>Lets AWS grow the service's address space without you editing routes.</td></tr>
+      <tr><td>BGP route selection (Direct Connect)</td><td>Best-path algorithm: highest local-pref → shortest AS-path → lowest MED → oldest → tie-breakers</td><td>Deterministic, decentralized route choice across ISPs and AWS AS 7224.</td></tr>
+      <tr><td>Interface endpoint DNS</td><td>Hash-based load balancing across ENIs; DNS returns the ENI in the caller's AZ</td><td>Keeps traffic AZ-local for lowest latency and no cross-AZ charge.</td></tr>
+      <tr><td>AWS Hyperplane</td><td>Stateless N-to-M shuffle-sharded L4 forwarder — no per-flow state</td><td>Massive horizontal scale and instant failover across AZs.</td></tr>
+      <tr><td>BFD (Bidirectional Forwarding Detection)</td><td>Small hello-timer heartbeat protocol running under BGP</td><td>Detects a dead peer in ~300 ms instead of waiting for BGP's 90-s hold-timer.</td></tr>
+    </table>
+
+    <p><strong>The one algorithm to name in the interview:</strong> longest-prefix match. When you say <em>"the route table always picks the most specific route,"</em> you're describing LPM over a radix tree, and it's what makes gateway endpoints work — the S3 prefix list is more specific than your <code>0.0.0.0/0</code> internet route, so it wins.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the mechanisms to services</h2>
+    <table>
+      <tr><th>Requirement</th><th>AWS service</th><th>Why this pick</th></tr>
+      <tr><td>Private S3 access from a private subnet</td><td><strong>Gateway VPC Endpoint (S3)</strong></td><td>Free, no ENI to manage, works with the AWS-managed prefix list. First thing you add.</td></tr>
+      <tr><td>Private S3 access from on-prem over DX</td><td><strong>Interface Endpoint for S3</strong></td><td>Gateway endpoints don't work over DX/VPN. Interface endpoint has a private DNS you can resolve from on-prem.</td></tr>
+      <tr><td>Encrypt/decrypt with KMS from private subnets</td><td><strong>Interface Endpoint for KMS</strong> (com.amazonaws.<em>region</em>.kms)</td><td>Compliance almost always requires this — otherwise KMS calls hairpin through the internet.</td></tr>
+      <tr><td>Pull container images from ECR without internet</td><td>Interface Endpoints for <strong>ECR API + ECR DKR + S3</strong></td><td>ECR needs three endpoints because layers live in S3.</td></tr>
+      <tr><td>SSM Session Manager into instances without SSH ports</td><td>Interface Endpoints for <strong>ssm, ssmmessages, ec2messages</strong></td><td>Lets you completely remove SSH + bastions.</td></tr>
+      <tr><td>Expose your microservice privately to another AWS account</td><td><strong>VPC Endpoint Service</strong> (PrivateLink provider side) + NLB</td><td>Cross-account, non-overlapping CIDRs, no peering.</td></tr>
+      <tr><td>Hybrid data centre: high-throughput, low-latency link</td><td><strong>Direct Connect</strong> + Direct Connect Gateway</td><td>Deterministic bandwidth, egress at DX rates, scales to 400 Gbps.</td></tr>
+      <tr><td>Encrypt private VIF traffic</td><td><strong>MACsec</strong> (line-rate L2) or <strong>AWS Site-to-Site VPN over the private VIF</strong></td><td>MACsec if hardware supports it; VPN-over-DX gives you IPsec while keeping the low-latency path.</td></tr>
+      <tr><td>Day-1 hybrid before DX is provisioned</td><td><strong>Site-to-Site VPN + Transit Gateway</strong></td><td>Ready in an hour; TGW with ECMP can push multi-gig aggregate.</td></tr>
+      <tr><td>Many VPCs + on-prem + DX all talking to each other</td><td><strong>Transit Gateway</strong> (with Transit VIF)</td><td>Regional cloud router; replaces the mess of full-mesh peering.</td></tr>
+      <tr><td>DNS resolution across VPC boundaries and on-prem</td><td><strong>Route 53 Resolver endpoints</strong> (inbound + outbound)</td><td>Lets on-prem query private VPC DNS, and lets VPCs query on-prem DNS.</td></tr>
+    </table>
+    <p>Typical deployment: multi-account landing zone, one Transit Gateway per Region, a Direct Connect Gateway attached to that TGW via a Transit VIF, a central "shared services" VPC that hosts <em>all</em> interface endpoints (endpoint sharing via TGW saves per-VPC ENI costs), and a Route 53 Resolver rule that forwards on-prem private zones to the Resolver outbound endpoint. Gateway endpoints are still cheap enough to just put one in every VPC that talks to S3/DynamoDB.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# reference — using an Interface Endpoint from .NET</h2>
+    <p>When <em>Private DNS is enabled</em> on the interface endpoint (the default), <strong>no code change is needed</strong> — the AWS SDK resolves <code>kms.us-east-1.amazonaws.com</code> to the endpoint's private ENI automatically. That's the whole point. But if you want to be explicit (or you have Private DNS disabled for some reason), you can override the endpoint at client-construction time:</p>
+<pre><code><span class="cmt">// Program.cs — reach AWS KMS through a Private-DNS-disabled interface endpoint</span>
+<span class="kw">using</span> Amazon;
+<span class="kw">using</span> Amazon.KeyManagementService;
+<span class="kw">using</span> Amazon.KeyManagementService.Model;
+<span class="kw">using</span> Amazon.Runtime;
+
+<span class="kw">var</span> endpointDns = <span class="str">"vpce-0abc123-9y8x7w6v.kms.us-east-1.vpce.amazonaws.com"</span>;
+
+<span class="kw">var</span> config = <span class="kw">new</span> <span class="typ">AmazonKeyManagementServiceConfig</span>
+{
+    <span class="cmt">// Point the SDK at the interface-endpoint DNS name.</span>
+    ServiceURL = <span class="str">$"https://{endpointDns}"</span>,
+    <span class="cmt">// The SDK still needs to sign for the real region.</span>
+    AuthenticationRegion = RegionEndpoint.USEast1.SystemName
+};
+
+<span class="kw">var</span> kms = <span class="kw">new</span> <span class="typ">AmazonKeyManagementServiceClient</span>(config);
+
+<span class="kw">async</span> <span class="typ">Task</span>&lt;<span class="typ">byte</span>[]&gt; <span class="fn">DecryptAsync</span>(<span class="typ">byte</span>[] ciphertext)
+{
+    <span class="kw">var</span> resp = <span class="kw">await</span> kms.DecryptAsync(<span class="kw">new</span> <span class="typ">DecryptRequest</span>
+    {
+        CiphertextBlob = <span class="kw">new</span> <span class="typ">MemoryStream</span>(ciphertext)
+    });
+    <span class="cmt">// Traffic went ENI → Hyperplane → KMS NLB. Never left AWS.</span>
+    <span class="kw">return</span> resp.Plaintext.ToArray();
+}</code></pre>
+
+    <p>And a Terraform/CloudFormation-style snippet for the endpoint itself — the piece that actually creates the private path:</p>
+<pre><code><span class="cmt"># Terraform — interface endpoint for KMS with policy + SG lockdown</span>
+<span class="kw">resource</span> <span class="str">"aws_vpc_endpoint"</span> <span class="str">"kms"</span> {
+  vpc_id              = aws_vpc.main.id
+  service_name        = <span class="str">"com.amazonaws.us-east-1.kms"</span>
+  vpc_endpoint_type   = <span class="str">"Interface"</span>
+  subnet_ids          = aws_subnet.private[*].id       <span class="cmt"># one ENI per AZ</span>
+  security_group_ids  = [aws_security_group.endpoints.id]
+  private_dns_enabled = <span class="kw">true</span>                          <span class="cmt"># magic — clients need no code change</span>
+  policy              = <span class="fn">jsonencode</span>({
+    Version   = <span class="str">"2012-10-17"</span>
+    Statement = [{
+      Effect    = <span class="str">"Allow"</span>
+      Principal = <span class="str">"*"</span>
+      Action    = [<span class="str">"kms:Decrypt"</span>, <span class="str">"kms:Encrypt"</span>, <span class="str">"kms:GenerateDataKey*"</span>]
+      Resource  = <span class="str">"*"</span>
+      Condition = { <span class="str">"StringEquals"</span> = { <span class="str">"aws:PrincipalOrgID"</span> = <span class="str">"o-abc123"</span> } }
+    }]
+  })
+}</code></pre>
+    <p>The <strong>endpoint policy</strong> is the security control most people forget — it means even a compromised IAM key inside your VPC can only call the APIs you've allowlisted through this endpoint.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <div class="compare">
+      <div>
+        <h4>Gateway vs Interface Endpoint (S3)</h4>
+        <p>Gateway is free but Region-local and doesn't work from on-prem. Interface (PrivateLink) costs money but resolves via private DNS from anywhere (VPN/DX). A common pattern: both on the same VPC — gateway for in-Region EC2 traffic, interface for on-prem callers.</p>
+      </div>
+      <div>
+        <h4>PrivateLink vs VPC Peering</h4>
+        <p>Peering exposes entire CIDR ranges bidirectionally and forbids overlapping CIDRs. PrivateLink exposes exactly one service, one direction, and CIDRs can overlap. Peering is right for "two VPCs I own that need broad connectivity"; PrivateLink is right for "I sell this API and I want isolation."</p>
+      </div>
+      <div>
+        <h4>Direct Connect vs Site-to-Site VPN</h4>
+        <p>DX is faster, more consistent, and can be cheaper at scale — but takes weeks to install and needs a colocation presence. VPN is provisioned in an hour and uses the public internet with IPsec. Real designs use VPN as backup on top of DX for the "fiber cut" scenario.</p>
+      </div>
+      <div>
+        <h4>MACsec vs VPN-over-DX</h4>
+        <p>MACsec encrypts at L2 at line rate but only some hardware supports it and only on ≥10 Gbps ports. Running VPN over the private VIF adds ~5% CPU overhead but works everywhere. Regulated industries often mandate one of the two.</p>
+      </div>
+    </div>
+
+    <h3>Bottlenecks and gotchas the interviewer will probe</h3>
+    <ul>
+      <li><strong>Interface-endpoint sprawl.</strong> Every service, every VPC, every AZ = an ENI at $0.01/hour. A 300-VPC estate can spend $50k/month on endpoint ENIs alone. Fix: centralize endpoints in a "shared services" VPC and share via Transit Gateway or Route 53 private hosted zones.</li>
+      <li><strong>Cross-AZ traffic to endpoints.</strong> If your caller in AZ-A hits the ENI in AZ-B you pay cross-AZ transfer <em>and</em> add latency. Fix: enable "AZ affinity" on the SDK and put ENIs in every AZ you deploy to.</li>
+      <li><strong>DNS resolution from on-prem.</strong> Interface endpoints only get their nice private DNS name inside the VPC. From on-prem, you must either use the endpoint's ugly regional DNS name or use a Route 53 Resolver inbound endpoint. Miss this and you'll wonder why the endpoint "doesn't work."</li>
+      <li><strong>Endpoint policies vs IAM policies.</strong> Both apply — the request must be allowed by <em>both</em>. Interviewers love asking "who wins if they conflict?" (answer: the intersection is what's allowed).</li>
+      <li><strong>Direct Connect single-fibre risk.</strong> One DX port = one PoP = one construction crew away from an outage. Best practice: two DX connections at two different DX locations (max resiliency), or DX + VPN as a warm standby.</li>
+      <li><strong>Gateway endpoint doesn't traverse peering or DX.</strong> Traffic from a peered VPC to your gateway endpoint is silently dropped. This is a top-10 AWS support ticket.</li>
+      <li><strong>DX data-transfer pricing.</strong> Egress via DX is cheaper than egress via the internet, but you still pay per-GB. If most of your traffic is <em>into</em> AWS, DX is essentially free.</li>
+      <li><strong>Latency floor.</strong> DX doesn't beat physics — a Mumbai → Frankfurt DX still incurs the ~110 ms speed-of-light round trip. It just makes that RTT predictable.</li>
+    </ul>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch">
+      <strong>30-second pitch:</strong> AWS gives you four private paths so your traffic never touches the public internet. <strong>Gateway endpoints</strong> are free route-table entries for S3 and DynamoDB. <strong>Interface endpoints (PrivateLink)</strong> put an ENI in your VPC connected via AWS Hyperplane to any other service — AWS-owned or a partner SaaS. <strong>Direct Connect</strong> is a physical fibre from your data centre to an AWS router, with BGP-managed private/public/transit VIFs. <strong>Site-to-Site VPN</strong> is the encrypted IPsec fallback over the public internet. The routing decision on every packet is longest-prefix match against the VPC route table.
+    </div>
+    <ul>
+      <li>Volunteer the numbers: <strong>10 Gbps per endpoint ENI per AZ</strong>, <strong>DX ports at 1/10/100/400 Gbps</strong>, <strong>~1.25 Gbps per VPN tunnel</strong>, <strong>gateway endpoints are free</strong>.</li>
+      <li>Say the phrase <strong>"longest-prefix match against the route table"</strong> — it demonstrates you understand the routing layer.</li>
+      <li>Name <strong>AWS Hyperplane</strong> as what actually powers PrivateLink. Very few candidates do.</li>
+      <li>Explain the S3 gotcha: gateway endpoint for in-Region VPC traffic + interface endpoint for on-prem callers over DX.</li>
+      <li>Always cite <strong>endpoint policy</strong> as the least-privilege control most people forget.</li>
+      <li>Design for HA: <strong>two DX circuits in two DX locations</strong>, endpoints in <strong>every AZ</strong>, and <strong>VPN as a standby</strong> on top of DX.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://docs.aws.amazon.com/vpc/latest/privatelink/what-is-privatelink.html">AWS Docs — What is AWS PrivateLink?</a></li>
+      <li><a href="https://docs.aws.amazon.com/vpc/latest/privatelink/gateway-endpoints.html">AWS Docs — Gateway VPC endpoints (S3 &amp; DynamoDB)</a></li>
+      <li><a href="https://docs.aws.amazon.com/directconnect/latest/UserGuide/Welcome.html">AWS Docs — What is AWS Direct Connect?</a></li>
+      <li><a href="https://aws.amazon.com/privatelink/pricing/">AWS PrivateLink pricing</a></li>
+      <li><a href="https://aws.amazon.com/directconnect/pricing/">AWS Direct Connect pricing</a></li>
+      <li><a href="https://docs.aws.amazon.com/vpc/latest/privatelink/concepts.html">AWS Docs — PrivateLink concepts (interface, gateway, resource, service-network endpoints)</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

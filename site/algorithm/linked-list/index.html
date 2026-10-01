@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Linked List — Explained</title>
+<style>
+  :root {
+    --bg: #f6f8fb;
+    --card: #ffffff;
+    --ink: #1f2733;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --kid: #ff8c42;
+    --kid-bg: #fff6ee;
+    --laymen: #ffb703;
+    --laymen-bg: #fff9e6;
+    --pro: #4361ee;
+    --pro-bg: #eef2ff;
+    --usecase: #2ec4b6;
+    --usecase-bg: #e6faf7;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(31,39,51,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 40px 36px;
+    box-shadow: var(--shadow);
+    margin-bottom: 28px;
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .92; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 28px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .9rem;
+    padding: 6px 12px; border-radius: 999px; transition: .15s;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 30px; margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+  section.kid { border-left: 6px solid var(--kid); background: var(--kid-bg); }
+  section.laymen { border-left: 6px solid var(--laymen); background: var(--laymen-bg); }
+  section.pro { border-left: 6px solid var(--pro); background: var(--pro-bg); }
+  section.usecase { border-left: 6px solid var(--usecase); background: var(--usecase-bg); }
+  .badge {
+    display: inline-block; font-size: .78rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .kid .badge { background: var(--kid); color: #fff; }
+  .laymen .badge { background: var(--laymen); color: #4a3800; }
+  .pro .badge { background: var(--pro); color: #fff; }
+  .usecase .badge { background: var(--usecase); color: #fff; }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  .kid p, .kid li { font-size: 1.08rem; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .95rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .ty  { color: #bb9af7; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--pro); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+    font-size: .88rem; line-height: 1.5;
+  }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 30px;
+    box-shadow: var(--shadow);
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat li { color: #fff; }
+  .usecase-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px; margin-top: 12px;
+  }
+  .usecase-card {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .usecase-card .u-title { font-weight: 700; margin: 0 0 4px; font-size: 1rem; }
+  .usecase-card .u-kind { display: inline-block; font-size: .72rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 999px; background: #e6faf7; color: #1a7d75;
+    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .usecase-card .u-kind.d { background: #e0e7ff; color: #3730a3; }
+  .usecase-card .u-kind.c { background: #fce7f3; color: #9d174d; }
+  .usecase-card p { margin: 0; font-size: .9rem; color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; color: #fff; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>🔗 Linked List</h1>
+    <p>A chain of little boxes where each box holds a value <em>and</em> a note pointing to the next box — cheap inserts, no shuffling, at the cost of random access.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#kid">🧒 For a 10-year-old</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#pro">👨‍💻 For a veteran</a>
+    <a href="#usecases">🌍 Real-world uses</a>
+    <a href="#steps">🔁 Step by step</a>
+    <a href="#cheat">📌 Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+  </nav>
+
+  <section id="kid" class="card kid">
+    <span class="badge">🧒 Explain it like I'm 10</span>
+    <h2>The treasure hunt story</h2>
+
+    <p>Imagine you and your friends are playing a <strong>treasure hunt</strong>. There is no big map. Instead, the first clue is in your pocket. That clue says:</p>
+
+    <p><em>"Look under the red flowerpot."</em></p>
+
+    <p>You run to the red flowerpot. Under it, you find a small toy… <em>and</em> a new clue. The new clue says:</p>
+
+    <p><em>"Look behind the swing."</em></p>
+
+    <p>Behind the swing there's another toy… and another clue. And on and on, until one clue says <em>"That's it, you're done!"</em></p>
+
+    <p>That is a <strong>linked list</strong>. Each hiding spot has two things:</p>
+    <ul>
+      <li>🎁 <strong>a toy</strong> (the actual thing you care about)</li>
+      <li>👉 <strong>a note</strong> that tells you where to look next</li>
+    </ul>
+
+    <h3>Why is this cool?</h3>
+    <p>Say your friend wants to <strong>add a new hiding spot in the middle</strong>. They don't have to move all the toys around. They just:</p>
+    <ol>
+      <li>Pick a new spot (say, "the mailbox").</li>
+      <li>Hide a toy there.</li>
+      <li>Change one clue to point to the mailbox first, and write a new clue at the mailbox that points to whatever came next.</li>
+    </ol>
+
+    <p>Two little changes — done! Nobody had to run around moving anything else. That's the superpower of a linked list: <strong>adding and removing is easy, because everything is tied together by little clues instead of being crammed into fixed spots.</strong></p>
+
+    <h3>The downside</h3>
+    <p>Want the <strong>7th</strong> toy? You <em>can't</em> just jump to it. You have to start at clue #1 and follow, follow, follow, follow, follow, follow, follow. Six hops to get to the seventh spot. There's no shortcut.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms — for a curious beginner</span>
+    <h2>What it is and why anyone should care</h2>
+
+    <p>A <strong>linked list</strong> is a way of storing a bunch of items — a to-do list, a queue of songs, a browser's history — where the items are <em>not</em> sitting next to each other in memory. Each item carries a little arrow that says <em>"the next item lives over there."</em></p>
+
+    <p>To picture it, think of a <strong>train</strong>. A train is a bunch of carriages coupled one to the next. You can walk from the front carriage to the back only by going through each one in order. But adding a new carriage in the middle of the train just means unhook, insert, re-hook — you don't have to move every carriage after it.</p>
+
+    <h3>The problem it solves</h3>
+    <p>Computers usually store lists in an <strong>array</strong> (a long shelf where item #1 is right next to item #2, item #2 is right next to item #3, and so on). Arrays are great for reading — "give me item #5" is instant. But <strong>inserting</strong> or <strong>removing</strong> an item in the middle is painful: everything after it has to physically shift one spot to fill the gap or make room.</p>
+
+    <p>A linked list fixes exactly that pain. <strong>You pay more to look things up, and less to change the list.</strong></p>
+
+    <h3>A tiny concrete example</h3>
+    <p>Say your favourite songs are in this order:</p>
+
+    <div class="viz">Bohemian Rhapsody  →  Hotel California  →  Imagine  →  ⛔ (end)</div>
+
+    <p>Each song is a little box. Each box has (1) the song name and (2) an arrow that says <em>"next song is here."</em> The last box has an arrow pointing to nothing — that means "end of the list."</p>
+
+    <p>Now you want to add <em>"Yesterday"</em> between <em>Hotel California</em> and <em>Imagine</em>. Here's what happens:</p>
+    <ol>
+      <li>Make a new box for <em>"Yesterday."</em></li>
+      <li>Copy Hotel California's arrow into Yesterday's arrow (so Yesterday now points to Imagine).</li>
+      <li>Change Hotel California's arrow to point to Yesterday.</li>
+    </ol>
+
+    <p><strong>Two arrows changed. That's it.</strong> Nothing else moved. In an array, you'd have to shove <em>Imagine</em> and everything after it one slot down to make room.</p>
+
+    <h3>How fast/slow does it feel?</h3>
+    <ul>
+      <li>Add a song at the front? <strong>Instant.</strong> (One arrow flip.)</li>
+      <li>Add or remove one you already have a hold of? <strong>Instant.</strong></li>
+      <li>"Give me the 100th song"? <strong>Slow</strong> — you have to walk from song 1, following arrows, 99 times. Twice as many songs → twice as long to find one in the middle.</li>
+    </ul>
+
+    <p>The rule of thumb: <strong>a linked list is great when you're always inserting/removing and rarely jumping to a specific position; an array is the opposite.</strong></p>
+
+    <h3>When you'd use one in real life</h3>
+    <ul>
+      <li>🎵 <strong>Music playlist</strong> — you skip forward one, go back one, and occasionally splice a new track in.</li>
+      <li>🌐 <strong>Browser history</strong> — Back and Forward are just "follow the previous arrow" and "follow the next arrow."</li>
+      <li>↩️ <strong>Undo / Redo</strong> — each action is a node linked to the one before it.</li>
+      <li>🚦 <strong>Round-robin turn-taking</strong> — the last person's arrow points back to the first, forming a circle so it never runs out.</li>
+    </ul>
+  </section>
+
+  <section id="pro" class="card pro">
+    <span class="badge">👨‍💻 For 15 years of IT experience</span>
+    <h2>The engineer's view</h2>
+
+    <p>A <strong>linked list</strong> is a linear collection of nodes where each node holds a payload and one or more pointers/references to other nodes. Storage is non-contiguous; iteration is pointer-chasing. Three canonical flavours:</p>
+
+    <table>
+      <thead><tr><th>Flavour</th><th>Node layout</th><th>Key property</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Singly Linked (SLL)</strong></td><td><code>{ value, next }</code></td><td>Forward-only traversal. Cheapest per-node.</td></tr>
+        <tr><td><strong>Doubly Linked (DLL)</strong></td><td><code>{ value, next, prev }</code></td><td>O(1) delete given a node reference; iterate both ways. Used by LRU cache, browser history, <code>std::list</code>, .NET <code>LinkedList&lt;T&gt;</code>, Linux kernel <code>list_head</code>.</td></tr>
+        <tr><td><strong>Circular</strong></td><td>Last node's <code>next</code> points back to head</td><td>Round-robin schedulers, Josephus, cyclic buffers, ring queues.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Complexity</h3>
+    <table>
+      <thead><tr><th>Operation</th><th>Singly (head/tail known)</th><th>Doubly</th><th>Array (contrast)</th></tr></thead>
+      <tbody>
+        <tr><td>Access index <code>i</code></td><td>O(n)</td><td>O(n)</td><td><strong>O(1)</strong></td></tr>
+        <tr><td>Search by value</td><td>O(n)</td><td>O(n)</td><td>O(n) — but cache-friendly</td></tr>
+        <tr><td>Insert at head</td><td><strong>O(1)</strong></td><td><strong>O(1)</strong></td><td>O(n)</td></tr>
+        <tr><td>Insert at tail (tail ptr)</td><td><strong>O(1)</strong></td><td><strong>O(1)</strong></td><td>Amortised O(1)</td></tr>
+        <tr><td>Insert / delete given a node</td><td>O(1) after prev*</td><td><strong>O(1)</strong></td><td>O(n)</td></tr>
+        <tr><td>Space (per element)</td><td>value + 1 ptr</td><td>value + 2 ptrs</td><td>value only</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:.9rem;color:var(--muted)">* SLL delete of a known node requires the previous node — you either walked to it, or you use the "swap-value-with-next-then-delete-next" trick when the node isn't the tail.</p>
+
+    <h3>Invariants &amp; edge cases to reason about</h3>
+    <ul>
+      <li><strong>Empty list</strong> ⇔ <code>head == null</code>. Always test this before dereferencing.</li>
+      <li><strong>Single-element list</strong> — head and tail are the same node; deleting means both become <code>null</code>.</li>
+      <li><strong>Tail pointer</strong> must be maintained on every insert/delete at the tail; forgetting this is the classic bug.</li>
+      <li><strong>Cycles</strong> — a corrupted <code>next</code> creates infinite loops. Use <strong>Floyd's tortoise &amp; hare</strong> (two-pointer, one step vs. two) to detect O(n) time / O(1) space.</li>
+      <li><strong>Reversal</strong> is the canonical interview problem. Iterative: three pointers (<code>prev</code>, <code>curr</code>, <code>next</code>) rewrites arrows in place, O(n)/O(1).</li>
+      <li><strong>Cache locality</strong> — nodes are usually heap-allocated, so pointer chasing incurs cache misses. On modern CPUs this is often the deciding factor <em>against</em> linked lists for hot paths; an array or <code>ArrayList</code>/<code>List&lt;T&gt;</code> frequently beats a linked list even for "insert in the middle" scenarios up to surprisingly large N.</li>
+    </ul>
+
+    <h3>When NOT to use a linked list</h3>
+    <ul>
+      <li>You need <strong>indexed random access</strong> (arrays / <code>List&lt;T&gt;</code>).</li>
+      <li>Payload is tiny and cache-friendliness matters (contiguous storage wins).</li>
+      <li>You need <strong>binary search</strong>, sorting is frequent, or you plan to hand the data to SIMD/vectorised code.</li>
+      <li>Memory-constrained: two pointers per element is 16 bytes of overhead on 64-bit — significant for millions of small values.</li>
+    </ul>
+
+    <h3>Reference implementation (C#)</h3>
+    <pre><span class="cmt">// A singly linked list with O(1) head/tail insert, reversal, and cycle detection.</span>
+<span class="kw">public class</span> <span class="ty">LinkedList</span>&lt;T&gt;
+{
+    <span class="kw">private class</span> <span class="ty">Node</span>
+    {
+        <span class="kw">public</span> T Value;
+        <span class="kw">public</span> <span class="ty">Node</span>? Next;
+        <span class="kw">public</span> <span class="fn">Node</span>(T v) { Value = v; }
+    }
+
+    <span class="kw">private</span> <span class="ty">Node</span>? _head, _tail;
+    <span class="kw">public int</span> Count { <span class="kw">get</span>; <span class="kw">private set</span>; }
+
+    <span class="cmt">// O(1) — insert at head</span>
+    <span class="kw">public void</span> <span class="fn">AddFirst</span>(T value)
+    {
+        <span class="kw">var</span> node = <span class="kw">new</span> <span class="ty">Node</span>(value) { Next = _head };
+        _head = node;
+        _tail ??= node;         <span class="cmt">// list was empty — new node is also tail</span>
+        Count++;
+    }
+
+    <span class="cmt">// O(1) — insert at tail (tail pointer maintained)</span>
+    <span class="kw">public void</span> <span class="fn">AddLast</span>(T value)
+    {
+        <span class="kw">var</span> node = <span class="kw">new</span> <span class="ty">Node</span>(value);
+        <span class="kw">if</span> (_tail == <span class="kw">null</span>) { _head = _tail = node; }
+        <span class="kw">else</span>              { _tail.Next = node; _tail = node; }
+        Count++;
+    }
+
+    <span class="cmt">// O(n) — remove first node matching value; returns true if removed</span>
+    <span class="kw">public bool</span> <span class="fn">Remove</span>(T value)
+    {
+        <span class="ty">Node</span>? prev = <span class="kw">null</span>, cur = _head;
+        <span class="kw">while</span> (cur != <span class="kw">null</span>)
+        {
+            <span class="kw">if</span> (<span class="ty">EqualityComparer</span>&lt;T&gt;.Default.<span class="fn">Equals</span>(cur.Value, value))
+            {
+                <span class="kw">if</span> (prev == <span class="kw">null</span>) _head = cur.Next; <span class="cmt">// removed head</span>
+                <span class="kw">else</span>              prev.Next = cur.Next;
+                <span class="kw">if</span> (cur == _tail) _tail = prev;         <span class="cmt">// removed tail</span>
+                Count--;
+                <span class="kw">return true</span>;
+            }
+            prev = cur; cur = cur.Next;
+        }
+        <span class="kw">return false</span>;
+    }
+
+    <span class="cmt">// O(n)/O(1) — iterative reverse (rewire arrows in place)</span>
+    <span class="kw">public void</span> <span class="fn">Reverse</span>()
+    {
+        <span class="ty">Node</span>? prev = <span class="kw">null</span>, cur = _head;
+        _tail = _head;
+        <span class="kw">while</span> (cur != <span class="kw">null</span>)
+        {
+            <span class="kw">var</span> next = cur.Next;   <span class="cmt">// remember the rest of the list</span>
+            cur.Next = prev;         <span class="cmt">// flip this arrow</span>
+            prev = cur;              <span class="cmt">// advance the two pointers</span>
+            cur = next;
+        }
+        _head = prev;
+    }
+
+    <span class="cmt">// Floyd's tortoise &amp; hare — O(n) time, O(1) space</span>
+    <span class="kw">public bool</span> <span class="fn">HasCycle</span>()
+    {
+        <span class="ty">Node</span>? slow = _head, fast = _head;
+        <span class="kw">while</span> (fast?.Next != <span class="kw">null</span>)
+        {
+            slow = slow!.Next;
+            fast = fast.Next.Next;
+            <span class="kw">if</span> (slow == fast) <span class="kw">return true</span>;
+        }
+        <span class="kw">return false</span>;
+    }
+
+    <span class="kw">public</span> <span class="ty">IEnumerable</span>&lt;T&gt; <span class="fn">Values</span>()
+    {
+        <span class="kw">for</span> (<span class="kw">var</span> n = _head; n != <span class="kw">null</span>; n = n.Next) <span class="kw">yield return</span> n.Value;
+    }
+}</pre>
+
+    <p style="font-size:.9rem;color:var(--muted)"><strong>Note:</strong> in production .NET, prefer <code>System.Collections.Generic.LinkedList&lt;T&gt;</code> — it's a doubly-linked list with an exposed <code>LinkedListNode&lt;T&gt;</code> giving true O(1) removal <em>given a node reference</em>. That handle-based API is the whole point.</p>
+  </section>
+
+  <section id="usecases" class="card usecase">
+    <span class="badge">🌍 Real-world scenarios where linked lists shine</span>
+    <h2>Where they earn their keep in real systems</h2>
+
+    <p>Linked lists rarely stand alone in modern app code — but they are <strong>everywhere</strong> inside the systems those apps sit on. Below are the classic ones, with the specific reason each system chose a linked list over an array.</p>
+
+    <div class="usecase-grid">
+      <div class="usecase-card">
+        <span class="u-kind d">Doubly</span>
+        <p class="u-title">🧠 LRU Cache (Redis, Memcached, browsers, OS page cache)</p>
+        <p>A doubly linked list stores entries in "most-recently-used → least-recently-used" order; a hash map gives O(1) lookup to the node. On a hit, unlink the node and move it to the head — <strong>O(1)</strong>. On overflow, evict the tail — <strong>O(1)</strong>. An array can't do either without shifting.</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind d">Doubly</span>
+        <p class="u-title">🌐 Browser history & Back/Forward buttons</p>
+        <p>Each page is a node; <code>prev</code> is Back, <code>next</code> is Forward. Navigating to a new URL from the middle truncates the forward chain by simply nulling one pointer — no array copy.</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind">Singly</span>
+        <p class="u-title">↩️ Undo / Redo stacks (Photoshop, VS Code, Word)</p>
+        <p>Each edit is pushed on a linked stack; branching (edit → undo → new edit) discards the tail chain by dropping one pointer. Cheap even when the history is huge.</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind c">Circular</span>
+        <p class="u-title">🔁 Round-robin CPU / thread scheduler</p>
+        <p>Runnable threads form a circular list; after each time slice the OS advances <code>current = current.next</code>. Never runs out; adding/removing a thread is one pointer swap. Used by classic Unix schedulers and Windows internal ready queues.</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind d">Doubly</span>
+        <p class="u-title">🐧 Linux kernel <code>list_head</code></p>
+        <p>The kernel's most-used data structure. Processes, open files, network sockets, timers, memory regions — all threaded together with the <code>list_head</code> intrusive doubly-linked list. Insert/remove in O(1) without allocations because the pointer field lives inside the object.</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind">Singly</span>
+        <p class="u-title">💾 Free-list memory allocators (<code>malloc</code>, JVM, .NET)</p>
+        <p>Free memory chunks are chained into a linked list. Allocation pops the head; free() pushes the block back. Cheap, no compaction needed, and the "next" pointer lives inside the free chunk itself (zero overhead when in use).</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind">Singly</span>
+        <p class="u-title">🧱 Hash map collision chaining</p>
+        <p>Java's <code>HashMap</code>, Go's older <code>map</code>, glibc's dictionaries — each bucket holds a linked list (or tree, if long) of colliding entries. Adding a new colliding key is O(1) at the bucket head.</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind d">Doubly</span>
+        <p class="u-title">🎵 Music player playlists</p>
+        <p>Spotify's queue, VLC's playlist, Apple Music's Up Next — inserts at cursor, drag-to-reorder, and prev/next are all one pointer flip. Random shuffle is a separate index.</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind">Singly</span>
+        <p class="u-title">📈 Adjacency list (graph representation)</p>
+        <p>Most graph implementations (social networks, road networks, Neo4j-style stores) represent each vertex's neighbours as a linked list. Sparse graphs use way less memory than an adjacency matrix.</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind">Singly</span>
+        <p class="u-title">⛓️ Blockchain</p>
+        <p>Each block stores the hash of the previous block — a linked list where the "arrow" is a cryptographic hash rather than a raw pointer. Tampering with any past block breaks every arrow after it.</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind d">Doubly</span>
+        <p class="u-title">🗃️ Redis <code>LIST</code> data type</p>
+        <p>Historically implemented as a doubly linked list (now a quicklist of ziplists for memory efficiency). Powers <code>LPUSH</code>/<code>RPUSH</code>/<code>BLPOP</code> — job queues, chat backlogs, rate-limit windows all at O(1) at either end.</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind c">Circular</span>
+        <p class="u-title">🎮 Game turn order</p>
+        <p>Poker, Uno, Mario Party — players are a circular list; whose-turn-next is <code>current = current.next</code>. Eliminating a player is one unlink.</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind">Singly</span>
+        <p class="u-title">✉️ Message queues &amp; event loops</p>
+        <p>Windows message pump, Node.js task queues, actor mailboxes — an enqueue-at-tail / dequeue-at-head singly-linked FIFO with a tail pointer gives O(1) at both ends without ever resizing.</p>
+      </div>
+
+      <div class="usecase-card">
+        <span class="u-kind d">Doubly</span>
+        <p class="u-title">🧵 Concurrency primitives</p>
+        <p>OS wait queues (mutex/semaphore/condvar waiters), Go's scheduler run-queue, Java's <code>ConcurrentLinkedQueue</code>. Lock-free versions (Michael-Scott queue) rely on linked structures for CAS-friendly single-pointer mutations.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:22px">The pattern behind the pattern</h3>
+    <p>Look at every real-world use above and you'll see the same three fingerprints:</p>
+    <ol>
+      <li><strong>Mutations dominate over indexed reads</strong> — you're always adding, removing, or moving nodes, not asking for "item #47."</li>
+      <li><strong>You already hold a reference to the node you want to change</strong> — via a hash map, a cursor, a stack pointer, a wait handle — so you never pay the O(n) find cost.</li>
+      <li><strong>The order matters and it changes</strong> — reorder, splice, evict-oldest, take-next. Order is the payload.</li>
+    </ol>
+    <p>When those three line up, a linked list is the right tool. When they don't (fixed-size table, random-access lookups, tight numeric crunching) — reach for an array.</p>
+  </section>
+
+  <section id="steps" class="card">
+    <h2>🔁 How it works, step by step</h2>
+
+    <p>Let's insert <strong>50</strong> between <strong>20</strong> and <strong>30</strong> in the list <code>[10 → 20 → 30 → 40]</code>. Two pointer changes, nothing shifts.</p>
+
+    <h3>Starting state</h3>
+    <div class="viz">head
+ │
+ ▼
+┌────┬───┐   ┌────┬───┐   ┌────┬───┐   ┌────┬────┐
+│ 10 │ ●─┼──▶│ 20 │ ●─┼──▶│ 30 │ ●─┼──▶│ 40 │ ⛔ │
+└────┴───┘   └────┴───┘   └────┴───┘   └────┴────┘</div>
+
+    <ol class="steps">
+      <li><strong>Walk to the insertion point.</strong> Start at <code>head</code>; step until <code>prev.value == 20</code>. We now hold <code>prev</code>.</li>
+      <li><strong>Create the new node.</strong> Allocate <code>node = {value: 50, next: null}</code>. Nothing is wired up yet.</li>
+      <li><strong>Point the new node forward.</strong> <code>node.next = prev.next</code> — so 50's arrow now points to 30. Note we didn't touch 20's arrow yet; both 20 and 50 point to 30 for a moment. That's fine — no reader will observe the half-state in single-threaded code.</li>
+      <li><strong>Redirect the previous node.</strong> <code>prev.next = node</code>. Now 20 points to 50, and 50 points to 30. The list is repaired.</li>
+      <li><strong>Increment count.</strong> <code>count++</code>. Done. Two writes total, zero shifts.</li>
+    </ol>
+
+    <h3>After the insert</h3>
+    <div class="viz">head
+ │
+ ▼
+┌────┬───┐   ┌────┬───┐   ┌────┬───┐   ┌────┬───┐   ┌────┬────┐
+│ 10 │ ●─┼──▶│ 20 │ ●─┼──▶│ 50 │ ●─┼──▶│ 30 │ ●─┼──▶│ 40 │ ⛔ │
+└────┴───┘   └────┴───┘   └────┴───┘   └────┴───┘   └────┴────┘</div>
+
+    <p><strong>Contrast with an array:</strong> to insert 50 at index 2 in <code>[10, 20, 30, 40]</code>, positions 30 and 40 must physically move to indices 3 and 4 — that's O(n) memory writes. The linked list did it in <strong>two</strong>.</p>
+
+    <h3>The reverse operation, visualised</h3>
+    <p>Reversing <code>[A → B → C → null]</code> in place with three pointers (<code>prev</code>, <code>curr</code>, <code>next</code>):</p>
+    <div class="viz">initial:   prev=null  curr=A    A → B → C → null
+step 1:    A.next=null,   prev=A,  curr=B     (A alone; B → C → null)
+step 2:    B.next=A,      prev=B,  curr=C     (B → A → null;  C → null)
+step 3:    C.next=B,      prev=C,  curr=null  (C → B → A → null) ✓
+head = prev = C</div>
+    <p>O(n) time, O(1) extra space, works on any singly-linked list.</p>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>📌 Cheat sheet</h2>
+    <ul>
+      <li><strong>Shape:</strong> nodes = <code>{value, next}</code> (+ <code>prev</code> if doubly). Non-contiguous memory, connected by pointers.</li>
+      <li><strong>Speed:</strong> insert/delete at a known node = <strong>O(1)</strong>. Access index <code>i</code> = <strong>O(n)</strong>. No random access — that's the whole trade.</li>
+      <li><strong>Space:</strong> +1 pointer per node (singly) or +2 (doubly). 8–16 bytes overhead per element on 64-bit.</li>
+      <li><strong>Bugs to watch for:</strong> forgetting to update the tail pointer, dereferencing a null <code>next</code>, cycles (use tortoise &amp; hare), off-by-one in "walk to prev."</li>
+      <li><strong>Pick it when:</strong> you insert/delete a lot at known positions, order matters and changes, you already have a handle to the node (LRU, wait queues, undo stacks).</li>
+      <li><strong>Skip it when:</strong> you need index access, you're hot-loop scanning small numeric data (cache locality wins), or memory overhead per item is tight.</li>
+      <li><strong>Canonical interview problems:</strong> reverse, detect cycle, merge two sorted lists, find k-th from end (two-pointer offset), remove n-th from end, LRU cache.</li>
+      <li><strong>.NET:</strong> use <code>LinkedList&lt;T&gt;</code> for real O(1) node ops via <code>LinkedListNode&lt;T&gt;</code>. Use <code>List&lt;T&gt;</code> for indexed access — it usually beats a linked list even on "middle inserts" up to a few thousand items due to cache behaviour.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this algorithm</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this algorithm and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <footer>Generated by the <strong>explain-algo</strong> skill · open in your browser via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

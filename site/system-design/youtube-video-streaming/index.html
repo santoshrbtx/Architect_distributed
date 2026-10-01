@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Design YouTube — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #ffb703;
+    --laymen-bg: #fff8e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #ff0000 0%, #cc0033 55%, #7048e8 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); color: #1b2230; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Design YouTube</h1>
+    <p>500 hours uploaded every minute, a billion hours watched every day — an upload/transcode/CDN/recommendation pipeline that has to feel instant on any device, on any network, anywhere on Earth.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>We're designing a global <strong>user-generated video platform</strong>: a creator uploads a large file once, and viewers on every device and every network watch a version that looks great and starts instantly. This is the archetype for <strong>YouTube</strong>, and closely related to <strong>TikTok</strong>, <strong>Instagram Reels</strong>, <strong>Vimeo</strong>, <strong>Netflix</strong> (though Netflix is a curated library, not user uploads), <strong>Twitch</strong> (live streaming variant), and <strong>Facebook Watch</strong>. The interview version usually asks for on-demand video only — live streaming is a follow-up.</p>
+    <p>Companies build this because <strong>video is the dominant medium of the internet</strong> and every large platform eventually needs a media pipeline: a social product wants shortform, an e-commerce site wants product videos, a corporate LMS wants training content. The design touches every heavyweight concept in a distributed systems curriculum: <strong>large blob storage</strong>, <strong>asynchronous processing at massive fan-out</strong>, <strong>CDN and edge caching</strong>, <strong>adaptive bitrate streaming</strong>, and <strong>ranked recommendation at billion-item scale</strong>. That's why it's a favorite interview question — a good answer proves you can reason about the entire stack, not just one layer.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Explained without any tech words</h2>
+    <p><strong>The everyday problem.</strong> Imagine you shoot a 15-minute video on your phone — a birthday, a cooking tutorial, whatever. You want to share it, and you want any random person on any device to be able to watch it without waiting, without buffering, and without it looking blurry on their new TV or eating up their mobile data. That is genuinely hard, and it's what YouTube quietly does for you.</p>
+    <p><strong>The story of one video.</strong> When you press "Upload," your phone doesn't try to send the whole video in one go — it slices it into small pieces, like tearing a long letter into pages, and sends each page separately. If your connection drops halfway, only the missing pages get re-sent, not the whole thing. Once all the pages arrive at YouTube's building, an army of "converter workers" takes your original video and makes many copies of it — a small blurry one for old phones, a medium one for laptops, a big sharp one for TVs, all at the same time. Each copy is then chopped into tiny <strong>4- to 6-second clips</strong> and stored in a giant warehouse of hard drives spread across many cities.</p>
+    <p><strong>Where things live.</strong> When someone in Tokyo taps play, YouTube doesn't fetch your video from a warehouse in California — that would be slow. Instead, YouTube keeps <strong>copies of popular videos in mini-warehouses close to viewers</strong>, kind of like how supermarkets keep the popular snacks up front and the odd stuff in a back room. Those little clips arrive one after another, so playback starts in a second or two even if the whole video is an hour long.</p>
+    <p><strong>The hard part.</strong> The tricky bit is that <strong>hundreds of millions of people press play every hour</strong>, and each person is on a different network, a different device, and speaks a different language. YouTube also has to guess which video you'll enjoy next — otherwise you'd close the app after the first video. So on top of the storage and delivery, there's a giant "recommendation kitchen" running in the background, tasting billions of viewing patterns to serve you a personalized playlist. The magic is that <strong>almost none of this happens while you wait</strong> — the heavy work was done long before you tapped play.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Upload</strong> a video (large file, resumable, chunked).</li>
+      <li><strong>Transcode</strong> the source into multiple resolutions (144p → 4K) and codecs (H.264, VP9, AV1) for adaptive playback.</li>
+      <li><strong>Stream</strong> to any device with adaptive bitrate (HLS/DASH) so quality follows the network.</li>
+      <li><strong>Search</strong> by title, tags, channel.</li>
+      <li><strong>Recommend</strong> a personalized "up next" list and homepage feed.</li>
+      <li><strong>Social</strong>: likes, comments, subscriptions, views.</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Availability &gt; strong consistency</strong> — a stale view count is fine; a broken play button is not.</li>
+      <li><strong>Low startup latency</strong>: playback should begin in &lt; 2 seconds worldwide.</li>
+      <li><strong>Durability</strong> of the master copy: ~11 nines. Losing an uploaded video is catastrophic for creators.</li>
+      <li><strong>Global reach</strong>: viewers on every continent, on cellular to fiber.</li>
+      <li><strong>Read-heavy</strong>: watches vastly outnumber uploads (roughly <strong>100 : 1</strong>).</li>
+    </ul>
+
+    <h3>Back-of-the-envelope (YouTube-scale)</h3>
+    <table>
+      <thead><tr><th>Metric</th><th>Estimate</th><th>How we got there</th></tr></thead>
+      <tbody>
+        <tr><td>DAU</td><td>~1 B daily active users</td><td>Public figure; ~2 B monthly.</td></tr>
+        <tr><td>Uploads / minute</td><td>~500 hours of video</td><td>Public figure (YouTube blog, 2021).</td></tr>
+        <tr><td>Uploads / day</td><td>~720 000 hours ≈ ~20 M videos</td><td>500 h × 60 × 24; avg upload ~2 min → ~20 M items.</td></tr>
+        <tr><td>Views / day</td><td>~5 B (5 videos × 1 B DAU)</td><td>1 B DAU × ~5 videos each.</td></tr>
+        <tr><td>Read : write ratio</td><td>~100 : 1 up to ~250 : 1</td><td>5 B views vs ~20 M uploads.</td></tr>
+        <tr><td>Peak QPS (watch)</td><td>~1 M req/s at the edge</td><td>5 B / 86 400 × 3× peak factor / 150 avg segments per session.</td></tr>
+        <tr><td>Avg source size</td><td>~100 MB (2-min 1080p)</td><td>~7 Mbps × 120 s.</td></tr>
+        <tr><td>Raw upload bytes/day</td><td>~2 PB/day</td><td>20 M × 100 MB.</td></tr>
+        <tr><td>Storage / year (all renditions × replication)</td><td>~1 EB (10³ PB) growth/year</td><td>~2 PB/day × 365 × ~1.4 renditions overhead.</td></tr>
+        <tr><td>Egress bandwidth / day</td><td>~200 Tb/s aggregate peak</td><td>~1 B hours watched × avg bitrate ~2 Mbps.</td></tr>
+      </tbody>
+    </table>
+    <p>The two dominant costs are <strong>storage</strong> (durable master + many renditions) and <strong>egress bandwidth</strong> (billions of hours streamed). That's why the entire design orients around <strong>doing the heavy work once, offline</strong>, and <strong>serving the results from cache close to the viewer</strong>.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>The whole system splits cleanly into two flows that meet only at the metadata database. The <strong>upload/ingest flow</strong> is offline and heavy — it moves bytes into durable object storage, generates renditions and thumbnails, extracts metadata, and publishes the video as "ready." The <strong>read/watch flow</strong> is online and light — the player fetches a manifest, then pulls small segments from the CDN and adapts quality as bandwidth changes. Recommendations run <strong>alongside</strong>, feeding two-stage ranked lists into the homepage and up-next slots.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="YouTube high-level architecture">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#f4a259"/>
+          </marker>
+        </defs>
+        <style>
+          .box { fill:#1b2940; stroke:#4361ee; stroke-width:1.5; rx:10; }
+          .lbl { fill:#eef2ff; font: 700 13px sans-serif; text-anchor:middle; }
+          .sub { fill:#9db1e6; font: 400 11px sans-serif; text-anchor:middle; }
+          .flow { stroke:#7fa2ff; stroke-width:2; fill:none; }
+          .async{ stroke:#f4a259; stroke-width:2; fill:none; stroke-dasharray:6 4; }
+          .grp  { fill:none; stroke:#2a3652; stroke-width:1; stroke-dasharray:2 3; rx:12; }
+          .grpL { fill:#7f8aa0; font: 700 11px sans-serif; }
+        </style>
+
+        <!-- Upload/ingest lane -->
+        <rect class="grp" x="10" y="12" width="880" height="200"/>
+        <text class="grpL" x="24" y="30">UPLOAD / INGEST · offline, heavy</text>
+
+        <rect class="box" x="30" y="50" width="130" height="60"/>
+        <text class="lbl" x="95" y="76">Creator</text>
+        <text class="sub" x="95" y="94">phone / desktop</text>
+
+        <rect class="box" x="185" y="50" width="140" height="60"/>
+        <text class="lbl" x="255" y="76">Upload Service</text>
+        <text class="sub" x="255" y="94">resumable, chunked</text>
+
+        <rect class="box" x="350" y="50" width="150" height="60"/>
+        <text class="lbl" x="425" y="76">Raw Object Store</text>
+        <text class="sub" x="425" y="94">S3 / GCS · master copy</text>
+
+        <rect class="box" x="530" y="50" width="150" height="60"/>
+        <text class="lbl" x="605" y="76">Transcode Queue</text>
+        <text class="sub" x="605" y="94">SQS / Kafka fan-out</text>
+
+        <rect class="box" x="710" y="50" width="160" height="60"/>
+        <text class="lbl" x="790" y="76">Transcoder Workers</text>
+        <text class="sub" x="790" y="94">chunk-parallel, GPU/VCU</text>
+
+        <rect class="box" x="350" y="130" width="150" height="60"/>
+        <text class="lbl" x="425" y="156">Segmented Renditions</text>
+        <text class="sub" x="425" y="174">HLS/DASH · 4-6s chunks</text>
+
+        <rect class="box" x="530" y="130" width="150" height="60"/>
+        <text class="lbl" x="605" y="156">Metadata DB</text>
+        <text class="sub" x="605" y="174">Vitess/MySQL · Bigtable</text>
+
+        <rect class="box" x="710" y="130" width="160" height="60"/>
+        <text class="lbl" x="790" y="156">Search Index</text>
+        <text class="sub" x="790" y="174">Elasticsearch</text>
+
+        <!-- Upload arrows -->
+        <path class="flow" d="M160 80 L185 80" marker-end="url(#ar)"/>
+        <path class="flow" d="M325 80 L350 80" marker-end="url(#ar)"/>
+        <path class="async" d="M500 80 L530 80" marker-end="url(#ar2)"/>
+        <path class="async" d="M680 80 L710 80" marker-end="url(#ar2)"/>
+        <path class="async" d="M790 110 L790 130 L505 130 L505 130" marker-end="url(#ar2)" fill="none"/>
+        <path class="async" d="M605 110 L605 130" marker-end="url(#ar2)"/>
+
+        <!-- Read lane -->
+        <rect class="grp" x="10" y="230" width="880" height="230"/>
+        <text class="grpL" x="24" y="248">WATCH / READ · online, latency-critical</text>
+
+        <rect class="box" x="30" y="270" width="130" height="60"/>
+        <text class="lbl" x="95" y="296">Viewer</text>
+        <text class="sub" x="95" y="314">any device</text>
+
+        <rect class="box" x="185" y="270" width="140" height="60"/>
+        <text class="lbl" x="255" y="296">Edge CDN</text>
+        <text class="sub" x="255" y="314">PoP near viewer</text>
+
+        <rect class="box" x="350" y="270" width="150" height="60"/>
+        <text class="lbl" x="425" y="296">Regional Cache</text>
+        <text class="sub" x="425" y="314">mid-tier · fills edge</text>
+
+        <rect class="box" x="530" y="270" width="150" height="60"/>
+        <text class="lbl" x="605" y="296">Origin (blob store)</text>
+        <text class="sub" x="605" y="314">renditions live here</text>
+
+        <rect class="box" x="710" y="270" width="160" height="60"/>
+        <text class="lbl" x="790" y="296">Video API</text>
+        <text class="sub" x="790" y="314">manifest, metadata</text>
+
+        <rect class="box" x="185" y="360" width="140" height="60"/>
+        <text class="lbl" x="255" y="386">Recs Service</text>
+        <text class="sub" x="255" y="404">candidate + rank</text>
+
+        <rect class="box" x="350" y="360" width="150" height="60"/>
+        <text class="lbl" x="425" y="386">Feature Store</text>
+        <text class="sub" x="425" y="404">watch history, embeddings</text>
+
+        <rect class="box" x="530" y="360" width="150" height="60"/>
+        <text class="lbl" x="605" y="386">Analytics Pipeline</text>
+        <text class="sub" x="605" y="404">Kafka → Spark/BigQuery</text>
+
+        <rect class="box" x="710" y="360" width="160" height="60"/>
+        <text class="lbl" x="790" y="386">View / Like Log</text>
+        <text class="sub" x="790" y="404">async fire-and-forget</text>
+
+        <!-- Read arrows -->
+        <path class="flow" d="M160 300 L185 300" marker-end="url(#ar)"/>
+        <path class="flow" d="M325 300 L350 300" marker-end="url(#ar)"/>
+        <path class="flow" d="M500 300 L530 300" marker-end="url(#ar)"/>
+        <path class="flow" d="M95 330 L95 390 L185 390" marker-end="url(#ar)"/>
+        <path class="flow" d="M325 390 L350 390" marker-end="url(#ar)"/>
+        <path class="async" d="M500 390 L530 390" marker-end="url(#ar2)"/>
+        <path class="async" d="M680 390 L710 390" marker-end="url(#ar2)"/>
+        <path class="flow" d="M255 330 L255 360" marker-end="url(#ar)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7fa2ff"></span>Synchronous request flow</span>
+        <span><span class="dot" style="background:#f4a259"></span>Asynchronous processing</span>
+      </div>
+    </div>
+
+    <p>Two subtle points that separate a good answer from a great one: the <strong>master copy in the raw object store is precious</strong> — everything else can be regenerated from it, and durability requirements are highest here. And the <strong>CDN is not a single layer</strong> — there's an edge PoP close to the viewer, a regional mid-tier that fills cold edges without hammering origin, and only then origin storage. This tiering keeps origin egress bandwidth manageable even at YouTube scale.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch the core mechanic run, step by step</h2>
+    <p>This animation walks through the two flows that make a video watchable: <strong>upload → transcode fan-out → store</strong>, then <strong>viewer → CDN edge → adaptive segments</strong>. Watch how the same manifest lets the player switch quality mid-stream when bandwidth drops.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="YouTube upload and stream animation">
+        <defs>
+          <marker id="anar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <style>
+          .anbox { fill:#1b2940; stroke:#4361ee; stroke-width:1.5; rx:8; }
+          .anlbl { fill:#eef2ff; font: 700 12px sans-serif; text-anchor:middle; }
+          .ansub { fill:#9db1e6; font: 400 10px sans-serif; text-anchor:middle; }
+          .lane  { fill:none; stroke:#2a3652; stroke-width:1; stroke-dasharray:2 3; rx:10; }
+          .laneL { fill:#7f8aa0; font: 700 10px sans-serif; }
+          .chunk { rx:3; }
+          .flow  { stroke:#7fa2ff; stroke-width:1.6; fill:none; }
+        </style>
+
+        <!-- Upload lane -->
+        <rect class="lane" x="10" y="10" width="880" height="150"/>
+        <text class="laneL" x="20" y="26">UPLOAD PIPELINE</text>
+
+        <!-- Creator -->
+        <rect class="anbox" x="30" y="60" width="90" height="50"/>
+        <text class="anlbl" x="75" y="82">Creator</text>
+        <text class="ansub" x="75" y="98">source.mp4</text>
+
+        <!-- Chunks flowing off the creator -->
+        <g id="upChunks">
+          <rect id="uc1" class="anbox chunk a-el a-hidden" data-anim x="140" y="72" width="26" height="26" fill="#4cc9f0"/>
+          <rect id="uc2" class="anbox chunk a-el a-hidden" data-anim x="170" y="72" width="26" height="26" fill="#4cc9f0"/>
+          <rect id="uc3" class="anbox chunk a-el a-hidden" data-anim x="200" y="72" width="26" height="26" fill="#4cc9f0"/>
+        </g>
+
+        <!-- Object store -->
+        <rect id="objstore" class="anbox a-el" x="255" y="60" width="120" height="50"/>
+        <text class="anlbl" x="315" y="82">Raw Object Store</text>
+        <text class="ansub" x="315" y="98">master copy · S3</text>
+
+        <!-- Queue -->
+        <rect id="queue" class="anbox a-el" x="400" y="60" width="100" height="50"/>
+        <text class="anlbl" x="450" y="82">Queue</text>
+        <text class="ansub" x="450" y="98">transcode jobs</text>
+
+        <!-- Transcoder workers - fan out -->
+        <g id="workers">
+          <rect id="w1" class="anbox a-el" x="530" y="30" width="120" height="34"/>
+          <text class="anlbl" x="590" y="52">Worker · 240p</text>
+          <rect id="w2" class="anbox a-el" x="530" y="72" width="120" height="34"/>
+          <text class="anlbl" x="590" y="94">Worker · 720p</text>
+          <rect id="w3" class="anbox a-el" x="530" y="114" width="120" height="34"/>
+          <text class="anlbl" x="590" y="136">Worker · 1080p</text>
+        </g>
+
+        <!-- Renditions store -->
+        <rect id="rend" class="anbox a-el" x="700" y="60" width="150" height="50"/>
+        <text class="anlbl" x="775" y="82">Renditions</text>
+        <text class="ansub" x="775" y="98">HLS segments · manifest</text>
+
+        <!-- Upload flow arrows -->
+        <path class="flow" d="M120 85 L140 85" marker-end="url(#anar)"/>
+        <path class="flow" d="M228 85 L255 85" marker-end="url(#anar)"/>
+        <path class="flow" d="M375 85 L400 85" marker-end="url(#anar)"/>
+        <path class="flow" d="M500 85 L530 47" marker-end="url(#anar)"/>
+        <path class="flow" d="M500 85 L530 89" marker-end="url(#anar)"/>
+        <path class="flow" d="M500 85 L530 131" marker-end="url(#anar)"/>
+        <path class="flow" d="M650 47 L700 80" marker-end="url(#anar)"/>
+        <path class="flow" d="M650 89 L700 89" marker-end="url(#anar)"/>
+        <path class="flow" d="M650 131 L700 98" marker-end="url(#anar)"/>
+
+        <!-- Watch lane -->
+        <rect class="lane" x="10" y="180" width="880" height="190"/>
+        <text class="laneL" x="20" y="196">WATCH FLOW</text>
+
+        <!-- Viewer -->
+        <rect class="anbox" x="30" y="220" width="90" height="50"/>
+        <text class="anlbl" x="75" y="242">Viewer</text>
+        <text class="ansub" x="75" y="258">Tokyo</text>
+
+        <!-- Edge PoP -->
+        <rect id="edge" class="anbox a-el" x="160" y="220" width="130" height="50"/>
+        <text class="anlbl" x="225" y="242">Edge PoP</text>
+        <text class="ansub" x="225" y="258">Tokyo CDN</text>
+
+        <!-- Regional cache -->
+        <rect id="regional" class="anbox a-el" x="320" y="220" width="130" height="50"/>
+        <text class="anlbl" x="385" y="242">Regional Cache</text>
+        <text class="ansub" x="385" y="258">Asia mid-tier</text>
+
+        <!-- Origin -->
+        <rect id="origin" class="anbox a-el" x="480" y="220" width="130" height="50"/>
+        <text class="anlbl" x="545" y="242">Origin</text>
+        <text class="ansub" x="545" y="258">rendition store</text>
+
+        <!-- Manifest + segments -->
+        <rect id="manifest" class="anbox a-el a-hidden" data-anim x="640" y="200" width="240" height="30" fill="#f4a259"/>
+        <text class="anlbl" x="760" y="220" style="fill:#0f1420">Manifest · 240p · 480p · 720p · 1080p</text>
+
+        <!-- Segments (bar row) representing playback -->
+        <g id="segbar" transform="translate(160,290)">
+          <rect id="s1" class="anbox chunk a-el a-hidden" data-anim x="0"  y="0" width="34" height="20" fill="#2dc653"/>
+          <rect id="s2" class="anbox chunk a-el a-hidden" data-anim x="40" y="0" width="34" height="20" fill="#2dc653"/>
+          <rect id="s3" class="anbox chunk a-el a-hidden" data-anim x="80" y="0" width="34" height="20" fill="#2dc653"/>
+          <rect id="s4" class="anbox chunk a-el a-hidden" data-anim x="120" y="0" width="34" height="20" fill="#2dc653"/>
+          <rect id="s5" class="anbox chunk a-el a-hidden" data-anim x="160" y="0" width="34" height="20" fill="#f4a259"/>
+          <rect id="s6" class="anbox chunk a-el a-hidden" data-anim x="200" y="0" width="34" height="20" fill="#f4a259"/>
+          <rect id="s7" class="anbox chunk a-el a-hidden" data-anim x="240" y="0" width="34" height="20" fill="#f7567c"/>
+          <text class="ansub" x="0" y="38" style="text-anchor:start">← time — 1080p / 720p / 240p depending on bandwidth</text>
+        </g>
+
+        <!-- Flow arrows -->
+        <path class="flow" d="M120 245 L160 245" marker-end="url(#anar)"/>
+        <path class="flow" d="M290 245 L320 245" marker-end="url(#anar)"/>
+        <path class="flow" d="M450 245 L480 245" marker-end="url(#anar)"/>
+        <path class="flow" d="M610 245 L640 220" marker-end="url(#anar)"/>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'Upload flows left-to-right (top lane), then a viewer pulls segments through the CDN (bottom lane).',
+          interval: 1800,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.add('a-hidden');
+              el.classList.remove('a-glow', 'a-dim');
+              el.removeAttribute('transform');
+            });
+            ['#objstore', '#queue', '#w1', '#w2', '#w3', '#rend',
+             '#edge', '#regional', '#origin'].forEach(id => {
+              const el = r.querySelector(id);
+              if (el) el.classList.remove('a-glow', 'a-dim');
+            });
+          },
+          steps: [
+            { caption: 'Creator uploads: the source video is split into small chunks (resumable, parallel).',
+              apply: (r, $) => {
+                $('#uc1').classList.remove('a-hidden');
+                $('#uc2').classList.remove('a-hidden');
+                $('#uc3').classList.remove('a-hidden');
+                $('#uc1').setAttribute('transform','translate(0,0)');
+              } },
+            { caption: 'Chunks land in the raw object store — this is the master copy, replicated for 11-nines durability.',
+              apply: (r, $) => {
+                $('#uc1').setAttribute('transform','translate(115,-12)');
+                $('#uc2').setAttribute('transform','translate(115,-12)');
+                $('#uc3').setAttribute('transform','translate(115,-12)');
+                $('#objstore').classList.add('a-glow');
+              } },
+            { caption: 'The upload service publishes a transcode job to the queue — the client already got its "upload complete" 200.',
+              apply: (r, $) => {
+                $('#objstore').classList.remove('a-glow');
+                $('#queue').classList.add('a-glow');
+              } },
+            { caption: 'Workers fan out: each renders one resolution (240p, 720p, 1080p) — chunk-parallel, GPU/VCU accelerated.',
+              apply: (r, $) => {
+                $('#queue').classList.remove('a-glow');
+                $('#w1').classList.add('a-glow');
+                $('#w2').classList.add('a-glow');
+                $('#w3').classList.add('a-glow');
+              } },
+            { caption: 'Renditions are sliced into 4–6s HLS/DASH segments and written next to a manifest that lists every quality.',
+              apply: (r, $) => {
+                $('#w1').classList.remove('a-glow');
+                $('#w2').classList.remove('a-glow');
+                $('#w3').classList.remove('a-glow');
+                $('#rend').classList.add('a-glow');
+                $('#manifest').classList.remove('a-hidden');
+              } },
+            { caption: 'Viewer in Tokyo hits the nearest edge PoP first — most segments are served from here.',
+              apply: (r, $) => {
+                $('#edge').classList.add('a-glow');
+                $('#s1').classList.remove('a-hidden');
+                $('#s2').classList.remove('a-hidden');
+                $('#s3').classList.remove('a-hidden');
+                $('#s4').classList.remove('a-hidden');
+              } },
+            { caption: 'Edge miss? The regional cache fills it — origin egress stays low even at billions of watches.',
+              apply: (r, $) => {
+                $('#edge').classList.remove('a-glow');
+                $('#regional').classList.add('a-glow');
+                $('#s5').classList.remove('a-hidden');
+              } },
+            { caption: 'Network drops. Player picks a lower rendition (720p → 240p) from the same manifest — no rebuffer.',
+              apply: (r, $) => {
+                $('#regional').classList.remove('a-glow');
+                $('#s6').classList.remove('a-hidden');
+                $('#s7').classList.remove('a-hidden');
+                $('#s7').classList.add('a-glow');
+              } },
+            { caption: 'That is the whole trick: heavy work done once, then small segments streamed from cache close to the viewer.',
+              apply: (r, $) => {
+                $('#s7').classList.remove('a-glow');
+                $('#objstore').classList.add('a-dim');
+                $('#queue').classList.add('a-dim');
+                ['#w1','#w2','#w3'].forEach(id => $(id).classList.add('a-dim'));
+                $('#rend').classList.add('a-glow');
+              } }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. Upload flow — resumable, chunked, direct-to-blob</h3>
+    <p>The client asks the upload service for a <strong>signed pre-authorized URL</strong> (S3 pre-signed URL or the equivalent) and then uploads <strong>directly to object storage</strong>, bypassing the application server. Uploads use the <strong>tus.io resumable protocol</strong> (or S3 multipart): the file is split into ~5–10 MB parts, each part is uploaded independently, and if the connection dies only the missing parts are retried. When all parts land, the client calls <code>completeUpload</code> and the server assembles them into a single object. Two crucial properties: (a) the application tier never becomes a bandwidth bottleneck, and (b) resumability turns "phone died in a tunnel" from a fatal error into a five-second retry. On completion, the service writes a <code>videos</code> row with <code>status=UPLOADED</code> and enqueues a transcode job — the API returns <strong>200 immediately</strong>, and everything downstream is asynchronous.</p>
+
+    <h3>2. Transcoding — the biggest asynchronous fan-out in the stack</h3>
+    <p>A single source has to become <strong>many outputs</strong>: multiple resolutions (144p, 240p, 360p, 480p, 720p, 1080p, 1440p, 2160p) × multiple codecs (H.264 for compatibility, VP9 and AV1 for bandwidth savings on modern devices) × segmented into 4–6-second chunks × plus a thumbnail sheet, captions, and content-ID fingerprint. To make this tractable at 500 hours-uploaded-per-minute, transcoding is <strong>chunk-parallelized</strong>: the source is split into scene-cut boundaries or fixed intervals, each interval is transcoded on a different worker (MapReduce-style), then reassembled. YouTube built a custom silicon accelerator called the <strong>VCU</strong> (Video Coding Unit) that gave them <strong>20-33× the compute efficiency</strong> of CPU transcoding — proof of how much this workload dominates infrastructure. In an interview, describe it as "a Kafka topic per resolution, workers pull chunks, and a reducer stitches segments and writes the manifest."</p>
+
+    <h3>3. Streaming — HLS/DASH adaptive bitrate</h3>
+    <p>Every stored video is not one file — it is a <strong>manifest</strong> (M3U8 for HLS, MPD for DASH) plus many <strong>4–6-second segments</strong>, one segment per (resolution, codec) combination. When the player opens a video, it downloads the manifest first (a few KB), then requests segments one at a time. The player measures its own bandwidth and buffer level and <strong>switches quality between segments</strong> — so a viewer whose Wi-Fi drops from strong to weak sees the next segment come down in 480p instead of stalling. This is why segments are short: shorter segments mean faster quality adaptation, at the cost of more manifest overhead. YouTube typically uses ~5-second segments as the sweet spot.</p>
+
+    <h3>4. Storage tiers — cheap-and-cold, fast-and-hot</h3>
+    <p>Videos are stored in three logical tiers. The <strong>master original</strong> lives in a durable, replicated blob store (S3 Standard / GCS) — this is the source of truth from which any lost rendition can be regenerated. The <strong>renditions and segments</strong> live in the same blob store but are the objects actually served. <strong>Cold videos</strong> — anything not watched in, say, 90 days — are migrated to a cheaper storage class (S3 Glacier Instant Retrieval or similar) with slightly higher retrieval cost. Metadata (title, uploader, view count, likes) lives in a sharded relational store (Vitess on MySQL for YouTube itself); high-volume denormalized reads (comments, subscription feeds) sit in a wide-column store like Bigtable/Cassandra.</p>
+
+    <h3>5. CDN strategy — three tiers to keep origin quiet</h3>
+    <p>The CDN is the <strong>only reason this design is affordable</strong>. It has three tiers: the <strong>edge PoP</strong> is the closest to the user (Google Global Cache lives in ISP networks and inside universities; CloudFront lives in ~600 PoPs globally); the <strong>regional mid-tier</strong> aggregates edge misses so origin sees only unique content; and the <strong>origin</strong> is the blob store of last resort. Hot content is <strong>promoted into the CDN by popularity</strong> — a video that starts trending is pulled up from origin into the edge on its first miss. A cold long-tail video may never be cached, and that's fine: for a video watched twice a month, cache miss cost is trivial. Interviewers love hearing you say <strong>"we don't cache the long tail because the working-set is Zipf-distributed — 90% of watches are on 10% of videos."</strong></p>
+
+    <h3>6. Recommendations — two-stage funnel</h3>
+    <p>The recommendation problem is <strong>"from ~1 billion videos, pick 10 for this user right now."</strong> You cannot rank a billion candidates per request — the classic solution, publicly described in the 2016 paper <em>"Deep Neural Networks for YouTube Recommendations"</em>, is a <strong>two-stage architecture</strong>. Stage 1 — <strong>candidate generation</strong> — takes user embeddings and does approximate nearest-neighbor lookup over item embeddings to return a few hundred candidates in milliseconds. Stage 2 — <strong>ranking</strong> — takes those hundreds of candidates plus rich features (watch time, freshness, session context, user demographics) and applies a deep model to produce a final ordered list. Real-time signals (this session's watches) feed both stages so the feed adapts as you scroll. Training data comes from the analytics pipeline: <strong>every play, pause, and skip is logged to Kafka</strong>, processed by Spark, and lands in BigQuery for offline model training.</p>
+
+    <h3>7. View counting &amp; social — write-behind, eventually consistent</h3>
+    <p>View counts do not go through a synchronous DB write. Every play emits an event to <strong>Kafka</strong>, a stream job aggregates counts per window, and the count DB is updated in batches — a viewer refreshing the page might see the counter go from 1,203 to 1,847 in one jump. This is deliberate: strong consistency on a global counter would require distributed locking, which is impossible at YouTube throughput. The same pattern applies to likes and watch history — <strong>write to a durable log first, materialize the aggregate later</strong>.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>YouTube looks like it's "all infrastructure," but under every subsystem is a specific algorithm doing the heavy lifting. Naming them in an interview signals depth.</p>
+
+    <table>
+      <thead><tr><th>Component</th><th>Structure / algorithm</th><th>Why chosen &amp; complexity</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Video ID generation</td>
+          <td>Snowflake-style 64-bit IDs</td>
+          <td>Time-sortable, globally unique without coordination. O(1) per ID.</td>
+        </tr>
+        <tr>
+          <td>Upload chunk assembly</td>
+          <td>Content-addressable hashing (SHA-256 per part)</td>
+          <td>Detect corruption &amp; dedupe re-uploads. O(n) over bytes; parallelizable.</td>
+        </tr>
+        <tr>
+          <td>Transcode fan-out</td>
+          <td>MapReduce / DAG of chunks</td>
+          <td>Split source at scene cuts, transcode chunks in parallel, reduce (stitch). Wall-clock shrinks from O(video length) to O(chunk length).</td>
+        </tr>
+        <tr>
+          <td>Segment lookup on watch</td>
+          <td>Hash-partitioned key-value on <code>(videoId, resolution, segmentIndex)</code></td>
+          <td>O(1) get from blob store; CDN caches by URL.</td>
+        </tr>
+        <tr>
+          <td>Adaptive bitrate selection</td>
+          <td>Rate-based EWMA on client bandwidth + PID-style buffer controller</td>
+          <td>Smooths quality switches; O(1) per segment on the client.</td>
+        </tr>
+        <tr>
+          <td>Search index</td>
+          <td>Inverted index + TF-IDF / BM25 (Elasticsearch/Lucene)</td>
+          <td>O(k + log N) per term over posting lists.</td>
+        </tr>
+        <tr>
+          <td>Candidate generation (recs)</td>
+          <td>Approximate nearest neighbor over embeddings (HNSW, ScaNN)</td>
+          <td>Sub-linear (~O(log N)) over a billion items vs O(N) brute force.</td>
+        </tr>
+        <tr>
+          <td>Ranking (recs)</td>
+          <td>Deep neural net over hundreds of features</td>
+          <td>O(F × depth × candidates); candidates capped at a few hundred, so bounded.</td>
+        </tr>
+        <tr>
+          <td>Trending / view aggregation</td>
+          <td>Count-min sketch, HyperLogLog for unique viewers</td>
+          <td>Sub-linear memory, approximate but tight bounds; O(1) update.</td>
+        </tr>
+        <tr>
+          <td>Hot content in CDN</td>
+          <td>LRU-K / LFU with admission (TinyLFU)</td>
+          <td>Keeps hot working-set (Zipf head) in edge cache. O(1) amortized.</td>
+        </tr>
+        <tr>
+          <td>Duplicate / Content-ID detection</td>
+          <td>Perceptual hashing + Bloom filter pre-filter</td>
+          <td>Bloom rules out obvious non-matches in O(1); full pHash comparison only on candidates.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>The one to remember: <strong>MapReduce for transcoding</strong>. It's the reason a 3-hour 4K upload doesn't take 3 hours to become watchable — chunks encode in parallel and the reducer stitches them.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>YouTube itself runs on Google's infrastructure (GCS, Bigtable, Spanner, Borg, custom VCU silicon, Google Global Cache). If we build the same design on <strong>AWS</strong>, the mapping is remarkably direct — the primitives all have close cousins.</p>
+
+    <table>
+      <thead><tr><th>Component</th><th>AWS service</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Client edge / DNS</td><td>Route 53 + CloudFront</td><td>Anycast DNS + global CDN with ~600 PoPs and shield tier for origin protection.</td></tr>
+        <tr><td>Upload service</td><td>API Gateway + Lambda (for pre-signed URL) → direct S3 multipart upload</td><td>Client uploads bytes directly to S3, bypassing app tier; API only mints URLs.</td></tr>
+        <tr><td>Raw / master blob storage</td><td>S3 Standard (with S3 Intelligent-Tiering)</td><td>11 nines durability; cross-region replication for DR.</td></tr>
+        <tr><td>Cold archive</td><td>S3 Glacier Instant Retrieval</td><td>Long-tail videos rarely watched — ~⅕ the storage cost of Standard.</td></tr>
+        <tr><td>Transcode queue</td><td>SQS (or MSK/Kinesis for higher throughput)</td><td>Decouples upload from transcode; per-resolution queue for prioritization.</td></tr>
+        <tr><td>Transcoder workers</td><td>AWS Elemental MediaConvert (managed) or ECS/EKS with FFmpeg + g5 GPU nodes</td><td>MediaConvert is the fastest interview answer; DIY on ECS/EKS if you need custom codecs or VCU-like acceleration.</td></tr>
+        <tr><td>Renditions &amp; segments</td><td>S3 (same bucket, prefix <code>/renditions/{videoId}/{res}/</code>)</td><td>Serves as CDN origin.</td></tr>
+        <tr><td>Content packaging</td><td>MediaPackage (for HLS/DASH manifests)</td><td>Also does DRM (Widevine/FairPlay/PlayReady) and just-in-time packaging.</td></tr>
+        <tr><td>CDN</td><td>CloudFront (with regional edge caches / Origin Shield)</td><td>Three tiers: edge PoP → regional edge cache → S3. Origin Shield collapses cache-fill traffic.</td></tr>
+        <tr><td>Metadata DB</td><td>Aurora MySQL (sharded) or DynamoDB with GSIs</td><td>Videos, channels, uploaders, subscriptions. Aurora if you need joins; DynamoDB for pure item lookups.</td></tr>
+        <tr><td>Wide-column (comments, watch history)</td><td>DynamoDB or Amazon Keyspaces (Cassandra)</td><td>Write-heavy, denormalized reads by partition key.</td></tr>
+        <tr><td>Search</td><td>Amazon OpenSearch</td><td>Inverted index over title, description, tags, transcripts.</td></tr>
+        <tr><td>Cache</td><td>ElastiCache Redis (with DAX for DynamoDB)</td><td>Manifest metadata, hot video info, session state.</td></tr>
+        <tr><td>Event stream (views, likes)</td><td>Kinesis Data Streams or MSK</td><td>Millions of events/sec, replay-able for reprocessing.</td></tr>
+        <tr><td>Analytics / training data</td><td>Kinesis Firehose → S3 → EMR (Spark) → Redshift / Athena</td><td>Feeds the recommender's training pipeline.</td></tr>
+        <tr><td>Recommendations (candidate gen)</td><td>SageMaker + OpenSearch k-NN or Amazon MemoryDB for Redis (vector search)</td><td>ANN over user/item embeddings; sub-linear lookup at billion-item scale.</td></tr>
+        <tr><td>Recommendations (ranking)</td><td>SageMaker real-time endpoint (deep model)</td><td>Ranks candidates with rich features; low-latency p99.</td></tr>
+        <tr><td>Live streaming (extension)</td><td>MediaLive + MediaPackage + CloudFront</td><td>RTMP/SRT ingest, HLS/DASH out.</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Deployment story</strong>: services run on <strong>EKS</strong> across three Availability Zones per region, with active-active multi-region for user-facing APIs. S3 uses <strong>Cross-Region Replication</strong> so a whole region can go down without losing the master copy. CloudFront's global anycast means viewers in Tokyo, São Paulo, and Frankfurt all get their nearest edge automatically. The recommender's <strong>online serving</strong> lives in every region behind an ALB; the <strong>offline training</strong> is a single global pipeline that publishes updated embeddings and model weights on a daily cadence.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>Two representative pieces of the design in C#: (1) the upload service returning a pre-signed S3 URL and publishing a transcode job, and (2) a transcoder worker that pulls a job, launches FFmpeg for one rendition, and writes segments back to S3. Both are deliberately compact — the point in an interview is to show you can code the seam between service tiers, not to write a full media server.</p>
+
+    <h3>Upload service (ASP.NET Core minimal API)</h3>
+<pre><code><span class="kw">using</span> Amazon.S3;
+<span class="kw">using</span> Amazon.S3.Model;
+<span class="kw">using</span> Amazon.SQS;
+<span class="kw">using</span> Amazon.SQS.Model;
+<span class="kw">using</span> System.Text.Json;
+
+<span class="kw">var</span> builder = WebApplication.CreateBuilder(args);
+builder.Services.AddAWSService&lt;IAmazonS3&gt;();
+builder.Services.AddAWSService&lt;IAmazonSQS&gt;();
+<span class="kw">var</span> app = builder.Build();
+
+<span class="kw">const</span> <span class="typ">string</span> RawBucket   = <span class="str">"yt-raw-uploads"</span>;
+<span class="kw">const</span> <span class="typ">string</span> QueueUrl    = <span class="str">"https://sqs.us-east-2.amazonaws.com/000000000000/yt-transcode"</span>;
+
+<span class="cmt">// 1. Client asks for an upload URL. We mint an S3 multipart pre-signed URL
+//    (valid ~15 min) and return it. Bytes never touch our app tier.</span>
+app.MapPost(<span class="str">"/uploads/init"</span>, (InitUploadReq req, IAmazonS3 s3) =&gt;
+{
+    <span class="kw">var</span> videoId = SnowflakeId.NewId();          <span class="cmt">// 64-bit sortable ID</span>
+    <span class="kw">var</span> key     = <span class="str">$"raw/{videoId}/source.{req.Ext}"</span>;
+
+    <span class="kw">var</span> url = s3.GetPreSignedURL(<span class="kw">new</span> GetPreSignedUrlRequest {
+        BucketName = RawBucket,
+        Key        = key,
+        Verb       = HttpVerb.PUT,
+        Expires    = DateTime.UtcNow.AddMinutes(15),
+        ContentType= req.ContentType
+    });
+
+    <span class="cmt">// Persist a videos row: status = UPLOADING. (DB call omitted for brevity.)</span>
+    <span class="kw">return</span> Results.Ok(<span class="kw">new</span> { videoId, uploadUrl = url, key });
+});
+
+<span class="cmt">// 2. Client calls /uploads/complete once S3 confirms all parts.
+//    We flip status → UPLOADED and enqueue a transcode job per resolution.</span>
+app.MapPost(<span class="str">"/uploads/complete"</span>, <span class="kw">async</span> (CompleteReq req, IAmazonSQS sqs) =&gt;
+{
+    <span class="kw">string</span>[] resolutions = { <span class="str">"240p"</span>, <span class="str">"480p"</span>, <span class="str">"720p"</span>, <span class="str">"1080p"</span> };
+
+    <span class="cmt">// Fan out one message per rendition — workers pick these up in parallel.</span>
+    <span class="kw">foreach</span> (<span class="kw">var</span> res <span class="kw">in</span> resolutions)
+    {
+        <span class="kw">var</span> body = JsonSerializer.Serialize(<span class="kw">new</span> {
+            videoId    = req.VideoId,
+            sourceKey  = req.Key,
+            resolution = res,
+            codec      = <span class="str">"h264"</span>
+        });
+        <span class="kw">await</span> sqs.SendMessageAsync(<span class="kw">new</span> SendMessageRequest {
+            QueueUrl    = QueueUrl,
+            MessageBody = body,
+            MessageGroupId = req.VideoId   <span class="cmt">// keep same video's jobs ordered</span>
+        });
+    }
+
+    <span class="kw">return</span> Results.Ok(<span class="kw">new</span> { req.VideoId, status = <span class="str">"QUEUED"</span> });
+});
+
+app.Run();
+</code></pre>
+
+    <h3>Transcoder worker (background service)</h3>
+<pre><code><span class="kw">public</span> <span class="kw">class</span> <span class="typ">TranscoderWorker</span> : BackgroundService
+{
+    <span class="kw">private readonly</span> IAmazonSQS _sqs;
+    <span class="kw">private readonly</span> IAmazonS3  _s3;
+    <span class="kw">private const</span> <span class="typ">string</span> Renditions = <span class="str">"yt-renditions"</span>;
+    <span class="kw">private const</span> <span class="typ">string</span> Queue      = <span class="str">"https://sqs..../yt-transcode"</span>;
+
+    <span class="kw">protected override async</span> Task ExecuteAsync(CancellationToken ct)
+    {
+        <span class="kw">while</span> (!ct.IsCancellationRequested)
+        {
+            <span class="kw">var</span> msgs = <span class="kw">await</span> _sqs.ReceiveMessageAsync(<span class="kw">new</span> ReceiveMessageRequest {
+                QueueUrl        = Queue,
+                MaxNumberOfMessages = <span class="str">1</span>,
+                WaitTimeSeconds = <span class="str">20</span>            <span class="cmt">// long-poll</span>
+            }, ct);
+
+            <span class="kw">foreach</span> (<span class="kw">var</span> m <span class="kw">in</span> msgs.Messages)
+            {
+                <span class="kw">var</span> job = JsonSerializer.Deserialize&lt;TranscodeJob&gt;(m.Body)!;
+                <span class="kw">await</span> TranscodeAsync(job, ct);
+                <span class="kw">await</span> _sqs.DeleteMessageAsync(Queue, m.ReceiptHandle, ct);
+            }
+        }
+    }
+
+    <span class="kw">private async</span> Task TranscodeAsync(TranscodeJob job, CancellationToken ct)
+    {
+        <span class="cmt">// 1) Pull master to local disk (streamed, no full buffer in memory).</span>
+        <span class="kw">var</span> src = <span class="str">$"/tmp/{job.VideoId}.src"</span>;
+        <span class="kw">await using</span> (<span class="kw">var</span> obj = <span class="kw">await</span> _s3.GetObjectAsync(<span class="str">"yt-raw-uploads"</span>, job.SourceKey, ct))
+        <span class="kw">await using</span> (<span class="kw">var</span> fs = File.Create(src))
+            <span class="kw">await</span> obj.ResponseStream.CopyToAsync(fs, ct);
+
+        <span class="cmt">// 2) Transcode + HLS-segment via FFmpeg — 6-second GOP-aligned chunks.</span>
+        <span class="kw">var</span> outDir = <span class="str">$"/tmp/{job.VideoId}/{job.Resolution}"</span>;
+        Directory.CreateDirectory(outDir);
+        <span class="kw">var</span> h = ResolutionHeight(job.Resolution);
+        <span class="kw">var</span> args = <span class="str">$"-i {src} -vf scale=-2:{h} -c:v libx264 -c:a aac "</span> +
+                   <span class="str">$"-hls_time 6 -hls_playlist_type vod "</span> +
+                   <span class="str">$"-hls_segment_filename {outDir}/seg_%03d.ts {outDir}/index.m3u8"</span>;
+        <span class="kw">await</span> RunProcess(<span class="str">"ffmpeg"</span>, args, ct);
+
+        <span class="cmt">// 3) Upload segments + playlist back to S3 under a stable prefix.</span>
+        <span class="kw">foreach</span> (<span class="kw">var</span> file <span class="kw">in</span> Directory.EnumerateFiles(outDir))
+        {
+            <span class="kw">var</span> key = <span class="str">$"renditions/{job.VideoId}/{job.Resolution}/{Path.GetFileName(file)}"</span>;
+            <span class="kw">await</span> _s3.PutObjectAsync(<span class="kw">new</span> PutObjectRequest {
+                BucketName = Renditions, Key = key, FilePath = file
+            }, ct);
+        }
+
+        <span class="cmt">// 4) Flip DB: rendition ready. Once all resolutions done, mark video PUBLIC
+        //    and invalidate CDN if a re-encode.</span>
+    }
+
+    <span class="kw">private static</span> <span class="typ">int</span> ResolutionHeight(<span class="typ">string</span> r) =&gt; r <span class="kw">switch</span> {
+        <span class="str">"240p"</span> =&gt; <span class="str">240</span>, <span class="str">"480p"</span> =&gt; <span class="str">480</span>,
+        <span class="str">"720p"</span> =&gt; <span class="str">720</span>, <span class="str">"1080p"</span> =&gt; <span class="str">1080</span>,
+        _ =&gt; <span class="kw">throw new</span> ArgumentException(r)
+    };
+
+    <span class="kw">private static async</span> Task RunProcess(<span class="typ">string</span> exe, <span class="typ">string</span> args, CancellationToken ct)
+    {
+        <span class="kw">using var</span> p = System.Diagnostics.Process.Start(<span class="kw">new</span> System.Diagnostics.ProcessStartInfo {
+            FileName = exe, Arguments = args, RedirectStandardError = <span class="kw">true</span>, UseShellExecute = <span class="kw">false</span>
+        })!;
+        <span class="kw">await</span> p.WaitForExitAsync(ct);
+        <span class="kw">if</span> (p.ExitCode != <span class="str">0</span>) <span class="kw">throw new</span> InvalidOperationException(<span class="str">"ffmpeg failed"</span>);
+    }
+}
+
+<span class="kw">public record</span> <span class="typ">TranscodeJob</span>(<span class="typ">string</span> VideoId, <span class="typ">string</span> SourceKey, <span class="typ">string</span> Resolution, <span class="typ">string</span> Codec);
+</code></pre>
+    <p>Note the shape: the upload API is <strong>synchronous but tiny</strong> (mint URL, enqueue jobs, return); the transcode worker is <strong>long-running and CPU-bound</strong>, running FFmpeg out of process. In production, <strong>chunked parallel transcoding</strong> would split the source further (say, one worker per 30-second scene) and a reducer would stitch segments — this is where the MapReduce framing shines. For AWS-first answers, replace the FFmpeg worker entirely with <strong>Elemental MediaConvert</strong> — same conceptual pipeline, but managed.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Where it can break</h3>
+    <p>The three real bottlenecks are <strong>egress bandwidth cost</strong>, <strong>transcoder throughput during viral upload bursts</strong>, and <strong>metadata DB hot shards</strong> (e.g., a global superstar channel writing a video that every user queries). Egress is handled by aggressive CDN caching and by tiered edge → regional → origin fill; transcoder bursts absorb into the queue and workers autoscale; hot shards are handled by <strong>caching the item view</strong> (Redis) and by <strong>write-behind counters</strong>. A subtle failure mode: a coding bug that produces a corrupted rendition — you never want to lose the master, so <strong>renditions are re-derivable and can be blown away and regenerated</strong>.</p>
+
+    <h3>Consistency vs availability</h3>
+    <p>Everything user-facing chooses <strong>availability</strong>. View counts, likes, subscriber counts are all eventually consistent — a viewer refreshing may see the count jump. Payment/monetization data (revenue share, ad billing) is the exception and lives in a separate strongly-consistent system with 2PC/Saga semantics. In an interview, name that split explicitly: <em>"read paths are AP; the money path is CP."</em></p>
+
+    <h3>Likely follow-up questions (with crisp answers)</h3>
+    <div class="qa"><p class="q">How do you keep viral videos from melting origin?</p>
+      <p class="a">Origin Shield / regional mid-tier collapses cache-fill traffic to one request per region per edge miss. Plus <strong>request coalescing</strong>: if 10 000 edges miss simultaneously, only one goes to origin.</p></div>
+
+    <div class="qa"><p class="q">Why 4–6-second HLS segments? Why not 2s or 10s?</p>
+      <p class="a">Shorter segments = faster ABR adaptation and lower live latency but more manifest overhead and more HTTP requests. Longer = fewer requests, better cache hit ratio, but slow to react to bandwidth changes. 4–6s is the industry-standard sweet spot.</p></div>
+
+    <div class="qa"><p class="q">How do you handle "fresh upload not yet transcoded, viewers hitting play"?</p>
+      <p class="a">Show a "processing" state until the first watchable rendition (typically 360p) is ready — this is why 360p is transcoded first. Once ready, unlock playback and continue transcoding higher resolutions in the background.</p></div>
+
+    <div class="qa"><p class="q">How does the recommender avoid stale results after a viral event?</p>
+      <p class="a">Real-time signals feed both stages: recent watches are added to the user's session vector and to a real-time popularity index. Candidate ANN over embeddings uses the fresh session embedding; ranking uses live features. Full model retraining is daily; feature freshness is minutes.</p></div>
+
+    <div class="qa"><p class="q">Why not gRPC everywhere instead of HTTP for streaming?</p>
+      <p class="a">Video segments are big and cacheable — HTTP is a first-class citizen of every CDN, browser, and mobile player, and HTTP/2 already multiplexes. gRPC gives you nothing on the segment path and would kill CDN-ability. Use gRPC on the control plane (upload service ↔ metadata) and HTTP on the data plane.</p></div>
+
+    <div class="qa"><p class="q">How would you extend this to live streaming?</p>
+      <p class="a">RTMP/SRT ingest, real-time transcode to LL-HLS or CMAF chunked-transfer, edge CDN with same three-tier fill. End-to-end latency ~2–5s (versus 15–30s classic HLS). YouTube Live uses this pattern.</p></div>
+
+    <div class="qa"><p class="q">How do you prevent unauthorized downloads / DRM?</p>
+      <p class="a">Encrypt segments (AES-128 in CMAF) with per-user session keys handed out through DRM licensing (Widevine / FairPlay / PlayReady). Pre-signed segment URLs with short TTLs prevent link-sharing.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch">
+      "YouTube is fundamentally a <strong>write-once, read-a-billion-times</strong> problem. The uploader hits a chunked, resumable upload that lands the master file in blob storage. That triggers an <strong>asynchronous, MapReduce-style transcode</strong> into 6–8 resolutions × 2–3 codecs × 4-second HLS segments. Viewers hit a <strong>three-tier CDN</strong> — edge PoP, regional cache, origin — and the player switches quality between segments as bandwidth changes. Metadata lives in sharded MySQL; comments in a wide-column store; views ride a Kafka pipeline into an aggregate. Recommendations are a <strong>two-stage funnel</strong>: ANN over embeddings picks a few hundred candidates from a billion, then a deep ranker scores them. Choose availability over consistency everywhere except billing."
+    </div>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li><strong>500 hours uploaded/minute</strong> (public YouTube figure).</li>
+      <li><strong>~1 B DAU, ~5 B views/day</strong>, read:write ratio ~100:1.</li>
+      <li><strong>~2 PB/day raw upload growth</strong>, ~1 EB/year with renditions.</li>
+      <li><strong>4–6 second HLS/DASH segments</strong>.</li>
+      <li><strong>&lt;2 s startup latency</strong> target; <strong>11 nines</strong> durability on the master.</li>
+    </ul>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li>"<strong>The client uploads bytes directly to S3</strong> via a pre-signed URL — my app never becomes the bandwidth bottleneck."</li>
+      <li>"<strong>Transcoding is MapReduce</strong>: split at scene cuts, transcode chunks in parallel, reduce back into segments + a manifest."</li>
+      <li>"<strong>Three-tier CDN</strong> — edge PoP, regional, origin — because a single-tier CDN can't survive a viral event; regional collapses fill traffic."</li>
+      <li>"<strong>Player-side adaptive bitrate</strong> using the same manifest — the server has one job, the player has all the intelligence."</li>
+      <li>"<strong>Recs are a two-stage funnel</strong>: ANN over embeddings for recall (billions → hundreds), deep ranker for precision (hundreds → 10)."</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://blog.youtube/inside-youtube/new-era-video-infrastructure/">A new era of video infrastructure at YouTube — YouTube Blog (VCU, 500 hours/minute, 20-33× compute efficiency)</a></li>
+      <li><a href="https://www.geeksforgeeks.org/system-design/system-design-of-youtube-a-complete-architecture/">System Design of YouTube — GeeksforGeeks (canonical component breakdown)</a></li>
+      <li><a href="https://www.enjoyalgorithms.com/blog/design-youtube-system-design-interview-question">Design YouTube — EnjoyAlgorithms (capacity math, Vitess/MySQL sharding, CDN tiering)</a></li>
+      <li><a href="https://research.google/pubs/deep-neural-networks-for-youtube-recommendations/">Deep Neural Networks for YouTube Recommendations — Covington, Adams, Sargin (RecSys 2016) — two-stage architecture</a></li>
+      <li><a href="https://developer.mozilla.org/en-US/docs/Web/Media/DASH_Adaptive_Streaming_for_HTML_5_Video">DASH Adaptive Streaming — MDN (segments + manifest reference)</a></li>
+      <li><a href="https://tus.io/">tus.io — resumable upload protocol</a></li>
+      <li><a href="https://aws.amazon.com/media-services/">AWS Media Services — MediaConvert, MediaPackage, MediaLive</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

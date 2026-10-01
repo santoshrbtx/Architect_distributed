@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AWS VPC Networking — Request Flow, NACL, SG, IGW, NAT — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #2dc653;
+    --laymen-bg: #eaf7ee;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px;
+  }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] { transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease; transform-box: fill-box; }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>AWS VPC Networking: how a request flows</h1>
+    <p>End-to-end packet walkthrough — inbound and outbound — through IGW, route tables, NACLs, Security Groups, ENIs, NAT Gateways and VPC endpoints. The full picture every cloud interview probes.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#sg-vs-nacl">🆚 SG vs NACL</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>Every AWS system you'll ever design lives inside a <strong>Virtual Private Cloud (VPC)</strong> — a logically isolated slice of Amazon's network where you own the IP space, subnets, and routing. Understanding how a packet enters your VPC, gets checked by half a dozen controls, hits your workload, and gets a response back is the single most probed topic in <strong>AWS Solutions Architect / SysOps / DevOps</strong> interviews, and a foundational conversation in any principal-level cloud infrastructure loop.</p>
+    <p>Consider what happens when a customer opens your React app: a browser request travels from the public internet, through an <strong>Internet Gateway</strong>, gets steered by a <strong>route table</strong>, is filtered by the <strong>NACL</strong> on the subnet, then by the <strong>Security Group</strong> on the target's Elastic Network Interface (ENI), and finally reaches your EC2 instance / ALB / Lambda ENI. On the way back, the reply retraces the same steps with the roles of "inbound" and "outbound" swapped, and it matters <em>which</em> component is stateful versus stateless. Meanwhile, when the same instance needs to call <code>dynamodb.us-east-1.amazonaws.com</code> or S3, the packet takes an entirely different path through a <strong>VPC endpoint</strong> — never leaving AWS's private network. Miss any of these hops in an interview and you get pinned as "cloud console user, not architect."</p>
+    <p>Every serious AWS shop — from Netflix's massive multi-account VPC topology, to Airbnb's Transit Gateway hub, to a fintech's PCI-scoped private subnets — lives and dies by these primitives. This page walks a real packet all the way through.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The whole thing, explained without any tech words</h2>
+    <p>Imagine you rent a <strong>private office building inside a giant business park</strong>. The business park is Amazon; your building is your VPC. The building has a street address, but you decide the office numbers inside, who works in which office, and who's allowed to walk in.</p>
+    <p>Now picture the security setup. First, there's the <strong>front door of the building</strong> — a big revolving door that either exists or doesn't. If you haven't installed one, nobody from the street can even enter (that's the <em>Internet Gateway</em>). If you have installed it, cars pull up outside and their drivers try to walk in. There's a <strong>road map on the wall</strong> that tells the doorman which floor each address belongs to (that's the <em>route table</em>). Wrong address? The visitor gets waved off before going anywhere.</p>
+    <p>Between the elevator and each floor there's a <strong>floor-level guard desk</strong> with a big binder. The binder has a numbered list of rules — "visitors from Delhi may come in", "nobody from Moscow may come in", read top to bottom, first match wins. The guard doesn't remember faces, so on the way out you get checked again by a different rule (that's the <em>Network ACL</em>: strict, stateless, list of rules).</p>
+    <p>Finally, right outside each office door, there's a <strong>personal receptionist</strong> who knows your office's rules by heart. They only allow specific visitors — say, "developers from the finance team" — and importantly, they <em>remember</em> that they let you in, so on your way out they wave you through automatically (that's the <em>Security Group</em>: friendly, stateful, allow-only).</p>
+    <p>When someone <em>inside</em> your office needs to run to the coffee shop across the street (make an outbound call to the internet), they don't just walk out — the building sends them via a <strong>shared taxi</strong> that swaps their nameplate for the building's public sign at the curb (that's the <em>NAT Gateway</em>). Nobody outside knows who exactly made the trip; they just see the building responded.</p>
+    <p>A tiny example: a customer in Mumbai opens your shopping site. Their request rolls up to your building, the doorman lets them in, the road map sends them to floor 12 (public web-server subnet), the floor guard's binder allows HTTPS traffic, the receptionist at the web-server's door recognises "web visitor — welcome", the server responds, and the reply retraces every step, waved through by the receptionist who remembers letting them in. Meanwhile another employee on floor 20 (a private database) never even sees the visitor, because <strong>the road map never points strangers to floor 20</strong>. That, in a paragraph, is how a VPC works.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What a well-designed VPC must do</h2>
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Isolate</strong> workloads inside a private IP space (CIDR block, e.g. <code>10.0.0.0/16</code>).</li>
+      <li><strong>Segment</strong> that space into subnets, each pinned to one Availability Zone.</li>
+      <li><strong>Route</strong> traffic between subnets, to the internet, to other VPCs, to on-prem, and to AWS services — using route tables.</li>
+      <li><strong>Filter</strong> traffic at two independent layers: subnet-level (NACLs) and instance-level (SGs).</li>
+      <li><strong>Translate</strong> private IPs to public and back (IGW for public instances, NAT Gateway for outbound-only from private subnets).</li>
+      <li><strong>Reach AWS services privately</strong> without going over the internet (Gateway &amp; Interface endpoints).</li>
+      <li><strong>Log</strong> flows for audit and forensics (VPC Flow Logs).</li>
+    </ul>
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>High availability</strong> — spread subnets across ≥ 2 AZs.</li>
+      <li><strong>Least privilege</strong> — SGs allow-only, deny by default.</li>
+      <li><strong>Auditability</strong> — every allow/deny should be explainable from the config.</li>
+      <li><strong>Cost efficiency</strong> — NAT Gateway bandwidth and cross-AZ traffic are the two big-ticket leaks.</li>
+    </ul>
+
+    <h3>Numbers to volunteer in the interview</h3>
+    <table>
+      <thead><tr><th>Limit / component</th><th>Default</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>VPC IPv4 CIDR size</td><td><code>/16</code> (65 536 IPs) max, <code>/28</code> (16 IPs) min</td><td>5 IPs per subnet are AWS-reserved</td></tr>
+        <tr><td>Subnets per VPC</td><td>200 (soft)</td><td>Each pinned to a single AZ</td></tr>
+        <tr><td>Security Groups per ENI</td><td>5 (up to 16 by quota increase)</td><td>Rules are OR'd together</td></tr>
+        <tr><td>Rules per SG</td><td>60 inbound + 60 outbound</td><td>Referenceable by SG id or CIDR</td></tr>
+        <tr><td>NACL rules per direction</td><td>20 default, 40 max</td><td>Numbered 1–32766; lowest first</td></tr>
+        <tr><td>NAT Gateway throughput</td><td>5 → 100 Gbps burst; 55 000 ports per unique dest</td><td>Scale via multi-AZ NAT gateways</td></tr>
+        <tr><td>IGW throughput</td><td>No AWS-imposed cap</td><td>Horizontally scaled by AWS</td></tr>
+        <tr><td>Cross-AZ traffic</td><td>$0.01/GB each way</td><td>Big cost driver at scale</td></tr>
+        <tr><td>NAT Gateway data</td><td>$0.045/GB processed + $0.045/hr</td><td>Beats EC2 NAT above ~10 Mbps</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>The full request-flow map</h2>
+    <p>Below is a canonical two-AZ VPC. The <strong>public subnet</strong> holds an ALB and a NAT Gateway per AZ; the <strong>private application subnet</strong> holds EC2 / Lambda; the <strong>private data subnet</strong> holds RDS and reaches DynamoDB / S3 via VPC endpoints. Each traffic type takes a distinct path through NACLs, SGs, route tables, and gateways.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 940 520" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/></marker>
+          <marker id="arrIn"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4cc9f0"/></marker>
+          <marker id="arrOut" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff9900"/></marker>
+        </defs>
+
+        <!-- Internet / user -->
+        <g><rect x="20" y="30" width="130" height="50" rx="10" fill="#0f1420" stroke="#4cc9f0"/><text x="85" y="60" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">🌐 User (browser)</text></g>
+
+        <!-- VPC outer -->
+        <rect x="180" y="18" width="740" height="490" rx="14" fill="rgba(67,97,238,.08)" stroke="#4361ee" stroke-dasharray="6,4"/>
+        <text x="196" y="38" fill="#4361ee" font-size="12" font-weight="800">VPC 10.0.0.0/16</text>
+
+        <!-- IGW -->
+        <g><rect x="210" y="55" width="110" height="42" rx="8" fill="#ff9900"/><text x="265" y="80" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Internet GW</text></g>
+        <line x1="150" y1="55" x2="210" y2="75" stroke="#4cc9f0" stroke-width="2" marker-end="url(#arrIn)"/>
+
+        <!-- Route table -->
+        <g><rect x="340" y="55" width="120" height="42" rx="8" fill="#0f1420" stroke="#4361ee"/><text x="400" y="72" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Route table</text><text x="400" y="88" text-anchor="middle" fill="#c6d0e0" font-size="10">0.0.0.0/0 → IGW</text></g>
+        <line x1="320" y1="76" x2="340" y2="76" stroke="#4cc9f0" stroke-width="2" marker-end="url(#arrIn)"/>
+
+        <!-- Public subnet AZ-a -->
+        <rect x="210" y="120" width="330" height="130" rx="10" fill="rgba(76,201,240,.08)" stroke="#4cc9f0"/>
+        <text x="222" y="140" fill="#4cc9f0" font-size="11" font-weight="800">Public subnet (AZ-a) 10.0.1.0/24</text>
+        <g><rect x="230" y="150" width="140" height="34" rx="7" fill="#0f1420" stroke="#4cc9f0"/><text x="300" y="171" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">NACL (subnet-lvl)</text></g>
+        <g><rect x="230" y="192" width="140" height="46" rx="7" fill="#0f1420" stroke="#2dc653"/><text x="300" y="211" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">ALB (ENI + SG)</text><text x="300" y="226" text-anchor="middle" fill="#c6d0e0" font-size="10">SG: 443 from 0/0</text></g>
+        <g><rect x="390" y="192" width="130" height="46" rx="7" fill="#0f1420" stroke="#ff9900"/><text x="455" y="211" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">NAT Gateway</text><text x="455" y="226" text-anchor="middle" fill="#c6d0e0" font-size="10">Elastic IP</text></g>
+        <line x1="400" y1="97" x2="300" y2="150" stroke="#4cc9f0" stroke-width="2" marker-end="url(#arrIn)"/>
+
+        <!-- Private app subnet -->
+        <rect x="210" y="270" width="330" height="110" rx="10" fill="rgba(112,72,232,.08)" stroke="#7048e8"/>
+        <text x="222" y="290" fill="#7048e8" font-size="11" font-weight="800">Private app subnet (AZ-a) 10.0.11.0/24</text>
+        <g><rect x="230" y="300" width="140" height="30" rx="7" fill="#0f1420" stroke="#7048e8"/><text x="300" y="320" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">NACL</text></g>
+        <g><rect x="230" y="336" width="290" height="34" rx="7" fill="#0f1420" stroke="#2dc653"/><text x="375" y="358" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">EC2 / Lambda ENI (SG: 443 from ALB-SG)</text></g>
+        <line x1="300" y1="238" x2="300" y2="300" stroke="#4cc9f0" stroke-width="2" marker-end="url(#arrIn)"/>
+
+        <!-- Private data subnet -->
+        <rect x="210" y="400" width="330" height="100" rx="10" fill="rgba(247,86,124,.08)" stroke="#f7567c"/>
+        <text x="222" y="420" fill="#f7567c" font-size="11" font-weight="800">Private data subnet (AZ-a) 10.0.21.0/24</text>
+        <g><rect x="230" y="430" width="140" height="30" rx="7" fill="#0f1420" stroke="#f7567c"/><text x="300" y="450" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">NACL</text></g>
+        <g><rect x="230" y="466" width="290" height="30" rx="7" fill="#0f1420" stroke="#2dc653"/><text x="375" y="486" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">RDS (SG: 5432 from App-SG)</text></g>
+        <line x1="375" y1="370" x2="375" y2="430" stroke="#4cc9f0" stroke-width="2" marker-end="url(#arrIn)"/>
+
+        <!-- AZ-b compressed on the right -->
+        <rect x="570" y="120" width="330" height="380" rx="10" fill="rgba(67,97,238,.04)" stroke="#4361ee" stroke-dasharray="4,3"/>
+        <text x="582" y="140" fill="#4361ee" font-size="11" font-weight="800">AZ-b (mirrored public + private subnets)</text>
+        <text x="735" y="310" text-anchor="middle" fill="#5b6677" font-size="12">(identical layout for HA)</text>
+
+        <!-- VPC endpoints -->
+        <g><rect x="580" y="440" width="140" height="46" rx="7" fill="#0f1420" stroke="#ff9900"/><text x="650" y="459" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Gateway Endpoint</text><text x="650" y="474" text-anchor="middle" fill="#c6d0e0" font-size="10">S3 / DynamoDB</text></g>
+        <g><rect x="740" y="440" width="140" height="46" rx="7" fill="#0f1420" stroke="#ff9900"/><text x="810" y="459" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Interface Endpoint</text><text x="810" y="474" text-anchor="middle" fill="#c6d0e0" font-size="10">Secrets Mgr / KMS ...</text></g>
+
+        <!-- Outbound path -->
+        <line x1="375" y1="370" x2="455" y2="238" stroke="#ff9900" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arrOut)"/>
+        <line x1="455" y1="192" x2="265" y2="97" stroke="#ff9900" stroke-width="2" stroke-dasharray="5,3" marker-end="url(#arrOut)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#4cc9f0"></span>Inbound traffic path</span>
+        <span><span class="dot" style="background:#ff9900"></span>Outbound (NAT) path</span>
+        <span><span class="dot" style="background:#2dc653"></span>Security Group (stateful)</span>
+        <span><span class="dot" style="background:#7048e8"></span>Private subnet</span>
+      </div>
+    </div>
+
+    <h3>Inbound path (client → app)</h3>
+    <p>The packet from the browser hits the <strong>Internet Gateway</strong> — a horizontally scaled, no-bandwidth-cap edge component that performs 1:1 NAT between the ALB's public IP and its private VPC IP. The IGW then hands the packet to the VPC router, which consults the <strong>route table</strong> associated with the destination subnet. Because the destination IP falls inside <code>10.0.0.0/16</code>, no gateway lookup is needed. Before the packet enters the public subnet, the subnet's <strong>NACL</strong> checks its numbered rule list; if allowed, the packet reaches the ALB's ENI, where the <strong>Security Group</strong> checks its allow-list. On accept, the ALB terminates TLS, selects a target from its target group, and initiates a fresh connection to the app ENI in the private subnet — where the same NACL → SG dance repeats on the private-subnet side.</p>
+
+    <h3>Outbound path (app → S3, external API)</h3>
+    <p>The reply/onward request leaves the app ENI. Because the private subnet's route table has <code>0.0.0.0/0 → nat-gw</code>, the packet is routed through the NAT Gateway, which rewrites the source IP from the ENI's private IP to the NAT's Elastic IP. The public-subnet NACL sees the NAT-sourced packet, and the IGW again performs 1:1 NAT to reach the internet. For traffic to <strong>S3 or DynamoDB</strong>, the route table has a more specific route to a <strong>Gateway Endpoint</strong>, so the packet never leaves AWS — no NAT, no data-transfer cost, and no exposure to the internet.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a request hop through every control</h2>
+    <p>This animation walks a single browser request from the internet into a private-subnet EC2 instance, hitting each control in order — IGW, route table, NACL, SG, then the reverse trip. The stateful vs stateless behaviour is highlighted.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
+        <defs>
+          <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/></marker>
+        </defs>
+
+        <!-- Track boxes -->
+        <g id="user"><rect x="20" y="60" width="90" height="60" rx="10" fill="#0f1420" stroke="#4cc9f0" class="a-el" data-anim/><text x="65" y="88" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">🌐 User</text><text x="65" y="106" text-anchor="middle" fill="#c6d0e0" font-size="10">203.0.113.5</text></g>
+        <g id="igw"><rect x="130" y="60" width="90" height="60" rx="10" fill="#0f1420" stroke="#ff9900" class="a-el" data-anim/><text x="175" y="88" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">IGW</text><text x="175" y="106" text-anchor="middle" fill="#c6d0e0" font-size="10">1:1 NAT</text></g>
+        <g id="rt"><rect x="240" y="60" width="110" height="60" rx="10" fill="#0f1420" stroke="#4361ee" class="a-el" data-anim/><text x="295" y="86" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Route table</text><text x="295" y="103" text-anchor="middle" fill="#c6d0e0" font-size="10">match dest</text></g>
+        <g id="nacl"><rect x="370" y="60" width="110" height="60" rx="10" fill="#0f1420" stroke="#f7567c" class="a-el" data-anim/><text x="425" y="86" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">NACL</text><text x="425" y="103" text-anchor="middle" fill="#c6d0e0" font-size="10">stateless, ordered</text></g>
+        <g id="sg"><rect x="500" y="60" width="110" height="60" rx="10" fill="#0f1420" stroke="#2dc653" class="a-el" data-anim/><text x="555" y="86" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Security Group</text><text x="555" y="103" text-anchor="middle" fill="#c6d0e0" font-size="10">stateful, allow-only</text></g>
+        <g id="eni"><rect x="630" y="60" width="110" height="60" rx="10" fill="#0f1420" stroke="#7048e8" class="a-el" data-anim/><text x="685" y="86" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">EC2 ENI</text><text x="685" y="103" text-anchor="middle" fill="#c6d0e0" font-size="10">10.0.11.42</text></g>
+
+        <!-- Arrows -->
+        <line x1="110" y1="90" x2="130" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="220" y1="90" x2="240" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="350" y1="90" x2="370" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="480" y1="90" x2="500" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="610" y1="90" x2="630" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+        <!-- Packet -->
+        <g id="pkt" class="a-el a-hidden" data-anim>
+          <rect x="15" y="30" width="120" height="22" rx="6" fill="#4cc9f0"/>
+          <text x="75" y="46" text-anchor="middle" fill="#0b1626" font-size="11" font-weight="800">GET / HTTPS ▶</text>
+        </g>
+
+        <!-- Return packet -->
+        <g id="rpkt" class="a-el a-hidden" data-anim>
+          <rect x="15" y="140" width="120" height="22" rx="6" fill="#2dc653"/>
+          <text x="75" y="156" text-anchor="middle" fill="#0b1626" font-size="11" font-weight="800">◀ 200 OK reply</text>
+        </g>
+
+        <!-- Bottom info panels -->
+        <rect x="30" y="200" width="380" height="150" rx="12" fill="rgba(76,201,240,.08)" stroke="#4cc9f0"/>
+        <text x="46" y="225" fill="#4cc9f0" font-size="13" font-weight="800">On the way IN</text>
+        <text x="46" y="248" fill="#c6d0e0" font-size="11">1. IGW does 1:1 NAT (public IP ↔ ENI IP)</text>
+        <text x="46" y="266" fill="#c6d0e0" font-size="11">2. Route table steers by destination CIDR</text>
+        <text x="46" y="284" fill="#c6d0e0" font-size="11">3. Subnet NACL evaluates numbered inbound rules</text>
+        <text x="46" y="302" fill="#c6d0e0" font-size="11">4. ENI's Security Group checks allow-only inbound</text>
+        <text x="46" y="320" fill="#c6d0e0" font-size="11">5. Packet delivered to instance's kernel</text>
+        <text x="46" y="338" fill="#c6d0e0" font-size="11">   SG remembers the flow (stateful)</text>
+
+        <rect x="440" y="200" width="430" height="150" rx="12" fill="rgba(45,198,83,.08)" stroke="#2dc653"/>
+        <text x="456" y="225" fill="#2dc653" font-size="13" font-weight="800">On the way OUT (the return)</text>
+        <text x="456" y="248" fill="#c6d0e0" font-size="11">6. SG waves reply through automatically (stateful)</text>
+        <text x="456" y="266" fill="#c6d0e0" font-size="11">7. NACL re-checks — but on the OUTBOUND rules,</text>
+        <text x="456" y="282" fill="#c6d0e0" font-size="11">   AND you must allow ephemeral ports 1024-65535 back</text>
+        <text x="456" y="300" fill="#c6d0e0" font-size="11">8. Route table sees dest 203.0.113.5 → IGW</text>
+        <text x="456" y="318" fill="#c6d0e0" font-size="11">9. IGW rewrites source to public IP, ships it</text>
+        <text x="456" y="336" fill="#c6d0e0" font-size="11">   User receives the 200 OK</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'Follow one HTTPS request from the internet, into a private EC2, and back out.',
+          interval: 1900,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.remove('a-glow');
+              el.removeAttribute('transform');
+            });
+            $('#pkt').classList.add('a-hidden');
+            $('#rpkt').classList.add('a-hidden');
+          },
+          steps: [
+            { caption: 'A browser at 203.0.113.5 sends an HTTPS request to your public IP.',
+              apply: (r, $) => {
+                $('#pkt').classList.remove('a-hidden');
+                $('#user').classList.add('a-glow');
+              }},
+            { caption: 'Packet reaches the Internet Gateway. The IGW performs 1:1 NAT — swaps the public IP for the ENI\'s private IP.',
+              apply: (r, $) => {
+                $('#pkt').setAttribute('transform', 'translate(115,0)');
+                $('#igw').classList.add('a-glow');
+              }},
+            { caption: 'Route table lookup: destination falls inside 10.0.0.0/16, so it stays local — no gateway hop needed.',
+              apply: (r, $) => {
+                $('#pkt').setAttribute('transform', 'translate(225,0)');
+                $('#rt').classList.add('a-glow');
+              }},
+            { caption: 'Subnet NACL evaluates its numbered inbound rules top-down. First match wins. Stateless — return traffic will be re-evaluated separately.',
+              apply: (r, $) => {
+                $('#pkt').setAttribute('transform', 'translate(355,0)');
+                $('#nacl').classList.add('a-glow');
+              }},
+            { caption: 'ENI\'s Security Group evaluates allow-only inbound rules. Multiple SGs are OR\'d. It remembers this connection.',
+              apply: (r, $) => {
+                $('#pkt').setAttribute('transform', 'translate(485,0)');
+                $('#sg').classList.add('a-glow');
+              }},
+            { caption: 'Packet delivered to the EC2 ENI. Kernel wakes the process. App handles the request.',
+              apply: (r, $) => {
+                $('#pkt').setAttribute('transform', 'translate(615,0)');
+                $('#eni').classList.add('a-glow');
+              }},
+            { caption: 'Reply generated. Because the SG is stateful, the reply flows back through it without needing an outbound rule.',
+              apply: (r, $) => {
+                $('#rpkt').classList.remove('a-hidden');
+                $('#sg').classList.add('a-glow');
+              }},
+            { caption: 'Reply hits the subnet NACL AGAIN — this time against outbound rules. It must explicitly allow the ephemeral source port (1024-65535).',
+              apply: (r, $) => {
+                $('#rpkt').setAttribute('transform', 'translate(-130,0)');
+                $('#nacl').classList.add('a-glow');
+              }},
+            { caption: 'Route table: destination 203.0.113.5 doesn\'t match 10.0.0.0/16 → matches 0.0.0.0/0 → IGW.',
+              apply: (r, $) => {
+                $('#rpkt').setAttribute('transform', 'translate(-260,0)');
+                $('#rt').classList.add('a-glow');
+              }},
+            { caption: 'IGW rewrites the source back to the public IP. Packet leaves AWS. The user\'s browser receives 200 OK.',
+              apply: (r, $) => {
+                $('#rpkt').setAttribute('transform', 'translate(-500,0)');
+                $('#igw').classList.add('a-glow');
+                $('#user').classList.add('a-glow');
+              }}
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; return; }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => { if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; } goto(idx + 1); });
+        btnPrev && btnPrev.addEventListener('click', () => { if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; } goto(idx - 1); });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive — every hop, in order</h2>
+
+    <h3>1. Internet Gateway (IGW)</h3>
+    <p>The IGW is a <strong>horizontally scaled, redundant, no-bandwidth-cap</strong> logical component you attach to a VPC. Only <em>one</em> IGW may be attached per VPC. It exists so packets can enter and leave the VPC over IPv4/IPv6. For IPv4 it also performs <strong>1:1 NAT</strong>: an instance's private IP (say <code>10.0.1.42</code>) is invisible on the internet; when its packet leaves via the IGW, the source is rewritten to the associated public/Elastic IP, and inbound the destination is rewritten back to the private IP before delivery. Without a route in the subnet's route table pointing to the IGW, a subnet is <em>private</em> — regardless of whether an instance has a public IP. Cost: the IGW itself is free; you pay for data transfer.</p>
+
+    <h3>2. Route table</h3>
+    <p>Every subnet is associated with exactly one route table (implicitly the VPC's main table, or explicitly a custom one). A route table is an ordered list of <code>(destination CIDR → target)</code> rules; the <strong>most-specific match wins</strong>. The local route <code>10.0.0.0/16 → local</code> is created automatically and cannot be deleted. Typical entries: <code>0.0.0.0/0 → igw-xxx</code> (public subnet), <code>0.0.0.0/0 → nat-xxx</code> (private subnet), <code>pl-6fa54006 (S3 prefix list) → vpce-xxx</code> (Gateway Endpoint), <code>10.1.0.0/16 → pcx-yyy</code> (VPC peering), <code>0.0.0.0/0 → tgw-zzz</code> (Transit Gateway). Route tables are the <em>only</em> way traffic finds its next hop — SGs and NACLs come <em>after</em> the routing decision, not before.</p>
+
+    <h3>3. Network ACL (NACL) — subnet-level, stateless</h3>
+    <p>A NACL sits at the boundary of a subnet. Every subnet must have one; if you don't associate a custom NACL, you get the default one (which allows all). NACLs are <strong>stateless</strong>: inbound rules govern packets entering the subnet, outbound rules govern packets leaving, and the two are evaluated independently. Rules are numbered 1–32766 and evaluated in ascending order — <strong>first match wins</strong>. Each rule can <code>allow</code> or <code>deny</code> — unlike SGs, NACLs can express explicit denies. Because they're stateless, if you allow inbound HTTPS on port 443, you <strong>also</strong> have to allow outbound on the client's ephemeral port range (Linux typically 32768–60999, Windows 49152–65535; AWS docs use 1024–65535 as the safe superset) or your replies get dropped. This is the #1 gotcha interviewers probe: "why does traffic work through the SG but fail at the NACL?"</p>
+
+    <h3>4. Elastic Network Interface (ENI)</h3>
+    <p>An ENI is a virtual NIC — a private IP, MAC address, and a set of attached Security Groups. Every EC2 instance, Lambda-in-VPC, ALB target, RDS instance, and VPC endpoint has one or more ENIs. This is where Security Groups actually attach; SGs are <em>not</em> attached to instances, they're attached to ENIs.</p>
+
+    <h3>5. Security Group (SG) — ENI-level, stateful, allow-only</h3>
+    <p>An SG is a virtual firewall wrapped around an ENI. Its rules are <strong>allow-only</strong> (no deny — the absence of a matching allow <em>is</em> the deny) and <strong>stateful</strong>: if a packet is allowed inbound, the entire flow (including the reverse direction) is tracked and the response is automatically permitted regardless of outbound rules, and vice versa. Rules can be scoped by CIDR, another SG's id (a powerful abstraction — "allow from anything wearing this SG"), or a prefix list. A single ENI can have up to 5 SGs by default (16 by quota increase), and rules across all SGs are OR'd — one allow anywhere is enough. Default outbound is "allow all"; default inbound (on the VPC's default SG) is "allow only from members of the same SG".</p>
+
+    <h3>6. NAT Gateway (or NAT instance)</h3>
+    <p>A NAT Gateway sits in a public subnet with an Elastic IP. Private subnets route <code>0.0.0.0/0</code> to it. It performs <strong>port-address translation</strong>: outbound packets from many private IPs are rewritten to a single Elastic IP with unique source ports (up to 55 000 concurrent connections per unique destination). It's a <em>managed</em> service — 5 Gbps baseline, bursting to 100 Gbps, no OS to patch. To make it highly available you deploy <strong>one NAT Gateway per AZ</strong>, and each private subnet routes to its own AZ's NAT — otherwise a cross-AZ hop costs money and adds latency. Cost is the big-ticket item: $0.045/hr fixed + $0.045/GB processed, which becomes serious at multi-TB egress.</p>
+
+    <h3>7. VPC Endpoints — Gateway and Interface</h3>
+    <p>To reach AWS services (S3, DynamoDB, KMS, Secrets Manager, SQS, Kinesis, ...) from a private subnet without a NAT Gateway, use VPC endpoints. <strong>Gateway endpoints</strong> (S3, DynamoDB only) are free and appear as a route in the route table pointing to a managed prefix list; the packet never leaves AWS. <strong>Interface endpoints</strong> (powered by AWS PrivateLink) create an ENI in your subnet with a private IP for the service; traffic looks like it's going to a private IP inside your VPC. Both keep traffic off the public internet and off the NAT Gateway — a common architecture win that shaves NAT bandwidth costs by 80%+ for services that talk to S3 or DynamoDB.</p>
+
+    <h3>8. Order of evaluation — the flow, in one sentence</h3>
+    <p>For every packet: <em>routing decision (route table) → subnet NACL (in the ingress direction) → ENI Security Group (inbound) → workload → SG (outbound reply — auto-allowed because stateful) → subnet NACL (outbound direction — re-evaluated!) → route table again → gateway.</em> Memorise that sequence; interviewers ask it.</p>
+  </section>
+
+  <section id="sg-vs-nacl" class="card">
+    <h2>🆚 Security Group vs Network ACL — the interview kill-shot</h2>
+    <p>Every AWS interview eventually gets here, and candidates who confuse the two are eliminated. The distinction:</p>
+    <table>
+      <thead><tr><th>Trait</th><th>Security Group</th><th>NACL</th></tr></thead>
+      <tbody>
+        <tr><td>Attached to</td><td>ENI (instance/ALB/RDS/Lambda...)</td><td>Subnet</td></tr>
+        <tr><td>State</td><td><strong>Stateful</strong> — return traffic auto-allowed</td><td><strong>Stateless</strong> — must allow both directions explicitly</td></tr>
+        <tr><td>Rule types</td><td>Allow only</td><td>Allow AND Deny</td></tr>
+        <tr><td>Rule evaluation</td><td>All rules evaluated; any allow = pass</td><td>Ordered by rule number; first match wins</td></tr>
+        <tr><td>Rules default</td><td>Deny all inbound, allow all outbound</td><td>Default NACL allows all in/out; custom NACL denies all</td></tr>
+        <tr><td>Referenceable targets</td><td>CIDRs, SG ids, prefix lists</td><td>CIDRs, prefix lists (no SG refs)</td></tr>
+        <tr><td>Rules per resource</td><td>60 in + 60 out per SG × up to 5 SGs</td><td>20 default, 40 max per direction</td></tr>
+        <tr><td>Ephemeral ports on return</td><td>Handled automatically</td><td><strong>You must add rules for them explicitly</strong></td></tr>
+        <tr><td>Logging</td><td>Via VPC Flow Logs (ENI-level)</td><td>Via VPC Flow Logs (subnet-level)</td></tr>
+        <tr><td>Layer</td><td>Layer 3/4 firewall around the workload</td><td>Layer 3/4 firewall around the subnet</td></tr>
+        <tr><td>Use for</td><td>Application-level allow-lists ("web tier can talk to app tier")</td><td>Coarse subnet-wide blocks (bad-IP deny lists, PCI segmentation)</td></tr>
+      </tbody>
+    </table>
+    <p><strong>The mnemonic:</strong> "SG is a stateful bouncer at the office door; NACL is a stateless guard at the floor entrance who forgets you the moment you pass. That's why NACLs need two-way rules and SGs don't."</p>
+    <p>Neither can filter DNS requests to the Route 53 Resolver, DHCP, EC2 instance metadata (IMDS), ECS task metadata, Windows license activation, or the Amazon Time Sync Service — these bypass both layers by design.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Under the hood, AWS runs a <strong>massive distributed packet processor</strong> — the <em>Mapping Service</em> and the <em>Blackfoot edge nodes</em> — that evaluates every packet against every routing rule, every NACL, and every SG in the microsecond budget you get between two servers in the same AZ. The primitives:</p>
+    <table>
+      <thead><tr><th>Where</th><th>Structure / algorithm</th><th>Complexity</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Route table lookup</td><td><strong>Longest-prefix match</strong> on radix trie (Patricia tree)</td><td>O(prefix bits) — ~O(32) for IPv4</td><td>Most-specific route wins; classic router primitive</td></tr>
+        <tr><td>NACL rule scan</td><td>Ordered array by rule number; linear scan, first match wins</td><td>O(n) with n ≤ 40</td><td>Explicit ordering is user-visible; small n makes linear fine</td></tr>
+        <tr><td>SG rule match</td><td>Hash-partitioned by (src CIDR, port); parallel evaluate all SGs</td><td>O(1) avg per SG × ≤ 5 SGs</td><td>OR across SGs; hash for allow-only lookup</td></tr>
+        <tr><td>Stateful SG tracking</td><td>Connection tracking table keyed by 5-tuple with LRU eviction</td><td>O(1) lookup, O(1) insert</td><td>Remember allowed flows so the reply is auto-permitted</td></tr>
+        <tr><td>NAT port allocation</td><td>Bitmap / free-port pool per (source, destination) IP pair</td><td>O(1) allocation</td><td>55 k ports per NAT per unique dest IP</td></tr>
+        <tr><td>Encapsulation</td><td>VXLAN-like overlay with mapping service lookup</td><td>O(1) cached lookup</td><td>Turns overlay IPs into underlay physical hosts</td></tr>
+        <tr><td>Prefix list expansion</td><td>Interval tree / merged CIDR set</td><td>O(log n) match</td><td>SG can reference "all of S3's CIDRs" without listing them</td></tr>
+        <tr><td>Flow logs</td><td>Ring buffer per ENI → aggregated → S3 / CloudWatch</td><td>O(1) append</td><td>Sampling-friendly, no impact on data plane</td></tr>
+      </tbody>
+    </table>
+    <p>The single most interesting one is the <strong>longest-prefix-match trie</strong>. Route tables can hold hundreds of overlapping CIDR ranges — <code>10.0.0.0/16 → local</code>, <code>10.0.5.0/24 → tgw</code>, <code>0.0.0.0/0 → igw</code>. Without a Patricia trie you'd be O(n) per packet; with one, you're constant work per IP bit (≤ 32 for IPv4), which is why AWS can move terabits per second per Availability Zone without measurable per-packet CPU cost on your instance.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to concrete AWS resources</h2>
+    <p>A production-grade VPC for a real workload looks like this:</p>
+    <table>
+      <thead><tr><th>Purpose</th><th>Resource</th><th>Config</th></tr></thead>
+      <tbody>
+        <tr><td>Address space</td><td>VPC</td><td>10.0.0.0/16 primary + secondary CIDR if you outgrow it</td></tr>
+        <tr><td>Public tier (per AZ)</td><td>Subnet 10.0.a.0/24</td><td>Route: 0.0.0.0/0 → IGW; hosts ALB + NAT GW</td></tr>
+        <tr><td>App tier (per AZ)</td><td>Subnet 10.0.1a.0/24</td><td>Route: 0.0.0.0/0 → NAT-a; hosts EC2/ECS/Lambda ENIs</td></tr>
+        <tr><td>Data tier (per AZ)</td><td>Subnet 10.0.2a.0/24</td><td>No default route to internet; only reaches VPC endpoints and peers</td></tr>
+        <tr><td>Internet edge</td><td>Internet Gateway</td><td>One per VPC</td></tr>
+        <tr><td>Outbound egress</td><td>NAT Gateway × N AZs</td><td>Each in the same AZ's public subnet; each app subnet routes to its own AZ's NAT</td></tr>
+        <tr><td>AWS-service access</td><td>Gateway endpoints for S3, DynamoDB</td><td>Free; route entry per subnet</td></tr>
+        <tr><td>Other AWS services</td><td>Interface endpoints (PrivateLink)</td><td>SSM, Secrets Manager, KMS, ECR, CloudWatch Logs, SQS, SNS...</td></tr>
+        <tr><td>Perimeter deny list</td><td>NACLs</td><td>Optional; explicit deny for bad IP ranges + allow ephemeral 1024–65535 on return</td></tr>
+        <tr><td>App allow-lists</td><td>Security Groups</td><td>ALB-SG (443 from 0/0), App-SG (443 from ALB-SG), DB-SG (5432 from App-SG)</td></tr>
+        <tr><td>Cross-VPC</td><td>Transit Gateway / VPC Peering</td><td>TGW for hub-and-spoke, peering for one-off</td></tr>
+        <tr><td>On-prem</td><td>Site-to-Site VPN / Direct Connect</td><td>Attach to Transit Gateway or Virtual Private Gateway</td></tr>
+        <tr><td>Audit</td><td>VPC Flow Logs</td><td>To CloudWatch Logs or S3; enable at VPC level for coverage</td></tr>
+        <tr><td>Advanced inspection</td><td>AWS Network Firewall / GWLB + third-party appliance</td><td>For deep-packet inspection, IDS/IPS</td></tr>
+      </tbody>
+    </table>
+    <p>The <strong>hub-and-spoke Transit Gateway</strong> pattern is the standard at scale: one central "networking" VPC hosts egress via NAT + Network Firewall, and every workload VPC attaches to the TGW, so security policy lives in one place and there's no NAT-per-VPC cost explosion. Combined with well-placed VPC endpoints, this cuts NAT egress cost by 80%+ for teams whose workloads mostly talk to S3 / DynamoDB / other AWS services.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — programmatic VPC setup</h2>
+    <p>Real VPCs are typically defined in Terraform / CloudFormation / CDK, but the AWS SDK for .NET can create the same resources when you need to build them from a control plane. Here's a compact snippet that stands up a two-AZ VPC with a public and private subnet, an IGW, a NAT Gateway, and an S3 Gateway endpoint — the minimum viable production shape.</p>
+<pre><span class="kw">using</span> Amazon.EC2;
+<span class="kw">using</span> Amazon.EC2.Model;
+
+<span class="kw">public sealed class</span> <span class="typ">VpcProvisioner</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IAmazonEC2</span> _ec2;
+    <span class="kw">public</span> <span class="fn">VpcProvisioner</span>(<span class="typ">IAmazonEC2</span> ec2) =&gt; _ec2 = ec2;
+
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="kw">string</span>&gt; <span class="fn">CreateVpcAsync</span>()
+    {
+        <span class="cmt">// 1. VPC (address space)</span>
+        <span class="kw">var</span> vpc = (<span class="kw">await</span> _ec2.CreateVpcAsync(<span class="kw">new</span> <span class="typ">CreateVpcRequest</span>
+        {
+            CidrBlock = <span class="str">"10.0.0.0/16"</span>,
+            TagSpecifications = [Tag(<span class="str">"vpc"</span>, <span class="str">"demo-vpc"</span>)]
+        })).Vpc;
+
+        <span class="cmt">// 2. Internet Gateway + attach</span>
+        <span class="kw">var</span> igwId = (<span class="kw">await</span> _ec2.CreateInternetGatewayAsync(<span class="kw">new</span>())).InternetGateway.InternetGatewayId;
+        <span class="kw">await</span> _ec2.AttachInternetGatewayAsync(<span class="kw">new</span>() { VpcId = vpc.VpcId, InternetGatewayId = igwId });
+
+        <span class="cmt">// 3. Public subnet in AZ-a + route table with 0/0 → IGW</span>
+        <span class="kw">var</span> pubSubnet = (<span class="kw">await</span> _ec2.CreateSubnetAsync(<span class="kw">new</span>
+        {
+            VpcId = vpc.VpcId,
+            CidrBlock = <span class="str">"10.0.1.0/24"</span>,
+            AvailabilityZone = <span class="str">"us-east-1a"</span>
+        })).Subnet;
+
+        <span class="kw">var</span> pubRt = (<span class="kw">await</span> _ec2.CreateRouteTableAsync(<span class="kw">new</span>() { VpcId = vpc.VpcId })).RouteTable;
+        <span class="kw">await</span> _ec2.CreateRouteAsync(<span class="kw">new</span> <span class="typ">CreateRouteRequest</span>
+        {
+            RouteTableId = pubRt.RouteTableId,
+            DestinationCidrBlock = <span class="str">"0.0.0.0/0"</span>,
+            GatewayId = igwId              <span class="cmt">// this makes it a PUBLIC subnet</span>
+        });
+        <span class="kw">await</span> _ec2.AssociateRouteTableAsync(<span class="kw">new</span>() { SubnetId = pubSubnet.SubnetId, RouteTableId = pubRt.RouteTableId });
+
+        <span class="cmt">// 4. Elastic IP + NAT Gateway in that public subnet</span>
+        <span class="kw">var</span> eip = <span class="kw">await</span> _ec2.AllocateAddressAsync(<span class="kw">new</span>() { Domain = DomainType.Vpc });
+        <span class="kw">var</span> natId = (<span class="kw">await</span> _ec2.CreateNatGatewayAsync(<span class="kw">new</span>
+        {
+            SubnetId = pubSubnet.SubnetId,
+            AllocationId = eip.AllocationId
+        })).NatGateway.NatGatewayId;
+
+        <span class="cmt">// 5. Private subnet + route 0/0 → NAT</span>
+        <span class="kw">var</span> privSubnet = (<span class="kw">await</span> _ec2.CreateSubnetAsync(<span class="kw">new</span>
+        {
+            VpcId = vpc.VpcId,
+            CidrBlock = <span class="str">"10.0.11.0/24"</span>,
+            AvailabilityZone = <span class="str">"us-east-1a"</span>
+        })).Subnet;
+        <span class="kw">var</span> privRt = (<span class="kw">await</span> _ec2.CreateRouteTableAsync(<span class="kw">new</span>() { VpcId = vpc.VpcId })).RouteTable;
+        <span class="kw">await</span> _ec2.CreateRouteAsync(<span class="kw">new</span>
+        {
+            RouteTableId = privRt.RouteTableId,
+            DestinationCidrBlock = <span class="str">"0.0.0.0/0"</span>,
+            NatGatewayId = natId
+        });
+        <span class="kw">await</span> _ec2.AssociateRouteTableAsync(<span class="kw">new</span>() { SubnetId = privSubnet.SubnetId, RouteTableId = privRt.RouteTableId });
+
+        <span class="cmt">// 6. S3 Gateway Endpoint — cost-free private access to S3</span>
+        <span class="kw">await</span> _ec2.CreateVpcEndpointAsync(<span class="kw">new</span>
+        {
+            VpcId = vpc.VpcId,
+            ServiceName = <span class="str">"com.amazonaws.us-east-1.s3"</span>,
+            VpcEndpointType = VpcEndpointType.Gateway,
+            RouteTableIds = [privRt.RouteTableId]
+        });
+
+        <span class="cmt">// 7. Security Group with allow-list — HTTPS from ALB SG only</span>
+        <span class="kw">var</span> appSg = (<span class="kw">await</span> _ec2.CreateSecurityGroupAsync(<span class="kw">new</span>
+        {
+            GroupName = <span class="str">"app-sg"</span>,
+            Description = <span class="str">"App tier: 443 from ALB only"</span>,
+            VpcId = vpc.VpcId
+        })).GroupId;
+
+        <span class="kw">await</span> _ec2.AuthorizeSecurityGroupIngressAsync(<span class="kw">new</span>
+        {
+            GroupId = appSg,
+            IpPermissions =
+            [
+                <span class="kw">new</span>
+                {
+                    IpProtocol = <span class="str">"tcp"</span>, FromPort = <span class="str">443</span>, ToPort = <span class="str">443</span>,
+                    UserIdGroupPairs = [<span class="kw">new</span> <span class="typ">UserIdGroupPair</span> { GroupId = <span class="str">"sg-albxxxx"</span> }]
+                }
+            ]
+        });
+
+        <span class="kw">return</span> vpc.VpcId;
+    }
+
+    <span class="kw">private static</span> <span class="typ">TagSpecification</span> <span class="fn">Tag</span>(<span class="kw">string</span> resource, <span class="kw">string</span> name) =&gt; <span class="kw">new</span>()
+    {
+        ResourceType = resource, Tags = [<span class="kw">new</span>() { Key = <span class="str">"Name"</span>, Value = name }]
+    };
+}
+</pre>
+    <p>In practice, use <strong>AWS CDK (C# flavour)</strong>: <code>new Vpc(this, "MyVpc", new VpcProps { MaxAzs = 2, NatGateways = 2, SubnetConfiguration = [...] })</code> synthesises all of the above (plus best-practice NACLs and route tables) from one constructor. The SDK code above is what you'd write for a runtime control plane (multi-tenant provisioning, self-service VPCs) that CDK/Terraform can't handle.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Trade-offs</h3>
+    <p><strong>SG-only vs SG + NACL.</strong> Most teams run only SGs and leave NACLs as "allow all" — SGs cover 95% of use cases and are easier to reason about. NACLs shine for two things: (1) coarse-grained deny-lists that must apply subnet-wide regardless of workload config (compliance, bad-IP block-lists) and (2) a defence-in-depth layer where a misconfigured SG can't accidentally open everything. The cost is real: stateless rules force you to think about ephemeral ports on the return path, and troubleshooting doubles.</p>
+
+    <p><strong>Public IP vs NAT vs endpoint.</strong> Giving instances public IPs is simplest but exposes them and doubles the attack surface. NAT Gateway is safer but expensive at high throughput. VPC endpoints are cheapest and safest for AWS-service traffic — always use them for S3 and DynamoDB.</p>
+
+    <p><strong>One big VPC vs many small ones.</strong> One VPC per environment scales further than people expect (up to /16 = 65 k IPs). Fragmenting into many VPCs adds Transit Gateway attachment fees, cross-VPC data cost, and operational complexity. Split only for blast-radius / compliance / team-ownership reasons, not because "microservices should have their own VPC."</p>
+
+    <p><strong>Single NAT vs multi-AZ NAT.</strong> Two NATs = high availability and no cross-AZ traffic charges, but two hourly fees. Single NAT saves money but if that AZ dies, every private subnet loses egress. For most production workloads, multi-AZ NAT is the correct default.</p>
+
+    <h3>Bottlenecks &amp; failure modes</h3>
+    <ul>
+      <li><strong>NAT Gateway port exhaustion</strong> — 55 000 ports per unique dest IP. If all your traffic goes to one third-party API's single IP, you hit the cap. Fix: multiple NAT Gateways per AZ, or move that traffic to a PrivateLink endpoint.</li>
+      <li><strong>Ephemeral-port NACL gotcha</strong> — inbound rule allows 443, no outbound ephemeral rule → connection stalls at handshake. Symptom: connect succeeds, no data flows.</li>
+      <li><strong>Cross-AZ NAT traffic</strong> — an app subnet in AZ-b routing to a NAT in AZ-a pays 2× (private out + private in) per GB.</li>
+      <li><strong>SG rule sprawl</strong> — >60 rules requires quota bump, and rule-management debt piles up. Reference other SGs by id, not CIDRs.</li>
+      <li><strong>Overlapping CIDRs across VPCs</strong> — makes peering / TGW attachments impossible. Reserve non-overlapping /16s per environment early.</li>
+      <li><strong>Bypass paths</strong> — SGs and NACLs don't filter IMDS, DNS to Route 53 Resolver, DHCP, Time Sync — treat those as always-open.</li>
+    </ul>
+
+    <h3>Likely interviewer follow-ups (with crisp answers)</h3>
+    <div class="qa"><p class="q">A packet is rejected. Where do you look first — SG or NACL?</p><p class="a">SG. It's the closest control to the workload, has 99% of typical filtering, and the rich VPC Reachability Analyzer / Flow Logs will point to it fast. Only if SG allows and it still fails do you check the subnet NACL and its ephemeral-port return rules.</p></div>
+    <div class="qa"><p class="q">A private-subnet EC2 can reach the internet but not S3. Fix?</p><p class="a">S3 traffic is going through the NAT Gateway, which is either expensive or has a network hiccup. Add an S3 Gateway Endpoint and update the private subnet's route table with the S3 prefix list → endpoint. Now S3 traffic bypasses NAT entirely, free and faster.</p></div>
+    <div class="qa"><p class="q">How does traffic flow between two ENIs in the same subnet?</p><p class="a">Route table's local route (10.0.0.0/16 → local) handles it — no gateway hop. NACLs are NOT evaluated for intra-subnet traffic. Both ENIs' SGs are evaluated normally.</p></div>
+    <div class="qa"><p class="q">Why is a Security Group "stateful"?</p><p class="a">AWS tracks each allowed flow in a connection tracking table. When a reply matches an existing entry, it's auto-allowed without re-evaluating outbound rules. That's why you rarely need outbound SG rules for reply traffic.</p></div>
+    <div class="qa"><p class="q">You need to block one bad IP range across every workload in the VPC. SG or NACL?</p><p class="a">NACL. It's the only place that supports explicit deny, and it's evaluated at the subnet edge so no per-workload changes needed. Add a deny rule at the top of the NACL rule list on every subnet.</p></div>
+    <div class="qa"><p class="q">How do you give a Lambda access to a private RDS?</p><p class="a">Configure the Lambda VPC settings with a subnet + SG. Lambda ENIs are created on demand in those subnets. Add an ingress rule on the RDS SG allowing 5432 from the Lambda's SG (reference by SG id, not IP — Lambda IPs churn).</p></div>
+    <div class="qa"><p class="q">A packet flows through: user → IGW → route table → NACL → SG → EC2. Which of these are stateless?</p><p class="a">Route table and NACL are stateless (they re-evaluate per packet). SG and NAT are stateful (they remember flows). IGW does 1:1 NAT but doesn't hold connection state per se; it's stateless from a filtering perspective.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch">
+      <strong>30-second pitch:</strong> "A VPC is an isolated virtual network with its own IP space. A packet from the internet enters through the Internet Gateway, which does 1:1 NAT, then the route table on the destination subnet decides where it goes. Before it reaches the workload, the subnet's Network ACL — stateless, ordered, allow-or-deny — checks it, then the ENI's Security Group — stateful, allow-only, referenceable by SG id — checks it. On the way back, the SG auto-allows the reply because it's stateful, but the NACL re-checks against outbound rules and needs an explicit allow for ephemeral ports. For outbound-only traffic from private subnets, you route 0/0 through a NAT Gateway; for AWS-service traffic, you use Gateway or Interface VPC endpoints and keep the packet entirely inside AWS."
+    </p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>VPC CIDR: <strong>/16 max, /28 min</strong>; 5 IPs per subnet reserved.</li>
+      <li>NACL rules: up to <strong>40</strong> per direction; numbered 1–32766; first match wins; <strong>stateless</strong>.</li>
+      <li>SG rules: <strong>60 in + 60 out</strong>; up to <strong>5 SGs per ENI</strong>; <strong>stateful, allow-only</strong>.</li>
+      <li>NAT Gateway: <strong>5 Gbps → 100 Gbps burst</strong>, <strong>55 k ports per unique dest</strong>, $0.045/hr + $0.045/GB.</li>
+      <li>Cross-AZ data: <strong>$0.01/GB each way</strong>.</li>
+      <li>IGW: <strong>no bandwidth cap</strong>, one per VPC, free (pay for data transfer).</li>
+      <li>Ephemeral port range: <strong>1024–65535</strong> (safe superset for NACL return rules).</li>
+    </ul>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li><strong>Stateful vs stateless</strong> — the difference between SG and NACL. Say it out loud.</li>
+      <li><strong>Order of evaluation</strong> — route table → NACL (in) → SG (in) → workload → SG (out auto) → NACL (out) → route table → gateway.</li>
+      <li><strong>VPC endpoints</strong> — reach S3/DynamoDB privately without NAT; huge cost + security win.</li>
+      <li><strong>Multi-AZ NAT</strong> — one NAT per AZ, subnet routes to its own AZ's NAT, avoids cross-AZ egress fees.</li>
+      <li><strong>SG-ref-by-id</strong> — reference another SG's id instead of a CIDR; makes rules resilient to IP churn.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://docs.aws.amazon.com/vpc/latest/userguide/how-it-works.html">Amazon VPC — How Amazon VPC works (AWS docs)</a></li>
+      <li><a href="https://docs.aws.amazon.com/vpc/latest/userguide/VPC_Internet_Gateway.html">Amazon VPC — Enable internet access using an Internet Gateway (AWS docs)</a></li>
+      <li><a href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html">Amazon VPC — Control traffic to resources using Security Groups (AWS docs)</a></li>
+      <li><a href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html">Amazon VPC — Control subnet traffic with Network ACLs (AWS docs)</a></li>
+      <li><a href="https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat.html">Amazon VPC — Connect to the internet using NAT devices (AWS docs)</a></li>
+      <li><a href="https://docs.aws.amazon.com/vpc/latest/privatelink/what-is-privatelink.html">AWS PrivateLink &amp; VPC Endpoints — What is PrivateLink (AWS docs)</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

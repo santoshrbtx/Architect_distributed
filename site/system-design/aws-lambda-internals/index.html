@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AWS Lambda Internals — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #2dc653;
+    --laymen-bg: #eafaf0;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #ff9900 0%, #f7567c 55%, #7048e8 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen   .badge { background: var(--laymen); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep · AWS Deep Dive</div>
+    <h1>AWS Lambda Internals</h1>
+    <p>How Lambda actually runs your code: Firecracker microVMs, the execution environment lifecycle, the Runtime API, SnapStart snapshots, and multi-tenant scheduling — the interview answer that separates a user from an operator.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What Lambda is really doing under the hood</h2>
+    <p>You upload a zip or container image. Someone hits an HTTPS endpoint, drops a file into S3, or writes a row to DynamoDB. Milliseconds later a fresh, isolated environment appears out of nowhere, runs your handler, and vanishes when it's no longer needed. You pay for the milliseconds it ran. <strong>How</strong> is that possible on shared hardware, safely, across millions of untrusted customers, without a fleet of always-on VMs?</p>
+    <p>That question is the interview. AWS Lambda is not "just a container." It's a compute plane built on top of a Rust-based hypervisor called <strong>Firecracker</strong>, a control plane that places microVMs onto a bare-metal worker fleet, a strict <strong>Init → Invoke → Shutdown</strong> execution environment lifecycle, and an HTTP-based <strong>Runtime API</strong> that lets any language talk to the platform. It's the same substrate that powers <strong>AWS Fargate</strong>, and the design ideas ripple through Google Cloud Run, Azure Container Apps, Fly.io, and every serious FaaS since 2018.</p>
+    <p>Interviewers love this topic because it forces you to reason about virtualization vs containerization, cold-start economics, snapshotting, multi-tenant isolation, and the physics of "scale to zero." If you can whiteboard Firecracker, the lifecycle, SnapStart, and the concurrency model, you're demonstrating principal-engineer-level depth in one answer.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Explain it like I've never opened a terminal</h2>
+    <p>Imagine you own a food-truck kitchen. Some days nobody orders anything. Other days a wedding party of 300 walks up in the same minute. You could rent a giant kitchen "just in case" — but that's expensive and mostly empty. Or you could keep <strong>tiny, identical mini-kitchens</strong> folded up in a warehouse, and unfold one only when a customer arrives, cook the dish, then fold it back up. That's Lambda.</p>
+    <p>When you "write a Lambda function," you're writing the recipe. AWS keeps the recipe in a warehouse. The moment a customer places an order — someone visits your website, uploads a photo, sends a message — AWS <strong>pops open a fresh mini-kitchen</strong> in a fraction of a second, lets your recipe cook one dish, and then either keeps the kitchen open in case another order arrives soon, or folds it away. You are billed for the seconds your kitchen was cooking, not for the empty warehouse hours.</p>
+    <p>The clever part is that the "mini-kitchen" is actually a very small, very fast <strong>virtual computer</strong> called a microVM. Think of it as a full kitchen inside a shipping container — sealed off from all other kitchens on the same truck, so if one customer's recipe catches fire (or is malicious), no one else's dish is ruined. AWS invented a lightweight hypervisor called <strong>Firecracker</strong> just to make these containers boot in milliseconds instead of minutes.</p>
+    <p>The hard part? Two things. <strong>Booting takes time.</strong> The first order after a quiet period is called a "cold start" and is slower — the kitchen has to be unfolded. AWS spent years shaving that down to under a second, and their newest trick, <strong>SnapStart</strong>, is like taking a photograph of an already-warmed-up kitchen and cloning it — the next order arrives to a kitchen that's already got the oven at 400°F. <strong>The other hard part is scale:</strong> when 10,000 customers show up at once, AWS has to spin up 10,000 kitchens across thousands of physical trucks, load-balance them, isolate them, and bill them separately — all without you doing anything.</p>
+    <p>Products you already use that run on Lambda-shaped systems: parts of <strong>Netflix</strong>, <strong>Coca-Cola's vending backend</strong>, iRobot, Slack's file-upload pipeline, Amazon Alexa, and thousands of "just call this webhook when X happens" glue jobs. Once you see it, you see it everywhere.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What the platform has to deliver</h2>
+    <p>Lambda is the platform, so its requirements are what <em>Amazon</em> promises to its customers. Interviewers will expect you to name both the functional and non-functional constraints and to quote the real published numbers.</p>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Run arbitrary customer code from many languages (managed runtimes for Node.js, Python, Java, .NET, Go, Ruby; custom runtimes via the Runtime API).</li>
+      <li>Deliver events from 200+ sources: HTTPS (API Gateway/ALB/Function URLs), S3, DynamoDB Streams, Kinesis, SQS, SNS, EventBridge, MQ, MSK, self-managed Kafka, CloudWatch, IoT, Step Functions.</li>
+      <li>Support synchronous (<code>RequestResponse</code>), asynchronous (<code>Event</code>), and poll-based (Event Source Mappings) invocation.</li>
+      <li>Scale to zero when idle, scale to thousands of concurrent environments in seconds.</li>
+      <li>Bill per millisecond of execution and per configured memory (128 MiB – 10 GiB).</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Strong isolation</strong> between tenants — VM-grade, not just container-grade — because customer code is untrusted by default.</li>
+      <li><strong>High density</strong> — thousands of tenants per bare-metal host — to make per-request pricing economically viable.</li>
+      <li><strong>Sub-second cold start</strong> for typical code, and <strong>&lt; 100 ms warm invoke overhead</strong>.</li>
+      <li><strong>Global availability</strong> across every AWS region, with retries and DLQs for async paths.</li>
+    </ul>
+
+    <h3>The numbers to quote (2026)</h3>
+    <table>
+      <tr><th>Metric</th><th>Value</th><th>Source</th></tr>
+      <tr><td>Default account concurrency</td><td>1,000 concurrent executions per region</td><td>AWS Lambda Concurrency docs</td></tr>
+      <tr><td>Per-function scale rate</td><td>+1,000 new environments per 10 seconds (per function)</td><td>AWS Lambda Concurrency docs</td></tr>
+      <tr><td>Cold-start frequency (typical)</td><td>&lt; 1% of invocations</td><td>Operating Lambda blog (AWS)</td></tr>
+      <tr><td>Cold-start duration</td><td>&lt; 100 ms to &gt; 1 s, language-dependent</td><td>AWS Developer Guide</td></tr>
+      <tr><td>Standard Init phase cap</td><td>10 seconds (retries at first invoke)</td><td>Lambda runtime environment docs</td></tr>
+      <tr><td>PC/SnapStart/Managed Instances Init cap</td><td>130 s or configured timeout (max 900 s)</td><td>Lambda runtime environment docs</td></tr>
+      <tr><td>Max function timeout</td><td>900 s (15 min)</td><td>AWS Lambda service limits</td></tr>
+      <tr><td>Memory range</td><td>128 MiB – 10,240 MiB</td><td>AWS Lambda service limits</td></tr>
+      <tr><td><code>/tmp</code> ephemeral storage</td><td>512 MiB – 10,240 MiB</td><td>AWS Lambda service limits</td></tr>
+      <tr><td>Firecracker VMM memory overhead</td><td>&lt; 5 MiB per microVM (VMM only)</td><td>firecracker-microvm.github.io</td></tr>
+      <tr><td>Firecracker emulated devices</td><td>Exactly 5 (virtio-net/block/vsock, serial, i8042)</td><td>Firecracker README</td></tr>
+      <tr><td>Container image dedup granularity</td><td>512 KiB block-level content-addressed</td><td>Brooker et al., USENIX ATC '23</td></tr>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>Control plane, data plane, and worker fleet</h2>
+    <p>Lambda is a two-plane system. The <strong>control plane</strong> handles function definitions, versions, configuration, IAM, and — critically — <em>placement</em>: deciding which physical worker should run the next invocation. The <strong>data plane</strong> is the hot path: the frontend that accepts <code>Invoke</code> calls, the workers running Firecracker, and the pollers pulling events from queues and streams.</p>
+
+    <p>When you call <code>Invoke</code>, the request first lands on the <strong>Lambda frontend</strong>. The frontend authorizes the call, looks up the function, and asks the <strong>Worker Manager</strong> for a live execution environment to route to. If a warm environment exists for that <code>(function version, version)</code>, the frontend forwards the payload straight to it. If not, the Worker Manager asks the <strong>Placement Service</strong> to pick a physical worker, spawn a fresh Firecracker microVM, pull the code, run Init, and register the new environment. The request then flows through — this is the "cold start" path. Every subsequent invoke can reuse the now-warm environment for a non-deterministic period.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AWS Lambda control-plane and data-plane architecture">
+        <defs>
+          <marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#4cc38a"/>
+          </marker>
+          <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#ffb454"/>
+          </marker>
+        </defs>
+
+        <!-- Clients -->
+        <rect x="20" y="30" width="140" height="60" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="90" y="55" fill="#e7ecf3" text-anchor="middle" font-size="13" font-weight="700">API GW / ALB</text>
+        <text x="90" y="75" fill="#7fa2ff" text-anchor="middle" font-size="11">HTTP invokes</text>
+
+        <rect x="20" y="110" width="140" height="60" rx="10" fill="#1b2940" stroke="#4cc38a"/>
+        <text x="90" y="135" fill="#e7ecf3" text-anchor="middle" font-size="13" font-weight="700">S3 / DynDB / EB</text>
+        <text x="90" y="155" fill="#4cc38a" text-anchor="middle" font-size="11">Async events</text>
+
+        <rect x="20" y="190" width="140" height="60" rx="10" fill="#1b2940" stroke="#ffb454"/>
+        <text x="90" y="215" fill="#e7ecf3" text-anchor="middle" font-size="13" font-weight="700">SQS / Kinesis / MSK</text>
+        <text x="90" y="235" fill="#ffb454" text-anchor="middle" font-size="11">Poll-based (ESM)</text>
+
+        <!-- Frontend -->
+        <rect x="220" y="90" width="180" height="80" rx="12" fill="#243154" stroke="#7fa2ff" stroke-width="2"/>
+        <text x="310" y="118" fill="#fff" text-anchor="middle" font-size="14" font-weight="800">Lambda Frontend</text>
+        <text x="310" y="138" fill="#c6d0e0" text-anchor="middle" font-size="11">Auth · Invoke API</text>
+        <text x="310" y="155" fill="#c6d0e0" text-anchor="middle" font-size="11">Sync 200 / Async 202</text>
+
+        <!-- Internal queue -->
+        <rect x="220" y="190" width="180" height="50" rx="10" fill="#243154" stroke="#4cc38a"/>
+        <text x="310" y="220" fill="#4cc38a" text-anchor="middle" font-size="12" font-weight="700">Internal Async Queue</text>
+
+        <!-- ESM Poller -->
+        <rect x="220" y="260" width="180" height="50" rx="10" fill="#243154" stroke="#ffb454"/>
+        <text x="310" y="290" fill="#ffb454" text-anchor="middle" font-size="12" font-weight="700">Event Source Mapping</text>
+
+        <!-- Control plane -->
+        <rect x="450" y="30" width="200" height="80" rx="12" fill="#3d2d5a" stroke="#c084fc" stroke-width="2"/>
+        <text x="550" y="58" fill="#fff" text-anchor="middle" font-size="14" font-weight="800">Control Plane</text>
+        <text x="550" y="78" fill="#e0c4ff" text-anchor="middle" font-size="11">Worker Manager</text>
+        <text x="550" y="95" fill="#e0c4ff" text-anchor="middle" font-size="11">Placement Service</text>
+
+        <!-- Data plane workers -->
+        <rect x="450" y="145" width="410" height="330" rx="14" fill="none" stroke="#5b6677" stroke-dasharray="4 4"/>
+        <text x="655" y="165" fill="#7f8aa0" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="1">DATA PLANE · BARE-METAL WORKER FLEET</text>
+
+        <!-- Worker A -->
+        <rect x="465" y="180" width="180" height="140" rx="10" fill="#132633" stroke="#7fa2ff"/>
+        <text x="555" y="200" fill="#e7ecf3" text-anchor="middle" font-size="12" font-weight="700">Worker (EC2 metal)</text>
+        <text x="555" y="216" fill="#7f8aa0" text-anchor="middle" font-size="10">Linux + KVM</text>
+
+        <rect x="480" y="230" width="72" height="38" rx="6" fill="#1b3652" stroke="#4cc38a"/>
+        <text x="516" y="253" fill="#c6d0e0" text-anchor="middle" font-size="10" font-weight="700">µVM A₁</text>
+        <rect x="558" y="230" width="72" height="38" rx="6" fill="#1b3652" stroke="#4cc38a"/>
+        <text x="594" y="253" fill="#c6d0e0" text-anchor="middle" font-size="10" font-weight="700">µVM A₂</text>
+        <rect x="480" y="275" width="72" height="38" rx="6" fill="#1b3652" stroke="#4cc38a"/>
+        <text x="516" y="298" fill="#c6d0e0" text-anchor="middle" font-size="10" font-weight="700">µVM B₁</text>
+        <rect x="558" y="275" width="72" height="38" rx="6" fill="#1b3652" stroke="#4cc38a"/>
+        <text x="594" y="298" fill="#c6d0e0" text-anchor="middle" font-size="10" font-weight="700">µVM C₁</text>
+
+        <!-- Worker B -->
+        <rect x="670" y="180" width="180" height="140" rx="10" fill="#132633" stroke="#7fa2ff"/>
+        <text x="760" y="200" fill="#e7ecf3" text-anchor="middle" font-size="12" font-weight="700">Worker (EC2 metal)</text>
+        <text x="760" y="216" fill="#7f8aa0" text-anchor="middle" font-size="10">Linux + KVM</text>
+        <rect x="685" y="230" width="72" height="38" rx="6" fill="#1b3652" stroke="#4cc38a"/>
+        <text x="721" y="253" fill="#c6d0e0" text-anchor="middle" font-size="10" font-weight="700">µVM D₁</text>
+        <rect x="763" y="230" width="72" height="38" rx="6" fill="#1b3652" stroke="#4cc38a"/>
+        <text x="799" y="253" fill="#c6d0e0" text-anchor="middle" font-size="10" font-weight="700">µVM E₁</text>
+        <rect x="685" y="275" width="72" height="38" rx="6" fill="#1b3652" stroke="#4cc38a"/>
+        <text x="721" y="298" fill="#c6d0e0" text-anchor="middle" font-size="10" font-weight="700">µVM F₁</text>
+        <rect x="763" y="275" width="72" height="38" rx="6" fill="#1b3652" stroke="#4cc38a"/>
+        <text x="799" y="298" fill="#c6d0e0" text-anchor="middle" font-size="10" font-weight="700">µVM G₁</text>
+
+        <!-- Code storage -->
+        <rect x="465" y="345" width="385" height="60" rx="10" fill="#2a1e0e" stroke="#ff9900"/>
+        <text x="657" y="368" fill="#ff9900" text-anchor="middle" font-size="12" font-weight="800">Content-Addressed Code &amp; Layer Store</text>
+        <text x="657" y="386" fill="#e7ecf3" text-anchor="middle" font-size="10">512 KiB chunks · block-level dedup · lazy fetch on cold start</text>
+
+        <!-- Snapshot store -->
+        <rect x="465" y="420" width="385" height="45" rx="10" fill="#1a2b3d" stroke="#00b4d8"/>
+        <text x="657" y="440" fill="#00b4d8" text-anchor="middle" font-size="12" font-weight="800">SnapStart Snapshot Cache</text>
+        <text x="657" y="456" fill="#c6d0e0" text-anchor="middle" font-size="10">Encrypted Firecracker memory + disk snapshots</text>
+
+        <!-- Arrows -->
+        <line x1="160" y1="60" x2="218" y2="115" stroke="#7fa2ff" stroke-width="2" marker-end="url(#ar1)"/>
+        <line x1="160" y1="140" x2="218" y2="145" stroke="#4cc38a" stroke-width="2" marker-end="url(#ar2)"/>
+        <line x1="160" y1="220" x2="218" y2="280" stroke="#ffb454" stroke-width="2" marker-end="url(#ar3)"/>
+        <line x1="310" y1="240" x2="310" y2="258" stroke="#4cc38a" stroke-width="2" marker-end="url(#ar2)"/>
+        <line x1="400" y1="130" x2="465" y2="230" stroke="#7fa2ff" stroke-width="2" marker-end="url(#ar1)"/>
+        <line x1="400" y1="215" x2="465" y2="240" stroke="#4cc38a" stroke-width="2" marker-end="url(#ar2)"/>
+        <line x1="400" y1="285" x2="465" y2="285" stroke="#ffb454" stroke-width="2" marker-end="url(#ar3)"/>
+        <line x1="550" y1="110" x2="550" y2="180" stroke="#c084fc" stroke-width="2" marker-end="url(#ar1)" stroke-dasharray="6 3"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7fa2ff"></span>Sync data-plane path</span>
+        <span><span class="dot" style="background:#4cc38a"></span>Async / queued path</span>
+        <span><span class="dot" style="background:#ffb454"></span>Poll-based (ESM)</span>
+        <span><span class="dot" style="background:#c084fc"></span>Control-plane placement</span>
+      </div>
+    </div>
+
+    <p>The control-plane hop is off the hot path. Once the environment exists and the Worker Manager has cached the placement, subsequent invokes route directly frontend → worker. That's why warm invokes add only a few milliseconds of overhead over the code itself.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a cold start, warm reuse, and SnapStart restore</h2>
+    <p>This animation walks through what actually happens the first time a request arrives to a Lambda function — including the placement handshake, Firecracker microVM boot, Init phase, warm reuse, and then a SnapStart restore replacing the slow path.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Lambda cold start and SnapStart animation">
+        <!-- static labels -->
+        <text x="60" y="30" fill="#7fa2ff" font-size="11" font-weight="800" letter-spacing="1">CLIENT</text>
+        <text x="240" y="30" fill="#7fa2ff" font-size="11" font-weight="800" letter-spacing="1">FRONTEND</text>
+        <text x="420" y="30" fill="#c084fc" font-size="11" font-weight="800" letter-spacing="1">CONTROL PLANE</text>
+        <text x="640" y="30" fill="#4cc38a" font-size="11" font-weight="800" letter-spacing="1">WORKER (Firecracker)</text>
+
+        <!-- boxes -->
+        <rect x="20" y="45" width="140" height="60" rx="10" fill="#1b2940" stroke="#7fa2ff" id="cli-box" class="a-el"/>
+        <text x="90" y="80" fill="#e7ecf3" text-anchor="middle" font-size="13" font-weight="700">API Gateway</text>
+
+        <rect x="210" y="45" width="150" height="60" rx="10" fill="#1b2940" stroke="#7fa2ff" id="fe-box" class="a-el"/>
+        <text x="285" y="72" fill="#e7ecf3" text-anchor="middle" font-size="13" font-weight="700">Lambda</text>
+        <text x="285" y="90" fill="#e7ecf3" text-anchor="middle" font-size="13" font-weight="700">Frontend</text>
+
+        <rect x="410" y="45" width="170" height="60" rx="10" fill="#3d2d5a" stroke="#c084fc" id="cp-box" class="a-el"/>
+        <text x="495" y="72" fill="#fff" text-anchor="middle" font-size="12" font-weight="700">Worker Mgr +</text>
+        <text x="495" y="90" fill="#fff" text-anchor="middle" font-size="12" font-weight="700">Placement</text>
+
+        <rect x="630" y="45" width="240" height="200" rx="12" fill="#0e2431" stroke="#4cc38a" id="worker" class="a-el"/>
+        <text x="750" y="70" fill="#4cc38a" text-anchor="middle" font-size="12" font-weight="700">Bare-metal worker</text>
+
+        <!-- microVM box (starts hidden) -->
+        <rect x="650" y="85" width="200" height="145" rx="10" fill="#132633" stroke="#4cc38a" stroke-dasharray="4 3" id="mvm" class="a-el a-hidden" data-anim="mvm"/>
+        <text x="750" y="105" fill="#e7ecf3" text-anchor="middle" font-size="12" font-weight="700" id="mvm-label" data-anim="mvm">Firecracker µVM</text>
+
+        <!-- Init phases inside mvm -->
+        <rect x="665" y="118" width="170" height="24" rx="6" fill="#1b3652" stroke="#7fa2ff" id="p-ext" class="a-el a-hidden" data-anim="mvm"/>
+        <text x="750" y="135" fill="#c6d0e0" text-anchor="middle" font-size="10" data-anim="mvm">Extension init</text>
+
+        <rect x="665" y="147" width="170" height="24" rx="6" fill="#1b3652" stroke="#7fa2ff" id="p-rt" class="a-el a-hidden" data-anim="mvm"/>
+        <text x="750" y="164" fill="#c6d0e0" text-anchor="middle" font-size="10" data-anim="mvm">Runtime init</text>
+
+        <rect x="665" y="176" width="170" height="24" rx="6" fill="#1b3652" stroke="#7fa2ff" id="p-fn" class="a-el a-hidden" data-anim="mvm"/>
+        <text x="750" y="193" fill="#c6d0e0" text-anchor="middle" font-size="10" data-anim="mvm">Function init (static code)</text>
+
+        <rect x="665" y="205" width="170" height="24" rx="6" fill="#1b5236" stroke="#4cc38a" id="p-inv" class="a-el a-hidden" data-anim="mvm"/>
+        <text x="750" y="222" fill="#c6d0e0" text-anchor="middle" font-size="10" data-anim="mvm">Handler invoke</text>
+
+        <!-- Request pill -->
+        <g id="req" class="a-el a-hidden" data-anim="req">
+          <rect x="0" y="0" width="70" height="26" rx="13" fill="#7fa2ff"/>
+          <text x="35" y="17" fill="#0f1420" text-anchor="middle" font-size="11" font-weight="800">req</text>
+        </g>
+
+        <!-- Snapshot cache -->
+        <rect x="20" y="290" width="330" height="80" rx="12" fill="#1a2b3d" stroke="#00b4d8" id="snap-store" class="a-el a-hidden" data-anim="snap"/>
+        <text x="185" y="315" fill="#00b4d8" text-anchor="middle" font-size="12" font-weight="800" data-anim="snap">SnapStart Snapshot Cache</text>
+        <text x="185" y="335" fill="#c6d0e0" text-anchor="middle" font-size="10" data-anim="snap">Encrypted memory + disk of a pre-initialized µVM</text>
+        <rect x="150" y="345" width="70" height="18" rx="4" fill="#0f2b3a" stroke="#00b4d8" data-anim="snap"/>
+        <text x="185" y="359" fill="#00b4d8" text-anchor="middle" font-size="10" font-weight="700" data-anim="snap">v42.snap</text>
+
+        <!-- Restore arrow -->
+        <line x1="350" y1="330" x2="650" y2="185" stroke="#00b4d8" stroke-width="2" stroke-dasharray="4 3" id="restore-arrow" class="a-el a-hidden" data-anim="snap"/>
+
+        <!-- Caption placeholder inside svg for pop of color state -->
+        <rect x="380" y="290" width="500" height="80" rx="12" fill="#111a2a" stroke="#2a3652" id="state" class="a-el"/>
+        <text x="630" y="315" fill="#7fa2ff" text-anchor="middle" font-size="12" font-weight="800">EXECUTION ENVIRONMENT STATE</text>
+        <text x="630" y="345" fill="#c6d0e0" text-anchor="middle" font-size="14" font-weight="700" id="state-text">Idle · no environments</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const setState = (t) => { const el = $('#state-text'); if (el) el.textContent = t; };
+        const move = (id, x, y) => { const el = $(id); if (el) el.setAttribute('transform', `translate(${x},${y})`); };
+        const show = (sel) => $$(sel).forEach(el => el.classList.remove('a-hidden'));
+        const hide = (sel) => $$(sel).forEach(el => el.classList.add('a-hidden'));
+        const glow = (sel) => $$(sel).forEach(el => el.classList.add('a-glow'));
+        const unglow = () => $$('.a-glow').forEach(el => el.classList.remove('a-glow'));
+
+        const CFG = {
+          intro: 'A first request triggers a cold start; a repeat request reuses the warm env; SnapStart short-circuits the slow path.',
+          interval: 1900,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => el.classList.add('a-hidden'));
+            r.querySelectorAll('.a-glow').forEach(el => el.classList.remove('a-glow'));
+            const req = r.querySelector('#req');
+            if (req) req.removeAttribute('transform');
+            setState('Idle · no environments');
+          },
+          steps: [
+            { caption: 'Client hits API Gateway with the first request for this function version.',
+              apply: (r, $$$) => { const req = $('#req'); req.classList.remove('a-hidden'); req.setAttribute('transform','translate(30,60)'); glow('#cli-box'); setState('Cold — no warm environments'); } },
+            { caption: 'Frontend receives the Invoke and asks the Worker Manager for a live environment.',
+              apply: () => { unglow(); $('#req').setAttribute('transform','translate(220,60)'); glow('#fe-box'); } },
+            { caption: 'Worker Manager asks the Placement Service to pick a bare-metal worker and spawn a fresh Firecracker microVM.',
+              apply: () => { unglow(); glow('#cp-box'); setState('Placement selecting worker…'); } },
+            { caption: 'Firecracker boots a microVM on the chosen worker in under ~125 ms. Jailer applies cgroups + namespaces + seccomp.',
+              apply: () => { unglow(); show('#mvm'); glow('#mvm'); setState('µVM booted — Init phase begins'); } },
+            { caption: 'Init phase — Extension init runs (any registered Lambda extensions start).',
+              apply: () => { unglow(); show('#p-ext'); glow('#p-ext'); } },
+            { caption: 'Init phase — Runtime init bootstraps the language runtime and connects to the Runtime API endpoint.',
+              apply: () => { unglow(); show('#p-rt'); glow('#p-rt'); } },
+            { caption: 'Init phase — Function init runs your static code (imports, DB connections, model loads) outside the handler.',
+              apply: () => { unglow(); show('#p-fn'); glow('#p-fn'); setState('Init done · ready to handle events'); } },
+            { caption: 'Handler invoked — runtime long-polls GET /runtime/invocation/next and processes the event.',
+              apply: () => { unglow(); show('#p-inv'); glow('#p-inv'); $('#req').setAttribute('transform','translate(670,180)'); setState('Warm · handling request'); } },
+            { caption: 'After the response, the environment is frozen — CPU suspended, /tmp preserved — waiting for the next request.',
+              apply: () => { unglow(); $('#req').classList.add('a-hidden'); setState('Frozen · reusable for warm invokes'); } },
+            { caption: 'SnapStart alternative — instead of Init from scratch, Lambda restores a cached, encrypted Firecracker snapshot.',
+              apply: () => { unglow(); show('#snap-store'); show('#restore-arrow'); glow('#snap-store'); setState('Restore phase — resume from snapshot'); } },
+            { caption: 'Result: environment is invoke-ready in a fraction of the time, at the cost of handling snapshot-uniqueness in afterRestore hooks.',
+              apply: () => { unglow(); glow('#mvm'); setState('Warm via SnapStart · handler invokes immediately'); } }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>The execution environment lifecycle</h3>
+    <p>Every Lambda invocation runs inside an <strong>execution environment</strong> — a sandboxed process tree inside a Firecracker microVM. The lifecycle has three phases (four with SnapStart): <strong>Init → Restore (optional) → Invoke → Shutdown</strong>. Each phase begins with an event Lambda dispatches to the runtime and to every registered extension, and completes when they signal readiness by issuing a <code>Next</code> request against the Runtime API. Between events, Lambda <em>freezes</em> the environment's processes — that's how it stops billing you and how one worker can hold thousands of dormant environments.</p>
+
+    <p>The <strong>Init</strong> phase does three concrete jobs: <em>Extension init</em> (start every registered extension), <em>Runtime init</em> (bootstrap the language runtime), <em>Function init</em> (execute the static code above your handler — imports, DB pool creation, model loading). For SnapStart-enabled functions, Init also runs <code>beforeCheckpoint</code> hooks. Standard functions get 10 seconds for the whole Init phase; PC, SnapStart, and Managed Instances functions get up to 130 s or the function timeout (max 900 s). On timeout, the standard function retries Init at first invocation using the configured function timeout.</p>
+
+    <p>The <strong>Invoke</strong> phase is what you pay for. It fires when an event arrives. Crucially, <strong>each execution environment handles exactly one request at a time</strong> in the default runtime — Lambda's fundamental concurrency unit. Six simultaneous API Gateway requests against a function with no warm environments produce six cold starts, because you need six independent environments. AWS keeps environments alive for a non-deterministic period between invokes (in practice, empirical measurements show 5–15 minutes for typical workloads) and proactively recycles them every few hours for patching.</p>
+
+    <p>The <strong>Shutdown</strong> phase gives extensions time to flush before Lambda terminates the process. The window depends on what's registered: <strong>0 ms with no extensions, 500 ms with an internal extension, 2,000 ms with one or more external extensions</strong>. Anything that doesn't respond by the deadline gets a <strong>SIGKILL</strong>.</p>
+
+    <h3>Firecracker — the isolation primitive</h3>
+    <p>Firecracker is a purpose-built, open-source, Rust-based Virtual Machine Monitor (VMM) that AWS created for Lambda and Fargate. It's a fork of Google's crosvm, aggressively stripped down. It runs each microVM on Linux KVM (hardware virtualization), giving VM-grade isolation between tenants — you're not sharing a kernel with your noisy neighbor, unlike containers. That matters because customer code is untrusted.</p>
+
+    <p>The design that makes Firecracker special is <strong>minimalism</strong>. It exposes only five emulated devices to the guest: <code>virtio-net</code> (network), <code>virtio-block</code> (disk), <code>virtio-vsock</code> (host-guest RPC), a serial console, and a minimal i8042 keyboard controller used only to signal the microVM to stop. No VGA, no USB, no BIOS emulation, no PCI. Fewer devices means less code, less attack surface, and less memory — <strong>under 5 MiB of VMM memory overhead per microVM</strong>, which is how a single bare-metal host can safely pack thousands of tenants.</p>
+
+    <p>Firecracker also hardens the VMM process with thread-specific <strong>seccomp filters</strong> (each thread has a narrowly scoped syscall allowlist), and it uses a separate binary called the <strong>Jailer</strong> to set up isolation before launching the VMM: <code>unshare</code> namespaces (mount, PID, optionally network), <code>pivot_root</code> into a chroot, <code>cgroup</code> v1/v2 constraints on CPU and memory, drop to a non-root UID/GID, close inherited file descriptors, clear environment, apply <code>setrlimit</code> ceilings, then <code>exec</code> Firecracker. Every microVM sits inside three layers of defense.</p>
+
+    <h3>The Runtime API — how your code talks to Lambda</h3>
+    <p>Managed runtimes and custom runtimes both use the <strong>Lambda Runtime API</strong>, a versioned HTTP interface (current version <code>2018-06-01</code>). The runtime discovers the endpoint from the <code>AWS_LAMBDA_RUNTIME_API</code> environment variable Lambda injects into the execution environment, and composes URLs like <code>http://$AWS_LAMBDA_RUNTIME_API/2018-06-01/runtime/invocation/next</code>. The core loop is a <strong>long-poll GET</strong> on <code>/runtime/invocation/next</code> — the runtime process may be frozen for several seconds while waiting for an event. This is the mechanism Lambda uses to cheaply suspend the environment between invokes: everything blocks on that single HTTP call.</p>
+
+    <p>Other endpoints on the same API: <code>POST /runtime/invocation/{req_id}/response</code> to return the result, <code>POST /runtime/invocation/{req_id}/error</code> for handler errors, and <code>POST /runtime/init/error</code> for Init-phase failures. Extensions register on <code>/runtime/register</code> and receive lifecycle events on <code>/extension/event/next</code>. That's the entire contract — any language that speaks HTTP can be a Lambda runtime.</p>
+
+    <h3>Code loading &amp; layers</h3>
+    <p>Container images and zip functions are content-addressed. AWS unpacks images into a flat filesystem and splits it into <strong>512 KiB chunks</strong>, hashes each chunk, and stores unique chunks once. Brooker et al.'s USENIX ATC '23 paper reports that <strong>roughly 75% of Lambda container images contain less than 5% unique bytes</strong>, so this dedup is enormous — the same base Python image, same node_modules, same JVM runtime chunks fan out across millions of functions from a small deduplicated store. Chunks are fetched lazily on demand as the microVM boots.</p>
+
+    <p><strong>Lambda Layers</strong> are a lighter-weight variant of the same idea for zip functions: attach up to 5 layers per function, each an independently versioned zip. Lambda extracts each layer's contents into <code>/opt</code> inside the environment. Every runtime's search paths (<code>/opt/bin</code>, <code>/opt/lib</code>, <code>/opt/python</code>, <code>/opt/nodejs/node_modules</code>, etc.) already include those directories, so imports "just work" without you knowing a layer was involved.</p>
+
+    <h3>SnapStart — Init at publish time</h3>
+    <p>Cold starts on JVM-heavy handlers (Java, Spring) are painful — sometimes 2–5 seconds — because class loading, JIT warm-up, and framework initialization dominate. SnapStart cuts that by shifting the Init phase to <strong>version-publish time</strong>. Here's the mechanic: when you publish a function version with SnapStart on, Lambda spins up a Firecracker microVM, runs Init (including your <code>beforeCheckpoint</code> hooks), and then takes a <strong>Firecracker snapshot of the microVM's memory and disk state</strong>. That snapshot is encrypted and cached for low-latency access.</p>
+
+    <p>On first invoke and on scale-up, instead of starting from scratch, Lambda <strong>resumes new environments from the cached snapshot</strong> — that's the <em>Restore</em> phase in the lifecycle. Firecracker's snapshot format captures three things: the guest memory file, the microVM state file (both KVM and Firecracker-emulated hardware state), and disk state. Restore uses <code>MAP_PRIVATE</code> so each resumed environment gets its own copy-on-write view of guest memory.</p>
+
+    <p>The catch is <strong>uniqueness</strong>. A single snapshot is shared across many resumed environments — anything that must be per-instance-unique will be duplicated if you baked it into Init. That includes: cryptographic random seeds (yes, the RNG state is snapshotted), ephemeral IDs, cached credentials with a lifetime, and any TCP connection whose server-side state won't tolerate being cloned. The workaround is runtime hooks: use <code>beforeCheckpoint</code> to release stateful resources before the snapshot, and <code>afterRestore</code> to regenerate them on wake. In Java that's <code>Core.getGlobalContext().register(new Resource() {...})</code>.</p>
+
+    <h3>Fairness &amp; multi-tenancy</h3>
+    <p>The Worker Manager and Placement Service — briefly named in the NSDI '20 and ATC '23 papers, but not otherwise publicly documented — handle placement. They pick which worker gets a new microVM, weighing bin-packing (density) against noisy-neighbor risk. Once placed, the Jailer's cgroup constraints and the Firecracker VMM's own accounting enforce per-tenant limits. Network egress is rate-limited at the vsock/virtio boundary. AWS has published enough at NSDI/ATC to convince security auditors, but the exact scheduling algorithm remains proprietary.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>What data structures power the platform</h2>
+    <p>Lambda's internals are less flashy than a distributed database, but they lean on some classic algorithmic building blocks.</p>
+
+    <table>
+      <tr><th>Component</th><th>Structure / algorithm</th><th>Why</th><th>Complexity</th></tr>
+      <tr><td>Placement / scheduling</td><td>Bin-packing + power-of-2 choices load balancing</td><td>Pack thousands of µVMs per host while avoiding hot spots</td><td>O(1) placement decision per invoke</td></tr>
+      <tr><td>Warm-environment lookup</td><td>Consistent hashing by <code>(functionARN, version)</code> → worker set</td><td>Sticky routing so warm envs get reused; stable under fleet changes</td><td>O(log n) lookup, O(1) after cache</td></tr>
+      <tr><td>Async queue</td><td>Internal durable FIFO with visibility timeouts (SQS-style)</td><td>Decouple 202 response from execution, enable retries + DLQ</td><td>O(1) enqueue/dequeue amortized</td></tr>
+      <tr><td>Event Source Mapping poller</td><td>Long-polling batched fetch + record-level checkpoint</td><td>Efficient stream/queue consumption without per-record round-trips</td><td>O(batch)</td></tr>
+      <tr><td>Container image dedup</td><td>Content-addressed 512 KiB chunks (Merkle-style hashing)</td><td>~75% of images share &gt;95% of bytes — dedup is massive</td><td>O(n/chunkSize) on ingest, O(1) chunk lookup</td></tr>
+      <tr><td>SnapStart</td><td>Firecracker memory snapshot + <code>MAP_PRIVATE</code> COW restore</td><td>Lazy per-instance divergence from a shared baseline</td><td>O(1) restore, O(pages touched) COW cost</td></tr>
+      <tr><td>Concurrency scaling</td><td>Token-bucket (1,000 new envs / 10 s per function)</td><td>Prevents runaway thundering herds while allowing bursts</td><td>O(1) per-invoke check</td></tr>
+      <tr><td>Runtime API</td><td>HTTP long-poll with cooperative freeze</td><td>Cheap suspend between events — no busy loop needed</td><td>O(1) per Next call</td></tr>
+      <tr><td>Jailer isolation</td><td>Namespaces + cgroups + seccomp BPF filters</td><td>Defense in depth: namespaces isolate, cgroups meter, seccomp restricts syscalls</td><td>O(1) enforcement per syscall</td></tr>
+    </table>
+
+    <p>The elegant idea is that Lambda's density is a <strong>coding-theory problem</strong>: pack many small, cold-most-of-the-time workloads onto shared hardware, ensuring each one wakes quickly and is isolated when awake. Firecracker (small overhead), content-addressed storage (small marginal cost per function), and SnapStart (small marginal cost per cold start) are three independent multiplications on that density.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Where Lambda's pieces map inside AWS</h2>
+    <p>Lambda itself is an AWS service, so the "AWS implementation" is really the internal AWS architecture. Here's how each layer maps to concrete AWS technology.</p>
+
+    <table>
+      <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+      <tr><td>Ingress</td><td>API Gateway, ALB, CloudFront Function URLs, direct <code>Invoke</code> API</td><td>Accept and authenticate customer traffic; route to Lambda frontend</td></tr>
+      <tr><td>Async plumbing</td><td>Internal durable queue (SQS-like), retry &amp; DLQ pipeline</td><td>Return 202 fast; retry with exponential backoff; DLQ to SQS/SNS on failure</td></tr>
+      <tr><td>Event Source Mapping</td><td>Managed poller fleet</td><td>Read Kinesis/DynamoDB Streams/SQS/MSK/Kafka batches; invoke function</td></tr>
+      <tr><td>Control plane</td><td>Worker Manager + Placement Service</td><td>Decide which bare-metal worker runs which new microVM</td></tr>
+      <tr><td>Compute</td><td>EC2 bare-metal instances running Linux + KVM + Firecracker + Jailer</td><td>Host the microVMs that run customer code</td></tr>
+      <tr><td>Isolation</td><td>Firecracker microVM, Jailer (namespaces/cgroups), seccomp BPF, per-VMM thread filters</td><td>Multi-tenant security &amp; resource limits</td></tr>
+      <tr><td>Runtime interface</td><td>Lambda Runtime API (HTTP <code>2018-06-01</code>)</td><td>Language runtimes fetch invokes, post responses/errors</td></tr>
+      <tr><td>Code storage</td><td>Content-addressed 512 KiB block store (S3-backed for durability, tiered cache close to workers)</td><td>Deduplicated function + layer + image content</td></tr>
+      <tr><td>Snapshot store</td><td>SnapStart snapshot cache (encrypted, tiered)</td><td>Fast restore of pre-initialized Firecracker microVMs</td></tr>
+      <tr><td>Observability</td><td>CloudWatch Logs/Metrics, X-Ray, Lambda Insights</td><td>Per-invoke logs, latency, errors, cold-start counts</td></tr>
+      <tr><td>Security</td><td>IAM, VPC ENIs (Hyperplane), KMS for env vars and snapshots</td><td>Auth, network isolation, encryption at rest</td></tr>
+    </table>
+
+    <p>Two things worth highlighting for interviews: <strong>Hyperplane ENIs</strong> — when your Lambda runs in a VPC, Lambda no longer creates one ENI per environment (that scaling problem was fixed in 2019). Instead, a small pool of shared, multi-tenant ENIs (called Hyperplane) fronts your VPC subnet, so cold-start latency doesn't scale with concurrency. And <strong>Lambda Managed Instances</strong> — a newer feature that keeps a warm pool of environments and can handle <em>multiple</em> requests per environment concurrently (unlike the default one-request-at-a-time model). It's the escape hatch for interviewers who like to needle you about the "one request per environment" claim.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>You don't <em>implement</em> Lambda's internals in your app code — but you can absolutely simulate the pieces that make the interview click. Here's a minimal reference implementation in C# that mirrors what a custom runtime does: <strong>long-poll the Runtime API for the next invocation, execute the handler, post the response.</strong> This is what AWS's own .NET runtime does under the hood, and writing it out proves you understand the contract.</p>
+
+    <pre><code><span class="cmt">// Minimal Lambda custom runtime loop in C# — mirrors the AWS Runtime API contract.
+// Real code you'd bundle as ./bootstrap in a "provided.al2" runtime zip.</span>
+
+<span class="kw">using</span> System;
+<span class="kw">using</span> System.Net.Http;
+<span class="kw">using</span> System.Text;
+<span class="kw">using</span> System.Text.Json;
+<span class="kw">using</span> System.Threading.Tasks;
+
+<span class="kw">public class</span> <span class="typ">LambdaRuntime</span>
+{
+    <span class="kw">private static readonly</span> <span class="typ">HttpClient</span> Http = <span class="kw">new</span>();
+    <span class="kw">private static readonly string</span> ApiBase =
+        <span class="str">$"http://{Environment.GetEnvironmentVariable(<span class="str">"AWS_LAMBDA_RUNTIME_API"</span>)}/2018-06-01/runtime"</span>;
+
+    <span class="kw">public static async</span> <span class="typ">Task</span> <span class="fn">Main</span>()
+    {
+        <span class="cmt">// Function init — this runs once per environment, in the Init phase.
+        // Static setup goes here: DB pools, DI containers, warmed-up config.</span>
+        <span class="kw">var</span> handler = <span class="fn">BuildHandler</span>();
+
+        <span class="cmt">// Invoke loop — one iteration = one Invoke phase.
+        // The GET blocks (long-poll); Lambda freezes the process here between events.</span>
+        <span class="kw">while</span> (<span class="kw">true</span>)
+        {
+            <span class="kw">using var</span> next = <span class="kw">await</span> Http.<span class="fn">GetAsync</span>(<span class="str">$"{ApiBase}/invocation/next"</span>);
+            <span class="kw">var</span> reqId = next.Headers.<span class="fn">GetValues</span>(<span class="str">"Lambda-Runtime-Aws-Request-Id"</span>).First();
+            <span class="kw">var</span> deadlineMs = <span class="fn">long</span>.<span class="fn">Parse</span>(next.Headers.<span class="fn">GetValues</span>(<span class="str">"Lambda-Runtime-Deadline-Ms"</span>).First());
+            <span class="kw">var</span> payload = <span class="kw">await</span> next.Content.<span class="fn">ReadAsStringAsync</span>();
+
+            <span class="kw">try</span>
+            {
+                <span class="kw">var</span> result = <span class="kw">await</span> handler(payload, deadlineMs);
+                <span class="kw">using var</span> body = <span class="kw">new</span> <span class="typ">StringContent</span>(result, <span class="typ">Encoding</span>.UTF8, <span class="str">"application/json"</span>);
+                <span class="kw">await</span> Http.<span class="fn">PostAsync</span>(<span class="str">$"{ApiBase}/invocation/{reqId}/response"</span>, body);
+            }
+            <span class="kw">catch</span> (<span class="typ">Exception</span> ex)
+            {
+                <span class="kw">var</span> err = JsonSerializer.<span class="fn">Serialize</span>(<span class="kw">new</span> { errorMessage = ex.Message, errorType = ex.<span class="fn">GetType</span>().Name });
+                <span class="kw">using var</span> body = <span class="kw">new</span> <span class="typ">StringContent</span>(err, <span class="typ">Encoding</span>.UTF8, <span class="str">"application/json"</span>);
+                <span class="kw">await</span> Http.<span class="fn">PostAsync</span>(<span class="str">$"{ApiBase}/invocation/{reqId}/error"</span>, body);
+            }
+        }
+    }
+
+    <span class="kw">private static</span> <span class="typ">Func</span>&lt;<span class="typ">string</span>, <span class="typ">long</span>, <span class="typ">Task</span>&lt;<span class="typ">string</span>&gt;&gt; <span class="fn">BuildHandler</span>() =&gt;
+        <span class="kw">async</span> (payload, deadlineMs) =&gt;
+        {
+            <span class="kw">using var</span> doc = JsonDocument.<span class="fn">Parse</span>(payload);
+            <span class="kw">var</span> name = doc.RootElement.<span class="fn">TryGetProperty</span>(<span class="str">"name"</span>, <span class="kw">out var</span> n) ? n.<span class="fn">GetString</span>() : <span class="str">"world"</span>;
+            <span class="kw">return</span> JsonSerializer.<span class="fn">Serialize</span>(<span class="kw">new</span> { message = <span class="str">$"Hello, {name}!"</span>, remainingMs = deadlineMs - <span class="typ">DateTimeOffset</span>.UtcNow.ToUnixTimeMilliseconds() });
+        };
+}
+</code></pre>
+
+    <p>Two things this snippet reveals that interviewers probe:</p>
+    <ol>
+      <li>The <strong>long-poll GET</strong> is the entire mechanism for freezing your process between events. There's no magic — just a blocking HTTP call. When Lambda "freezes" you, it's freezing you while you're waiting on this socket. When it thaws you, the socket returns.</li>
+      <li>The <code>Lambda-Runtime-Deadline-Ms</code> header tells you exactly when you'll be SIGKILLed. Use it to bail out gracefully before the platform kills you mid-write.</li>
+    </ol>
+
+    <p>Alternative languages: the same 30 lines work in <strong>Rust</strong> (<code>lambda_runtime</code> crate), <strong>Go</strong> (<code>aws-lambda-go</code>), <strong>Python</strong> (<code>awslambdaric</code> — the real AWS-shipped runtime interface client), or a shell script + <code>curl</code>. The Runtime API is the language-neutral contract.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Design tensions Lambda navigates</h3>
+    <p><strong>Isolation vs density.</strong> Firecracker gives up some of a container's density (a raw container is measured in KiB of overhead; a microVM in low MiB) in exchange for hardware-enforced isolation. AWS accepted that trade because customer code is untrusted and shared-kernel container escape bugs are catastrophic when your tenant is a stranger from the internet.</p>
+
+    <p><strong>Cold start vs cost.</strong> The pay-per-ms billing model requires "scale to zero," which requires environments to actually shut down when idle. But shutting down means the next invoke pays for Init. AWS's answers — Provisioned Concurrency (pre-warm N environments, you pay for idle), SnapStart (Init once at publish, restore on invoke), Lambda Managed Instances (multi-request-per-env warm pool) — each pick a different point on the cold-start-vs-cost curve.</p>
+
+    <p><strong>One request per environment vs concurrency inside one env.</strong> The default "one request at a time" model is dead simple to reason about but wastes CPU on I/O-bound workloads. Managed Instances is the escape hatch. Cloudflare Workers took the opposite extreme (isolate-per-request, thousands per V8 process) and pay for it with a much more restrictive execution model.</p>
+
+    <p><strong>Simplicity vs power.</strong> Lambda deliberately does not let you SSH into the environment, run background threads that outlive a request, or open a listening socket. Those constraints are what make the platform manageable at millions of tenants.</p>
+
+    <h3>Likely bottlenecks</h3>
+    <ul>
+      <li><strong>Container image cold start.</strong> A 500 MB container image can add seconds to the first cold start while chunks stream in, even with dedup. Mitigation: keep images small, use Lambda's optimized base images, favor zip + layers for latency-sensitive functions.</li>
+      <li><strong>VPC networking (pre-Hyperplane workloads).</strong> Historically each ENI creation was slow; Hyperplane fixed it in 2019, but code that predates it still assumes the old cost.</li>
+      <li><strong>Downstream throughput.</strong> Lambda scales faster than most databases. Without connection pooling (RDS Proxy) or asynchronous fan-in, you crush the DB.</li>
+      <li><strong>Per-region account concurrency limit (default 1,000).</strong> Easy to forget until a viral event or a Kinesis backfill lights it up.</li>
+    </ul>
+
+    <h3>Interviewer follow-ups &amp; crisp answers</h3>
+    <div class="qa">
+      <p class="q">Why Firecracker instead of gVisor or plain containers?</p>
+      <p class="a">gVisor intercepts syscalls in user-space — great for compatibility but adds latency and can't match hardware-virtualization security guarantees. Plain containers share the host kernel: one kernel bug and one tenant escapes. Firecracker gives VM-grade isolation with &lt; 5 MiB VMM overhead — enough of both to co-locate untrusted tenants at high density.</p>
+    </div>
+    <div class="qa">
+      <p class="q">How does SnapStart handle randomness?</p>
+      <p class="a">It doesn't — that's on you. The RNG state is inside the snapshot, so if you cache <code>SecureRandom.getInstanceStrong()</code> in Init and reuse it, every resumed environment starts with identical seed state. Fix: reseed in an <code>afterRestore</code> hook. Same rule for anything unique-per-instance (ephemeral IDs, cached tokens).</p>
+    </div>
+    <div class="qa">
+      <p class="q">Why does the Runtime API use HTTP long-polling instead of gRPC or a socket?</p>
+      <p class="a">HTTP is language-universal, easy to implement in any runtime (Python, Rust, shell, .NET all speak it), and long-polling gives Lambda a natural point to freeze the process cheaply — a blocked <code>recv()</code> is essentially free. The simplicity is the feature.</p>
+    </div>
+    <div class="qa">
+      <p class="q">If each environment handles one request at a time, how do you get 10,000 concurrent invocations?</p>
+      <p class="a">Ten thousand environments. Scaling rate is 1,000 new environments every 10 seconds per function; the default per-region account concurrency is 1,000. Above that you burst by requesting a service quota increase or by pre-warming via Provisioned Concurrency.</p>
+    </div>
+    <div class="qa">
+      <p class="q">What actually gets snapshotted?</p>
+      <p class="a">A Firecracker snapshot captures three things: the guest memory file, the microVM state file (both KVM CPU/register state and Firecracker-emulated device state), and the disk state. On restore, guest memory is <code>MAP_PRIVATE</code>-mapped so each resumed environment lazily copies pages it modifies.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Why not just keep every function warm?</p>
+      <p class="a">Economics. Lambda's business model depends on thousands of dormant tenants per host. Keeping every function warm would collapse density and force AWS to charge for idle time — which is exactly what Provisioned Concurrency does, and why it costs extra.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch">
+      <strong>30-second pitch:</strong> Lambda runs your code in a Firecracker microVM — an AWS-built, Rust-based, KVM-backed hypervisor with less than 5 MiB of overhead per instance. Every invocation runs inside an <em>execution environment</em> that follows an <strong>Init → Invoke → Shutdown</strong> lifecycle (plus <em>Restore</em> for SnapStart). Each environment handles one request at a time, so concurrency equals the number of live environments. A control-plane Worker Manager + Placement Service assigns new microVMs to a bare-metal worker fleet. The runtime talks to Lambda over a versioned HTTP Runtime API by long-polling for the next event. SnapStart short-circuits slow JVM cold starts by snapshotting a pre-initialized Firecracker microVM at publish time and restoring it on invoke.
+    </div>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Firecracker overhead: <strong>&lt; 5 MiB per microVM</strong>, exactly <strong>5 emulated devices</strong></li>
+      <li>Cold-start frequency: <strong>&lt; 1% of invocations</strong>, duration <strong>&lt; 100 ms to &gt; 1 s</strong></li>
+      <li>Init cap: <strong>10 s standard</strong>, <strong>up to 130 s / 900 s</strong> for PC/SnapStart/Managed Instances</li>
+      <li>Shutdown: <strong>0 / 500 / 2,000 ms</strong> depending on extensions, then SIGKILL</li>
+      <li>Concurrency: <strong>1,000 per region default</strong>, +1,000 environments per 10 s per function</li>
+      <li>Container images: <strong>75% of images &lt; 5% unique bytes</strong> → massive block-level dedup at 512 KiB granularity</li>
+    </ul>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li><strong>Two-plane architecture</strong> — control plane (Worker Manager, Placement) is off the hot path; data plane (frontend → worker) handles the invoke.</li>
+      <li><strong>Firecracker's design is minimalism</strong> — 5 devices, seccomp per thread, Jailer sets up cgroups + namespaces + privilege drop before <code>exec</code>.</li>
+      <li><strong>Lifecycle drives the mental model</strong> — Init runs once per env, Invoke runs per request, Shutdown gets a small extension-dependent window; SnapStart adds Restore.</li>
+      <li><strong>One request per environment is the concurrency unit</strong> (Managed Instances is the exception). Six simultaneous requests = six environments = six cold starts if none warm.</li>
+      <li><strong>SnapStart trades snapshot uniqueness for speed</strong> — you must regenerate any per-instance-unique state in <code>afterRestore</code>, or all clones share the same "unique" value.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <p>Verified sources from the deep-research pass — primary AWS documentation and Firecracker upstream, plus the two peer-reviewed papers that document the internals.</p>
+    <ul>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html">Understanding the Lambda execution environment lifecycle — AWS Developer Guide</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/operatorguide/execution-environment.html">Execution environment — AWS Lambda Operator Guide</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-invocation.html">Invoking Lambda functions — AWS Developer Guide</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-async.html">Asynchronous invocation — AWS Developer Guide</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/invocation-eventsourcemapping.html">Event source mappings — AWS Developer Guide</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/runtimes-api.html">Lambda Runtime API — AWS Developer Guide</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/chapter-layers.html">Lambda Layers — AWS Developer Guide</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/lambda-concurrency.html">Lambda function scaling — AWS Developer Guide</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/snapstart.html">Lambda SnapStart — AWS Developer Guide</a></li>
+      <li><a href="https://docs.aws.amazon.com/lambda/latest/dg/snapstart-uniqueness.html">Handling uniqueness with SnapStart — AWS Developer Guide</a></li>
+      <li><a href="https://aws.amazon.com/blogs/compute/starting-up-faster-with-aws-lambda-snapstart/">Starting up faster with AWS Lambda SnapStart — AWS Compute Blog</a></li>
+      <li><a href="https://aws.amazon.com/blogs/compute/operating-lambda-performance-optimization-part-1/">Operating Lambda: Performance optimization part 1 — AWS Compute Blog</a></li>
+      <li><a href="https://github.com/firecracker-microvm/firecracker">Firecracker upstream README (github.com/firecracker-microvm/firecracker)</a></li>
+      <li><a href="https://firecracker-microvm.github.io/">Firecracker official site</a></li>
+      <li><a href="https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md">Firecracker Jailer documentation</a></li>
+      <li><a href="https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md">Firecracker snapshot format documentation</a></li>
+      <li><a href="https://www.usenix.org/system/files/nsdi20-paper-agache.pdf">Agache et al., "Firecracker: Lightweight Virtualization for Serverless Applications" — NSDI '20</a></li>
+      <li><a href="https://www.usenix.org/conference/atc23/presentation/brooker">Brooker et al., "On-demand Container Loading in AWS Lambda" — USENIX ATC '23</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via deep-research workflow · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

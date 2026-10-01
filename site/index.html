@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Study Hub — Algorithms · System Design · LeetCode Notes</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --algo: #4361ee; --sd: #f7567c; --notes: #6c5ce7; --ai: #00b4d8;
+    --shadow: 0 4px 18px rgba(27,34,48,.06);
+    --shadow-hover: 0 10px 28px rgba(27,34,48,.12);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--ink); line-height: 1.55; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #6c5ce7 50%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 40px 36px; box-shadow: var(--shadow); margin-bottom: 26px;
+  }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .74rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 8px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.05rem; opacity: .94; }
+
+  .toolbar {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 10px 14px; margin-bottom: 22px; box-shadow: var(--shadow);
+  }
+  .toolbar input {
+    flex: 1 1 240px; min-width: 200px; border: 0; outline: 0; font: 400 .95rem inherit;
+    padding: 8px 10px; border-bottom: 2px solid transparent; transition: border-color .15s;
+  }
+  .toolbar input:focus { border-bottom-color: var(--algo); }
+  .toolbar .chip {
+    font-size: .8rem; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--muted);
+    cursor: pointer; transition: .15s; user-select: none;
+  }
+  .toolbar .chip:hover { background: #eef1f6; color: var(--ink); }
+  .toolbar .chip.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .toolbar .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+  .toolbar .chip.sort { background: #eef2ff; border-color: #c8d3ff; color: var(--algo); }
+  .toolbar .chip.sort:hover { background: #dbe4ff; color: var(--algo); }
+  .toolbar .chip.sort.active { background: var(--algo); color: #fff; border-color: var(--algo); }
+  .toolbar .count { font-size: .82rem; color: var(--muted); font-weight: 700; }
+
+  .group { margin-bottom: 26px; }
+  .group > h2 {
+    font-size: 1.18rem; margin: 0 0 12px; display: flex; align-items: center; gap: 10px;
+    padding: 4px 0;
+  }
+  .group > h2 .dot { width: 10px; height: 22px; border-radius: 4px; display: inline-block; }
+  .group > h2 .badge {
+    margin-left: auto; font-size: .75rem; font-weight: 700; color: var(--muted);
+    background: var(--bg); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line);
+  }
+  .group.algo  h2 .dot { background: var(--algo); }
+  .group.sd    h2 .dot { background: var(--sd); }
+  .group.notes h2 .dot { background: var(--notes); }
+  .group.ai    h2 .dot { background: var(--ai); }
+
+  ul.list { list-style: none; margin: 0; padding: 0; }
+  ul.list li { margin: 0; }
+  ul.list li + li { margin-top: 8px; }
+  a.row {
+    display: grid; grid-template-columns: 108px 34px 1fr auto; align-items: center;
+    gap: 14px; padding: 12px 18px; text-decoration: none; color: var(--ink);
+    background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--algo);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  }
+  a.row:hover { transform: translateY(-1px); box-shadow: var(--shadow-hover); }
+  .group.sd    a.row { border-left-color: var(--sd); }
+  .group.notes a.row { border-left-color: var(--notes); }
+  .group.ai    a.row { border-left-color: var(--ai); }
+  a.row .date {
+    font: 700 .78rem/1 "SF Mono", Consolas, Menlo, monospace;
+    color: var(--muted); letter-spacing: .04em; white-space: nowrap;
+    background: var(--bg); padding: 6px 10px; border-radius: 6px; text-align: center;
+  }
+  a.row .date.new { color: #208b3a; background: #e6f9ec; }
+  a.row .icon { font-size: 1.35rem; text-align: center; }
+  a.row .body .t { font-weight: 700; font-size: 1rem; color: var(--ink); margin-bottom: 2px; }
+  a.row .body .d { font-size: .85rem; color: var(--muted); line-height: 1.4; }
+  a.row .arrow { color: var(--muted); font-size: 1rem; opacity: 0; transition: opacity .12s, transform .12s; }
+  a.row:hover .arrow { opacity: 1; transform: translateX(3px); }
+
+  footer { text-align: center; color: var(--muted); font-size: .82rem; margin-top: 30px; }
+  code { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, monospace; font-size: .88em; }
+
+  @media (max-width: 640px) {
+    a.row { grid-template-columns: 74px 26px 1fr; gap: 10px; padding: 12px 14px; }
+    a.row .arrow { display: none; }
+    a.row .date { font-size: .7rem; padding: 5px 6px; }
+  }
+
+  /* --- Dark mode --- */
+  html[data-theme="dark"] {
+    --bg: #0f1420; --card: #1a2340; --ink: #e7ecf3; --muted: #a0aec0; --line: #2a3652;
+  }
+  html[data-theme="dark"] body { background: #0f1420; color: #e7ecf3; }
+  html[data-theme="dark"] .toolbar { background: #1a2340; border-color: #2a3652; }
+  html[data-theme="dark"] .toolbar input { color: #e7ecf3; background: transparent; }
+  html[data-theme="dark"] .toolbar .chip { background: #2a3652; border-color: #2a3652; color: #a0aec0; }
+  html[data-theme="dark"] .toolbar .chip:hover { background: #3a4a6a; color: #e7ecf3; }
+  html[data-theme="dark"] .toolbar .chip.active { background: #e7ecf3; color: #1a2340; border-color: #e7ecf3; }
+  html[data-theme="dark"] .toolbar .sep { background: #2a3652; }
+  html[data-theme="dark"] .toolbar .chip.sort { background: rgba(67,97,238,.22); border-color: rgba(67,97,238,.35); color: #9db5ff; }
+  html[data-theme="dark"] .toolbar .chip.sort:hover { background: rgba(67,97,238,.32); color: #e7ecf3; }
+  html[data-theme="dark"] .toolbar .chip.sort.active { background: #4361ee; color: #fff; border-color: #4361ee; }
+  html[data-theme="dark"] a.row { background: #1a2340; border-color: #2a3652; color: #e7ecf3; }
+  html[data-theme="dark"] a.row .body .t { color: #e7ecf3; }
+  html[data-theme="dark"] a.row .body .d { color: #a0aec0; }
+  html[data-theme="dark"] a.row .date { background: #2a3652; color: #a0aec0; }
+  html[data-theme="dark"] a.row .date.new { background: rgba(45,198,83,.18); color: #5fd97b; }
+  html[data-theme="dark"] .group > h2 .badge { background: #2a3652; border-color: #2a3652; color: #a0aec0; }
+  html[data-theme="dark"] code { background: #2a3652; color: #e7ecf3; }
+  html[data-theme="dark"] footer { color: #a0aec0; }
+
+  /* Theme toggle button */
+  .theme-toggle {
+    position: fixed; top: 14px; right: 14px; z-index: 70;
+    width: 44px; height: 44px; border-radius: 22px;
+    background: #0f1420; color: #ffd166;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 1.2rem; box-shadow: 0 4px 14px rgba(0,0,0,.25);
+    border: 0; transition: transform .15s, filter .15s; user-select: none;
+  }
+  .theme-toggle:hover { filter: brightness(1.15); transform: scale(1.05); }
+  .theme-toggle:active { transform: scale(.95); }
+  html[data-theme="dark"] .theme-toggle { background: #e7ecf3; color: #4361ee; }
+</style>
+<script>
+  (function() {
+    var KEY = 'studyhub.theme';
+    var saved = 'light';
+    try { saved = localStorage.getItem(KEY) || 'light'; } catch (e) {}
+    document.documentElement.setAttribute('data-theme', saved);
+  })();
+</script>
+</head>
+<body>
+<button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+<script>
+  (function() {
+    var KEY = 'studyhub.theme';
+    var btn = document.getElementById('theme-toggle');
+    var cur = document.documentElement.getAttribute('data-theme') || 'light';
+    btn.textContent = cur === 'dark' ? '☀️' : '🌙';
+    btn.addEventListener('click', function() {
+      var next = (document.documentElement.getAttribute('data-theme') === 'dark') ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      btn.textContent = next === 'dark' ? '☀️' : '🌙';
+      try { localStorage.setItem(KEY, next); } catch (e) {}
+    });
+  })();
+</script>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Interview Prep · Study Hub</div>
+    <h1>📚 Study Hub</h1>
+    <p>Algorithm explainers, system-design research, and a LeetCode pattern notebook — all in one place. Newest at the top.</p>
+  </header>
+
+  <div class="toolbar">
+    <input id="q" type="search" placeholder="🔍 Filter topics — try 'kafka' or 'consensus'…" autocomplete="off" />
+    <button class="chip active" data-filter="all">All</button>
+    <button class="chip" data-filter="notes">Notes</button>
+    <button class="chip" data-filter="ai">AI</button>
+    <button class="chip" data-filter="algo">Algorithm</button>
+    <button class="chip" data-filter="sd">System Design</button>
+    <span class="sep" aria-hidden="true"></span>
+    <button class="chip sort active" id="sortToggle" data-sort="desc" title="Sort by date">📅 Newest ↓</button>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div class="group notes" data-cat="notes">
+    <h2><span class="dot"></span>🗒️ LeetCode Notes <span class="badge">1 page</span></h2>
+    <ul class="list">
+      <li><a class="row" href="leetcode-notes/index.html" data-title="LeetCode Pattern Notebook">
+        <span class="date">2026-07-03</span>
+        <span class="icon">🗒️</span>
+        <span class="body">
+          <div class="t">LeetCode Pattern Notebook</div>
+          <div class="d">Living, pattern-grouped revision notebook — see the signal, pick the algorithm, log the bite &amp; complexity.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+    </ul>
+  </div>
+
+  <div class="group ai" data-cat="ai">
+    <h2><span class="dot"></span>🤖 AI <span class="badge">1 page</span></h2>
+    <ul class="list">
+      <li><a class="row" href="ai/prompt-llms-reliably/index.html" data-title="Prompt LLMs Reliably (Session 1)">
+        <span class="date new">2026-09-15</span>
+        <span class="icon">🧠</span>
+        <span class="body">
+          <div class="t">Prompt LLMs Reliably (Session 1)</div>
+          <div class="d">The reliable-prompt pipeline end-to-end — LLM inference, temperature/top-p, why output is non-deterministic, Chain-of-Thought &amp; Self-Consistency, positive-vs-negative prompts, structured output, prompt injection (text + multimodal), and inference routers.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+    </ul>
+  </div>
+
+  <div class="group algo" data-cat="algo">
+    <h2><span class="dot"></span>⚙️ Algorithm Explainers <span class="badge">8 pages</span></h2>
+    <ul class="list">
+      <li><a class="row" href="algorithm/linked-list/index.html" data-title="Linked List">
+        <span class="date new">2026-08-18</span>
+        <span class="icon">🔗</span>
+        <span class="body">
+          <div class="t">Linked List</div>
+          <div class="d">Nodes wired by pointers — O(1) insert/delete at a known node, no random access. The engine behind LRU caches, browser history, Redis LIST, Linux <code>list_head</code>, and round-robin schedulers.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+      <li><a class="row" href="algorithm/heap-priority-queue/index.html" data-title="Heap & Priority Queue">
+        <span class="date new">2026-08-17</span>
+        <span class="icon">⛰️</span>
+        <span class="body">
+          <div class="t">Heap &amp; Priority Queue</div>
+          <div class="d">"Give me the smallest/biggest thing now" in O(log n) — the engine behind Dijkstra, top-K, schedulers, event loops, load balancers, and LSM merges.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+      <li><a class="row" href="algorithm/dynamic-programming/index.html" data-title="Dynamic Programming">
+        <span class="date">2026-07-10</span>
+        <span class="icon">🧩</span>
+        <span class="body">
+          <div class="t">Dynamic Programming</div>
+          <div class="d">Overlapping subproblems, 8 LeetCode archetypes, systematic interview recipe.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+      <li><a class="row" href="algorithm/big-o-notation/index.html" data-title="Big O Notation">
+        <span class="date">2026-07-03</span>
+        <span class="icon">⏱️</span>
+        <span class="body">
+          <div class="t">Big O Notation</div>
+          <div class="d">Time complexity, why O(2n)=O(n), all the classes.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+      <li><a class="row" href="algorithm/bloom-filter/index.html" data-title="Bloom Filter">
+        <span class="date">2026-07-03</span>
+        <span class="icon">🌸</span>
+        <span class="body">
+          <div class="t">Bloom Filter</div>
+          <div class="d">"Definitely not" or "probably yes" membership.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+      <li><a class="row" href="algorithm/greedy/index.html" data-title="Greedy Algorithm">
+        <span class="date">2026-07-03</span>
+        <span class="icon">💰</span>
+        <span class="body">
+          <div class="t">Greedy Algorithm</div>
+          <div class="d">Locally-optimal choices that reach the global best.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+      <li><a class="row" href="algorithm/h-index/index.html" data-title="H-Index">
+        <span class="date">2026-07-03</span>
+        <span class="icon">📊</span>
+        <span class="body">
+          <div class="t">H-Index</div>
+          <div class="d">Largest h with h items ≥ h; counting sort.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+      <li><a class="row" href="algorithm/product-of-array-except-self/index.html" data-title="Product of Array Except Self">
+        <span class="date">2026-07-03</span>
+        <span class="icon">✖️</span>
+        <span class="body">
+          <div class="t">Product of Array Except Self</div>
+          <div class="d">Prefix × suffix, two passes, no division.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+    </ul>
+  </div>
+
+  <div class="group sd" data-cat="sd">
+    <h2><span class="dot"></span>🏗️ System Design <span class="badge">50 pages</span></h2>
+    <ul class="list">
+
+      <li><a class="row" href="system-design/sns-sqs-internals/index.html" data-title="SNS & SQS Internals">
+        <span class="date new">2026-08-09</span>
+        <span class="icon">📣</span>
+        <span class="body">
+          <div class="t">SNS &amp; SQS Internals</div>
+          <div class="d">How the AWS pub/sub topic and durable queue are built inside — multi-AZ replication, visibility timeout, FIFO dedup, fanout pattern, DLQs, long polling, and the numbers to quote.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/rpc-when-to-use/index.html" data-title="RPC — When to use, when not">
+        <span class="date new">2026-08-08</span>
+        <span class="icon">📞</span>
+        <span class="body">
+          <div class="t">RPC — When to use it, when not</div>
+          <div class="d">Two sample architectures — checkout aggregator (gRPC wins) vs OrderPlaced fan-out (async wins) — with a decision rubric, gRPC vs REST vs pub/sub table, and .NET code.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/sqlserver-vs-postgres/index.html" data-title="SQL Server vs PostgreSQL">
+        <span class="date new">2026-08-08</span>
+        <span class="icon">⚖️</span>
+        <span class="body">
+          <div class="t">SQL Server vs PostgreSQL</div>
+          <div class="d">Architecture-level comparison — MVCC vs locking, single-process-threads vs process-per-connection, native columnstore vs extension ecosystem, licensing, and a picking rubric.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/saga-pattern/index.html" data-title="Saga Pattern (Richardson/Newman)">
+        <span class="date new">2026-08-08</span>
+        <span class="icon">🪄</span>
+        <span class="body">
+          <div class="t">Saga Pattern (Richardson &amp; Newman)</div>
+          <div class="d">The recommended alternative to distributed 2PC — local transactions + compensations, choreography vs orchestration, ACD (not ACID), isolation anomalies and Chris Richardson's six countermeasures.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/database-performance-scaling/index.html" data-title="DB Performance Scaling Ladder">
+        <span class="date new">2026-08-08</span>
+        <span class="icon">🪜</span>
+        <span class="body">
+          <div class="t">DB Performance Scaling Ladder</div>
+          <div class="d">Eleven architectural rungs from a single Postgres box to a polyglot, sharded, event-sourced stack — with the symptom-to-rung diagnosis map and specific trade-offs at each level.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/samsung-lambda-streaming/index.html" data-title="Samsung Lambda Streaming">
+        <span class="date new">2026-08-08</span>
+        <span class="icon">λ</span>
+        <span class="body">
+          <div class="t">Samsung Lambda Streaming (Case Study)</div>
+          <div class="d">How Samsung.com killed 1-hour price cache drift with Lambda response streaming + CloudFront edge cache — P90 4,500 ms → 50 ms (90×), 95% hit ratio.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/angular-dotnet-request-flow/index.html" data-title="Angular → .NET Core Request Flow">
+        <span class="date new">2026-08-06</span>
+        <span class="icon">🔀</span>
+        <span class="body">
+          <div class="t">Angular → .NET Core Request Flow</div>
+          <div class="d">One HTTP request end-to-end: browser NgZone → Kestrel I/O thread → ThreadPool workers → middleware pipeline → HttpContext across <code>await</code>. Every process, thread, and context tracked.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/sql-pipe-syntax/index.html" data-title="SQL Pipe Syntax">
+        <span class="date new">2026-08-05</span>
+        <span class="icon">|▸</span>
+        <span class="body">
+          <div class="t">SQL Pipe Syntax</div>
+          <div class="d">How Google's <code>|&gt;</code> operator fixes SQL's clause-order problem — a parser-only extension shared across BigQuery, F1, Spanner, Procella via ZetaSQL.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/aws-lambda-internals/index.html" data-title="AWS Lambda Internals">
+        <span class="date new">2026-07-23</span>
+        <span class="icon">λ</span>
+        <span class="body">
+          <div class="t">AWS Lambda Internals</div>
+          <div class="d">Firecracker microVMs, Init/Restore/Invoke/Shutdown lifecycle, Runtime API long-polling, SnapStart snapshots &amp; uniqueness, multi-tenant scheduling.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/networking-fundamentals/index.html" data-title="Networking Fundamentals">
+        <span class="date new">2026-07-19</span>
+        <span class="icon">🌐</span>
+        <span class="body">
+          <div class="t">Networking Fundamentals (7 topics)</div>
+          <div class="d">OSI · IP/CIDR · TCP vs UDP · HTTP/HTTPS · DNS · Checksums · Proxy vs Reverse Proxy — all seven in one page.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/dns-udp-tcp/index.html" data-title="DNS: UDP vs TCP">
+        <span class="date new">2026-07-30</span>
+        <span class="icon">🌐</span>
+        <span class="body">
+          <div class="t">DNS: UDP vs TCP</div>
+          <div class="d">Why UDP is the default, when TCP fallback kicks in, the 512 → 1232 → 4096 EDNS0 story, TC-bit truncation, zone transfers (AXFR/IXFR), DNSSEC, DoT/DoH.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/tls-handshake-hops/index.html" data-title="TLS Handshake Across Hops">
+        <span class="date new">2026-08-18</span>
+        <span class="icon">🔒</span>
+        <span class="body">
+          <div class="t">TLS Handshake Across Hops (with termination)</div>
+          <div class="d">Where TLS terminates at each hop (CDN → WAF → ALB → pod → DB), which cert is presented, SNI, session tickets, mTLS with SPIFFE, and the five Cloudflare SSL modes.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/request-flow-dns-cdn-waf/index.html" data-title="Request Flow: DNS → CDN → WAF → LB → App">
+        <span class="date new">2026-08-16</span>
+        <span class="icon">🌍</span>
+        <span class="body">
+          <div class="t">Request Flow: DNS → Cloudflare → WAF → ALB → App</div>
+          <div class="d">End-to-end path of an HTTPS request: browser cache, ISP resolver, root/TLD/authoritative DNS, Anycast, TLS 1.3, edge WAF & CDN, AWS ALB listener rules, ingress, and finally the app pod.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/digital-payment-system/index.html" data-title="Digital Payment System (Stripe/UPI)">
+        <span class="date new">2026-08-17</span>
+        <span class="icon">💳</span>
+        <span class="body">
+          <div class="t">Digital Payment System (Stripe / UPI)</div>
+          <div class="d">4-party card model, PSP → acquirer → network → issuer flow, idempotency keys, double-entry ledger, auth vs capture vs settlement, 3DS/SCA, tokenization, outbox &amp; reconciliation.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/zookeeper-watches/index.html" data-title="ZooKeeper & Watches (reactive updates)">
+        <span class="date new">2026-08-17</span>
+        <span class="icon">🐘</span>
+        <span class="body">
+          <div class="t">ZooKeeper &amp; Watches (reactive updates)</div>
+          <div class="d">Znode hierarchy, ephemeral + sequential nodes, one-shot &amp; persistent watches, ZAB consensus, session lifecycle — the coordination layer under Kafka, HBase, Solr, and reactive config.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/vertical-partitioning/index.html" data-title="Vertical Partitioning (Vitess/ZK/binlog)">
+        <span class="date new">2026-08-17</span>
+        <span class="icon">🧱</span>
+        <span class="body">
+          <div class="t">Vertical Partitioning (Vitess / ZK / binlog)</div>
+          <div class="d">Split a wide table into narrow ones by column group, with ZooKeeper-driven routing, binlog replication, live SwitchTraffic cutover, and reverse replication for safe rollback.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/amazon-shopping/index.html" data-title="Amazon Shopping">
+        <span class="date new">2026-07-19</span>
+        <span class="icon">🛒</span>
+        <span class="body">
+          <div class="t">Amazon Shopping (E-commerce)</div>
+          <div class="d">Marketplace at global scale: catalog, cart, checkout SAGA, inventory contention, Prime Day surge, event-driven microservices.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/multi-tenancy/index.html" data-title="Multi-Tenancy">
+        <span class="date new">2026-07-22</span>
+        <span class="icon">🏢</span>
+        <span class="body">
+          <div class="t">Multi-Tenancy (SaaS)</div>
+          <div class="d">Silo / Pool / Bridge, tenant isolation ≠ authN, JWT tenant_id claims, RLS + LeadingKeys, shuffle sharding, cellular blast radius, cost attribution.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/load-balancer/index.html" data-title="Load Balancer">
+        <span class="date new">2026-07-19</span>
+        <span class="icon">⚖️</span>
+        <span class="body">
+          <div class="t">Load Balancer</div>
+          <div class="d">L4 vs L7, round-robin, least-connections, consistent hashing, health checks, sticky sessions, and how the LB itself stays HA.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/web-crawler/index.html" data-title="Web Crawler">
+        <span class="date new">2026-07-19</span>
+        <span class="icon">🕷️</span>
+        <span class="body">
+          <div class="t">Web Crawler</div>
+          <div class="d">Politeness, frontier queue, dedup with Bloom filter, robots.txt, distributed workers, freshness scheduling.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/microservices-patterns/index.html" data-title="Microservices Patterns">
+        <span class="date new">2026-07-19</span>
+        <span class="icon">🧩</span>
+        <span class="body">
+          <div class="t">Microservices Patterns (8)</div>
+          <div class="d">Service Discovery, API Gateway, BFF, Sidecar, Circuit Breaker, Bulkhead, Strangler Fig, Service Mesh — all in one place.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/consistent-hashing/index.html" data-title="Consistent Hashing">
+        <span class="date new">2026-07-19</span>
+        <span class="icon">⭕</span>
+        <span class="body">
+          <div class="t">Consistent Hashing</div>
+          <div class="d">The ring, virtual nodes, K/N remap on membership change. Powers DynamoDB, Cassandra, Memcached, CDNs, sticky load balancers.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/dynamo-consistent-hashing-nwr/index.html" data-title="Dynamo Paper: Consistent Hashing & NWR">
+        <span class="date new">2026-09-18</span>
+        <span class="icon">💠</span>
+        <span class="body">
+          <div class="t">Dynamo Paper: Consistent Hashing &amp; NWR</div>
+          <div class="d">Whitepaper §4-5 in depth — the ring, preference list, sloppy quorum, hinted handoff, vector clocks, Merkle-tree anti-entropy, gossip.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/stripe-zero-downtime-migration/index.html" data-title="Stripe Zero-Downtime Migration">
+        <span class="date">2026-07-18</span>
+        <span class="icon">💳</span>
+        <span class="body">
+          <div class="t">Stripe Zero-Downtime Migration</div>
+          <div class="d">Move hundreds of millions of live records with no outage: dual-write, snapshot backfill, Scientist shadow-compare, cleanup.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/database-indexes/index.html" data-title="Database Indexes">
+        <span class="date">2026-07-18</span>
+        <span class="icon">🌳</span>
+        <span class="body">
+          <div class="t">Database Indexes</div>
+          <div class="d">Why B+Trees turn O(n) full scans into O(log n) lookups: page fan-out, LSM vs B-tree, hash / inverted / bitmap / BRIN.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/indexes-partitioned-sharded/index.html" data-title="Indexes on Partitioned & Sharded Data">
+        <span class="date">2026-08-02</span>
+        <span class="icon">🗂️</span>
+        <span class="body">
+          <div class="t">Indexes on Partitioned &amp; Sharded Data</div>
+          <div class="d">Local vs Global Secondary Index: scatter-gather cost, sync vs async GSI updates, hot partitions, DynamoDB/Postgres examples.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/jiocinema-ipl-live/index.html" data-title="JioCinema IPL Live Stream">
+        <span class="date">2026-07-18</span>
+        <span class="icon">🏏</span>
+        <span class="body">
+          <div class="t">JioCinema (IPL Live Stream)</div>
+          <div class="d">20M concurrent devices, CDN mesh with origin shield, prescaled K8s, panic-mode blob, HLS/DASH/CMAF, SCTE-35 ads.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/vpc-networking/index.html" data-title="VPC Networking">
+        <span class="date">2026-07-18</span>
+        <span class="icon">🌐</span>
+        <span class="body">
+          <div class="t">VPC Networking (NACL/SG/IGW)</div>
+          <div class="d">Packet-level walkthrough: how requests flow through IGW → route tables → NACL → SG → ENI, plus NAT and VPC endpoints.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/webhooks-eventbridge/index.html" data-title="Webhooks & EventBridge">
+        <span class="date">2026-07-16</span>
+        <span class="icon">🪝</span>
+        <span class="body">
+          <div class="t">Webhooks &amp; EventBridge</div>
+          <div class="d">Same shape, different chassis: HMAC-signed HTTP push vs managed AWS event bus — routing, retries, DLQ, replay.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/database-bottleneck/index.html" data-title="Database Bottleneck">
+        <span class="date">2026-07-14</span>
+        <span class="icon">💥</span>
+        <span class="body">
+          <div class="t">Database Bottleneck</div>
+          <div class="d">The scaling ladder: read replicas → cache → sharding → CQRS → event sourcing → change DB tech. When to use each.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/notification-system/index.html" data-title="Notification System">
+        <span class="date">2026-07-14</span>
+        <span class="icon">🔔</span>
+        <span class="body">
+          <div class="t">Notification System</div>
+          <div class="d">Email/SMS/Push at 10B/day: priority queues, retries with jitter, idempotency, rate limits, DLQ.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/retry-storm-protection/index.html" data-title="Retry Storm Protection">
+        <span class="date">2026-07-14</span>
+        <span class="icon">🌀</span>
+        <span class="body">
+          <div class="t">Retry Storm Protection</div>
+          <div class="d">Rate limits, circuit breakers, jittered backoff, concurrency caps, load shedding — the five layers.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/distributed-cache/index.html" data-title="Distributed Cache">
+        <span class="date">2026-07-14</span>
+        <span class="icon">🧠</span>
+        <span class="body">
+          <div class="t">Distributed Cache</div>
+          <div class="d">Consistent hashing + virtual nodes, N/W/R quorum replication, gossip failure detection, K/N rebalancing.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/netflix-streaming/index.html" data-title="Netflix Streaming">
+        <span class="date">2026-07-14</span>
+        <span class="icon">🎬</span>
+        <span class="body">
+          <div class="t">Netflix (Streaming + CDN)</div>
+          <div class="d">Open Connect in-ISP appliances, EVCache cross-region warm, Cassandra 9:1, two-stage recs + bandit thumbnails.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/uber-ride-sharing/index.html" data-title="Uber Ride-Sharing">
+        <span class="date">2026-07-13</span>
+        <span class="icon">🚗</span>
+        <span class="body">
+          <div class="t">Uber (Ride-Sharing)</div>
+          <div class="d">Real-time geospatial marketplace: H3 hexagons, S2 cells, driver-location firehose, DISCO matching, CAS reservation, surge pricing.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/whatsapp-chat/index.html" data-title="WhatsApp Chat System">
+        <span class="date">2026-07-13</span>
+        <span class="icon">💬</span>
+        <span class="body">
+          <div class="t">WhatsApp / Chat System</div>
+          <div class="d">WebSockets, offline delivery, ✓/✓✓/blue ticks, per-device identity keys, client-fanout, presence heartbeats.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/youtube-video-streaming/index.html" data-title="YouTube Video Streaming">
+        <span class="date">2026-07-13</span>
+        <span class="icon">▶️</span>
+        <span class="body">
+          <div class="t">YouTube (Video Streaming)</div>
+          <div class="d">Chunked upload, MapReduce transcode, HLS/DASH adaptive bitrate, three-tier CDN, two-stage recs.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/redis-concurrency/index.html" data-title="Redis Concurrency">
+        <span class="date">2026-07-13</span>
+        <span class="icon">⚡</span>
+        <span class="body">
+          <div class="t">Redis Concurrency</div>
+          <div class="d">Single-threaded event loop, MULTI/WATCH transactions, Lua atomicity, SET NX PX locks, Redlock &amp; the Kleppmann critique.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/redis-architecture/index.html" data-title="Redis Architecture &amp; Purpose">
+        <span class="date">2026-08-09</span>
+        <span class="icon">🧱</span>
+        <span class="body">
+          <div class="t">Redis Architecture &amp; Purpose</div>
+          <div class="d">Core data structures, single-threaded event loop, RDB/AOF, Sentinel &amp; Cluster (16 384 slots), eviction, use cases &amp; when NOT to use Redis.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/redis-distributed-lock/index.html" data-title="Redis Distributed Lock (Nightly Job)">
+        <span class="date new">2026-08-22</span>
+        <span class="icon">🔒</span>
+        <span class="body">
+          <div class="t">Redis Distributed Lock (Nightly Job)</div>
+          <div class="d">5 servers, 1 midnight cron, 0 duplicate emails — SET NX PX, unique token, Lua safe release, watchdog renewal, fencing tokens &amp; idempotency ledger.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/dau-hyperloglog/index.html" data-title="DAU with HyperLogLog (Instagram-scale)">
+        <span class="date new">2026-08-22</span>
+        <span class="icon">📊</span>
+        <span class="body">
+          <div class="t">DAU with HyperLogLog (Instagram-scale)</div>
+          <div class="d">Count 1.5 B unique daily users in 12 KB — hash + run-of-zeros intuition, 16 384 registers, PFADD/PFCOUNT/PFMERGE, per-shard sketches merged across regions.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/locking-concurrency-control/index.html" data-title="Locking & Concurrency Control (all mechanisms)">
+        <span class="date new">2026-08-24</span>
+        <span class="icon">🔐</span>
+        <span class="body">
+          <div class="t">Locking &amp; Concurrency Control (all mechanisms)</div>
+          <div class="d">Optimistic vs pessimistic, row-level, atomic UPDATE, Redis distributed lock, Postgres advisory, CAS/RowVersion/ETag — with a decision matrix, deadlock diagram &amp; interview traps.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/dotnet-memory-leaks/index.html" data-title=".NET Memory Leaks (Production)">
+        <span class="date new">2026-09-01</span>
+        <span class="icon">🩸</span>
+        <span class="body">
+          <div class="t">.NET Memory Leaks (Production)</div>
+          <div class="d">Reachable-but-unwanted — the 8 real-world scenarios (HttpClient, event handlers, LOH, EF change tracker…), the retention-path detection workflow, and before/after C# fixes.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/redis-distributed-rate-limiter/index.html" data-title="Redis Distributed Rate Limiter (interview:)">
+        <span class="date new">2026-08-22</span>
+        <span class="icon">🚦</span>
+        <span class="body">
+          <div class="t">interview: Redis Distributed Rate Limiter</div>
+          <div class="d">20 app servers, one shared counter — INCR + Lua atomicity, fixed-window boundary burst, sliding window &amp; token bucket, fail-open vs fail-closed, HA &amp; hot keys.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/aws-api-gateway/index.html" data-title="AWS API Gateway">
+        <span class="date">2026-07-09</span>
+        <span class="icon">🚪</span>
+        <span class="body">
+          <div class="t">AWS API Gateway</div>
+          <div class="d">4-stage request lifecycle, proxy vs VTL integrations, token-bucket throttling, authorizers, REST vs HTTP.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/amazon-msk-kafka/index.html" data-title="Amazon MSK Kafka">
+        <span class="date">2026-07-09</span>
+        <span class="icon">📨</span>
+        <span class="body">
+          <div class="t">Amazon MSK (Kafka)</div>
+          <div class="d">Partitioned commit log, ISR replication, acks/min.insync, zero-copy throughput, KRaft, tiered storage.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/rate-limiter/index.html" data-title="Rate Limiter">
+        <span class="date">2026-07-09</span>
+        <span class="icon">🚦</span>
+        <span class="body">
+          <div class="t">Rate Limiter</div>
+          <div class="d">Token/leaky bucket, sliding window, distributed Redis + Lua atomicity, fail-open, Stripe's 4-layer model.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/meta-tao-social-graph/index.html" data-title="Meta TAO Social Graph">
+        <span class="date">2026-07-08</span>
+        <span class="icon">🕸️</span>
+        <span class="body">
+          <div class="t">Meta TAO — Social Graph</div>
+          <div class="d">FAANG case study: read-heavy scaling, objects/associations, leader/follower caches, write-through, eventual consistency.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/git-internals/index.html" data-title="Git Internals">
+        <span class="date">2026-07-08</span>
+        <span class="icon">🔀</span>
+        <span class="body">
+          <div class="t">How Git Works Internally</div>
+          <div class="d">Content-addressable store, Merkle DAG, refs, packfiles &amp; delta compression, want/have sync.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/distributed-file-system/index.html" data-title="Distributed File System">
+        <span class="date">2026-07-08</span>
+        <span class="icon">🗂️</span>
+        <span class="body">
+          <div class="t">Distributed File System</div>
+          <div class="d">GFS/HDFS/Colossus/Ceph, metadata vs data plane, chunking, replication, erasure coding, durability.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/outbox-pattern/index.html" data-title="Transactional Outbox">
+        <span class="date">2026-07-06</span>
+        <span class="icon">📤</span>
+        <span class="body">
+          <div class="t">Transactional Outbox</div>
+          <div class="d">Solve the dual-write problem: atomic DB write + event publish, CDC vs polling, idempotency.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/principal-architect-interview/index.html" data-title="Principal/Architect Interview">
+        <span class="date">2026-07-04</span>
+        <span class="icon">🎯</span>
+        <span class="body">
+          <div class="t">Principal/Architect Interviews</div>
+          <div class="d">FAANG L7/E7 loop: scoping, trade-offs, blast radius, influence, question bank.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/cap-theorem/index.html" data-title="CAP Theorem">
+        <span class="date">2026-07-03</span>
+        <span class="icon">⚖️</span>
+        <span class="body">
+          <div class="t">CAP Theorem &amp; PACELC</div>
+          <div class="d">C vs A during a partition, CP/AP systems, PACELC's latency truth.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/consensus-raft-paxos/index.html" data-title="Consensus Raft Paxos">
+        <span class="date">2026-07-03</span>
+        <span class="icon">🗳️</span>
+        <span class="body">
+          <div class="t">Consensus: Raft &amp; Paxos</div>
+          <div class="d">Leader election, log replication, majority quorums, N=2f+1.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/consistency-models/index.html" data-title="Consistency Models">
+        <span class="date">2026-07-03</span>
+        <span class="icon">🪜</span>
+        <span class="body">
+          <div class="t">Consistency Models</div>
+          <div class="d">Linearizable → causal → eventual; isolation levels &amp; write skew.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/dynamodb-design/index.html" data-title="How DynamoDB Works">
+        <span class="date">2026-07-03</span>
+        <span class="icon">⚡</span>
+        <span class="body">
+          <div class="t">How DynamoDB Works</div>
+          <div class="d">Hash partitioning, Multi-Paxos replication, RCU/WCU, single-table design.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/instagram/index.html" data-title="Instagram">
+        <span class="date">2026-07-03</span>
+        <span class="icon">📷</span>
+        <span class="body">
+          <div class="t">Instagram</div>
+          <div class="d">Media in S3+CDN, hybrid fan-out feed, Snowflake IDs, sharding.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/music-streaming/index.html" data-title="Music Streaming Spotify">
+        <span class="date">2026-07-03</span>
+        <span class="icon">🎵</span>
+        <span class="body">
+          <div class="t">Music Streaming (Spotify)</div>
+          <div class="d">Audio pipeline, CDN, adaptive bitrate, search &amp; recommendations at 700M+ users.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/partitioning-sharding/index.html" data-title="Partitioning & Sharding">
+        <span class="date">2026-07-03</span>
+        <span class="icon">🔪</span>
+        <span class="body">
+          <div class="t">Partitioning &amp; Sharding</div>
+          <div class="d">Horizontal vs vertical, shard keys, consistent hashing, hot shards.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/two-phase-commit/index.html" data-title="Two-Phase Commit">
+        <span class="date">2026-07-03</span>
+        <span class="icon">🤝</span>
+        <span class="body">
+          <div class="t">2PC &amp; 3PC Commit</div>
+          <div class="d">Atomic distributed commit, the blocking problem, Sagas &amp; consensus.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/concurrency-parallelism/index.html" data-title="Concurrency & Parallelism">
+        <span class="date">2026-07-03</span>
+        <span class="icon">🧵</span>
+        <span class="body">
+          <div class="t">Concurrency &amp; Parallelism</div>
+          <div class="d">Multithreaded crawler: threads vs async, races, deadlock, thread pools.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/jwt-auth-login/index.html" data-title="JWT & Login Flow">
+        <span class="date">2026-07-03</span>
+        <span class="icon">🔐</span>
+        <span class="body">
+          <div class="t">JWT &amp; Login Flow</div>
+          <div class="d">Access/refresh tokens, rotation, revocation, sessions vs JWT, OAuth/OIDC.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/browser-security-3tier/index.html" data-title="Browser Security in 3-Tier (SOP/CORS/CSRF/XSS/CSP)">
+        <span class="date new">2026-08-22</span>
+        <span class="icon">🛡️</span>
+        <span class="body">
+          <div class="t">Browser Security in a 3-Tier App</div>
+          <div class="d">Where SOP, CORS, preflight, cookies, SameSite, CSRF, XSS, CSP, authZ, input validation &amp; SQLi live across Browser → UI → API → DB — with a full boundary map.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/news-feed/index.html" data-title="News Feed">
+        <span class="date">2026-07-03</span>
+        <span class="icon">📰</span>
+        <span class="body">
+          <div class="t">News Feed (Twitter/FB)</div>
+          <div class="d">Fan-out push vs pull, the celebrity problem, timeline cache.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/s3-object-storage/index.html" data-title="Amazon S3 Internals">
+        <span class="date">2026-07-03</span>
+        <span class="icon">🪣</span>
+        <span class="body">
+          <div class="t">Amazon S3 Internals</div>
+          <div class="d">Index vs data plane, erasure coding, 11 nines, heat management.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+      <li><a class="row" href="system-design/url-shortener/index.html" data-title="URL Shortener">
+        <span class="date">2026-07-03</span>
+        <span class="icon">🔗</span>
+        <span class="body">
+          <div class="t">URL Shortener</div>
+          <div class="d">Base62, KGS, caching, sharding, AWS mapping.</div>
+        </span>
+        <span class="arrow">→</span>
+      </a></li>
+
+    </ul>
+  </div>
+
+  <footer>Study Hub · self-contained static pages · deploy the whole <code>site/</code> folder to S3 + CloudFront</footer>
+</div>
+
+<script>
+  (function () {
+    const q         = document.getElementById('q');
+    const filterChips = document.querySelectorAll('.chip[data-filter]');
+    const sortBtn   = document.getElementById('sortToggle');
+    const groups    = document.querySelectorAll('.group');
+    const countEl   = document.getElementById('count');
+    let activeCat = 'all';
+    // sort cycle: 'desc' (newest first) → 'asc' (oldest first) → 'off' (original order)
+    let sortMode  = 'desc';
+
+    // Snapshot original DOM order so 'off' can restore it.
+    const originalOrder = new Map();
+    groups.forEach(g => {
+      originalOrder.set(g, Array.from(g.querySelectorAll('ul.list > li')));
+    });
+
+    function rowDate(li) {
+      const d = li.querySelector('.date');
+      return d ? Date.parse(d.textContent.trim()) || 0 : 0;
+    }
+
+    function applySort() {
+      groups.forEach(g => {
+        const ul = g.querySelector('ul.list');
+        if (!ul) return;
+        let items = originalOrder.get(g).slice();
+        if (sortMode !== 'off') {
+          items.sort((a, b) => {
+            const da = rowDate(a), db = rowDate(b);
+            return sortMode === 'desc' ? db - da : da - db;
+          });
+        }
+        items.forEach(li => ul.appendChild(li));
+      });
+    }
+
+    function applyFilter() {
+      const term = q.value.trim().toLowerCase();
+      let shown = 0;
+      groups.forEach(g => {
+        const cat = g.getAttribute('data-cat');
+        const catOk = (activeCat === 'all' || activeCat === cat);
+        let visibleInGroup = 0;
+        g.querySelectorAll('a.row').forEach(row => {
+          const hay = (row.getAttribute('data-title') + ' ' + row.textContent).toLowerCase();
+          const match = catOk && (!term || hay.includes(term));
+          row.parentElement.style.display = match ? '' : 'none';
+          if (match) { visibleInGroup++; shown++; }
+        });
+        g.style.display = visibleInGroup ? '' : 'none';
+      });
+      countEl.textContent = shown + ' page' + (shown === 1 ? '' : 's');
+    }
+
+    function refreshSortBtn() {
+      sortBtn.setAttribute('data-sort', sortMode);
+      sortBtn.classList.toggle('active', sortMode !== 'off');
+      sortBtn.textContent =
+        sortMode === 'desc' ? '📅 Newest ↓' :
+        sortMode === 'asc'  ? '📅 Oldest ↑' :
+                              '📅 Sort by date';
+    }
+
+    q.addEventListener('input', applyFilter);
+    filterChips.forEach(c => c.addEventListener('click', () => {
+      filterChips.forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+      activeCat = c.getAttribute('data-filter');
+      applyFilter();
+    }));
+
+    sortBtn.addEventListener('click', () => {
+      sortMode = sortMode === 'desc' ? 'asc' : sortMode === 'asc' ? 'off' : 'desc';
+      refreshSortBtn();
+      applySort();
+      applyFilter();
+    });
+
+    refreshSortBtn();
+    applySort();
+    applyFilter();
+  })();
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

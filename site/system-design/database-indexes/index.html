@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Database Indexes — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --laymen: #f4a259;
+    --laymen-bg: #fff7ed;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px;
+    box-shadow: var(--shadow); margin-bottom: 24px;
+  }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px;
+    padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box; }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .25; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>How Database Indexes Make Reads Faster</h1>
+    <p>Turning an O(n) full-table scan into an O(log n) tree walk — the B+Tree, hash, LSM, and inverted indexes that power every serious database.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>Why every serious database is built around indexes</h2>
+    <p>Imagine a <code>users</code> table with <strong>500 million rows</strong> and a query <code>SELECT * FROM users WHERE email = 'alice@x.com'</code>. Without an index, the database must open the table file and read every single row until it finds a match — a <strong>full table scan</strong>. On disk that's tens of gigabytes at ~100 MB/s, so the query takes minutes. With a B+Tree index on <code>email</code>, the database walks a tree of depth 4 — <strong>four disk reads, a millisecond or two</strong>. The index has turned an <em>O(n)</em> scan into an <em>O(log n)</em> lookup, and that is the single most important trick in a database's toolbox.</p>
+    <p>You've hit indexes every day without knowing it. When Gmail loads your inbox, an index on <code>(user_id, received_at DESC)</code> gives you the latest 20 messages instantly. When Instagram opens a profile page, an index on <code>author_id</code> retrieves the person's posts without scanning the whole posts table. When Amazon looks up an order by ID, a primary-key index makes it a point lookup. When Google searches the web, a giant inverted index maps every word to the list of documents that contain it. <strong>The index is what makes a database "fast" — the storage engine is really just a set of indexes with rules for keeping them consistent.</strong></p>
+    <p>This is a classic system-design and staff-engineer interview topic because it touches everything: data structures (B+Tree, LSM, hash tables, tries, bitmaps, bloom filters), disk I/O (page size, sequential vs random reads), consistency (writes must update every index atomically), and workload trade-offs (read-heavy vs write-heavy, OLTP vs analytics). If you can explain <em>why</em> a B+Tree beats a binary search tree on disk, you can hold your own in any database conversation.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Think of it as the index at the back of a giant book</h2>
+    <p>Imagine you have a <strong>10,000-page cookbook</strong> and someone shouts across the room: "find me every recipe that uses saffron." You have two choices. You could <strong>read the whole book cover to cover</strong>, page by page, checking each recipe for the word "saffron." That would take you a week. Or you could flip to the <strong>index at the back</strong> — the little alphabetical list where every ingredient is followed by the page numbers it appears on. "Saffron … pages 47, 312, 981." Three page turns and you're done.</p>
+    <p>A database index is exactly that: <strong>a separate, sorted list that says "for this value, here's where to find the actual row."</strong> The database keeps it up to date every time you add, change, or delete a recipe (row), so it's always ready to answer "where is X?" in a heartbeat.</p>
+    <p>But here's the clever twist. If the ingredient list at the back of the book had a <em>million</em> entries, even <em>scanning the index</em> would be slow. So databases don't use a flat list — they use a <strong>tree of pages</strong>, like a phone book that first tells you "A–F is here, G–L is there, M–R over there, S–Z last." You flip to the S–Z section, then within it flip to "Sa–", then to "Saf–", and in three or four flips you've narrowed a million entries down to one. Every extra level of the tree lets you handle roughly a hundred times more data with just <strong>one more page turn</strong>. That's why even Amazon or Facebook, with hundreds of billions of rows, can answer "give me this user's profile" in a millisecond.</p>
+    <p>The hard part isn't the reading — it's the <strong>writing</strong>. Every time you edit the cookbook, you also have to update the index. Add a new saffron recipe? You have to insert "saffron … page 10,001" into the sorted list. That's why databases don't index everything: <strong>indexes make reads fast but writes slower, and take extra room on the shelf</strong>. The art of tuning a database is choosing which columns deserve an index and which don't.</p>
+    <p>You already benefit from this every day. When you type a friend's name in WhatsApp, an index makes their chat pop up instantly. When you search Amazon for "wireless headphones," an inverted index (like the cookbook example) finds every matching product in a blink. When your bank looks up your account by account number, an index turns "search 200 million accounts" into "walk down 4 signposts."</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What we're optimizing for</h2>
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Fast <strong>point lookups</strong> by a specific column (find the user with <code>email = X</code>).</li>
+      <li>Fast <strong>range queries</strong> (<code>orders WHERE created_at BETWEEN a AND b</code>).</li>
+      <li>Fast <strong>sorting</strong> (<code>ORDER BY created_at DESC LIMIT 20</code>) without extra work.</li>
+      <li>Enforce <strong>uniqueness</strong> constraints (primary keys, unique emails) as a side effect of the index.</li>
+      <li>Support <strong>compound queries</strong> on multiple columns (composite indexes).</li>
+    </ul>
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li>Read latency: <strong>&lt;5&nbsp;ms p99</strong> for a keyed lookup on billions of rows.</li>
+      <li>Write amplification: acceptable <strong>1× to 3×</strong> — every write updates the row plus every affected index.</li>
+      <li>Space overhead: an index typically costs <strong>~10–20 % of the table size</strong> for a single column.</li>
+      <li>Durability &amp; crash safety — the index must always match the base table after recovery.</li>
+    </ul>
+
+    <h3>Back-of-the-envelope: why a B+Tree wins</h3>
+    <p>A B+Tree page is typically <strong>8&nbsp;KB</strong> and holds ~<strong>100–200 keys+pointers</strong> (call it a fan-out of <strong>~100</strong>). Depth <em>d</em> holds <em>100<sup>d</sup></em> rows. So:</p>
+    <table>
+      <thead><tr><th>Rows in table</th><th>Full scan (100 MB/s)</th><th>B+Tree depth</th><th>Indexed lookup</th></tr></thead>
+      <tbody>
+        <tr><td>10,000</td><td>~1 ms</td><td>2</td><td>~1 ms (both cheap)</td></tr>
+        <tr><td>1,000,000</td><td>~100 ms</td><td>3</td><td>~2 ms</td></tr>
+        <tr><td>100,000,000</td><td>~10 s</td><td>4</td><td>~3 ms</td></tr>
+        <tr><td>1,000,000,000</td><td>~100 s</td><td>5</td><td>~4 ms</td></tr>
+        <tr><td>1,000,000,000,000</td><td>~28 hours</td><td>6</td><td>~5 ms</td></tr>
+      </tbody>
+    </table>
+    <p>Only the <strong>root page</strong> is small enough to stay hot in RAM, so the top 1–2 levels are essentially free. In practice a 4-level index on a billion rows costs <strong>2–3 real disk reads</strong> per lookup.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>Where indexes sit inside a database</h2>
+    <p>An index lives inside the storage engine, alongside the table (called the <strong>heap</strong> in Postgres, or the <em>clustered index</em> itself in InnoDB/SQL&nbsp;Server). When a query arrives, the <strong>parser</strong> turns it into an AST, the <strong>query planner</strong> asks the <strong>statistics collector</strong> "how selective is <code>WHERE email = ?</code>?" and picks between a full scan and an index scan based on estimated cost. On an index scan, the executor calls the storage engine, which walks the B+Tree pages held in the <strong>buffer pool</strong> (an in-memory cache of disk pages), fetches the pointer to the row, then goes to the heap to read the row itself. Writes go through the <strong>write-ahead log (WAL)</strong> first for durability, then update the heap page and every affected index page in memory; the WAL is what lets the DB rebuild indexes after a crash.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 900 480" xmlns="http://www.w3.org/2000/svg" font-family="Inter,Segoe UI,Arial" font-size="13">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0L10 5L0 10z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0L10 5L0 10z" fill="#f4a259"/>
+          </marker>
+        </defs>
+        <!-- Client -->
+        <rect x="30" y="30" width="150" height="60" rx="10" fill="#4361ee"/>
+        <text x="105" y="60" text-anchor="middle" fill="#fff" font-weight="700">Client / App</text>
+        <text x="105" y="78" text-anchor="middle" fill="#dbe4ff" font-size="11">SELECT ... WHERE email=?</text>
+
+        <!-- Parser -->
+        <rect x="220" y="30" width="130" height="60" rx="10" fill="#7048e8"/>
+        <text x="285" y="55" text-anchor="middle" fill="#fff" font-weight="700">SQL Parser</text>
+        <text x="285" y="72" text-anchor="middle" fill="#e5dcfe" font-size="11">→ AST</text>
+
+        <!-- Planner -->
+        <rect x="390" y="30" width="150" height="60" rx="10" fill="#7048e8"/>
+        <text x="465" y="55" text-anchor="middle" fill="#fff" font-weight="700">Query Planner</text>
+        <text x="465" y="72" text-anchor="middle" fill="#e5dcfe" font-size="11">picks scan vs index</text>
+
+        <!-- Stats -->
+        <rect x="580" y="30" width="140" height="60" rx="10" fill="#00b4d8"/>
+        <text x="650" y="55" text-anchor="middle" fill="#fff" font-weight="700">Statistics</text>
+        <text x="650" y="72" text-anchor="middle" fill="#cfefff" font-size="11">selectivity, histograms</text>
+
+        <!-- Executor -->
+        <rect x="220" y="140" width="500" height="60" rx="10" fill="#f7567c"/>
+        <text x="470" y="165" text-anchor="middle" fill="#fff" font-weight="700">Executor · Storage Engine</text>
+        <text x="470" y="183" text-anchor="middle" fill="#ffe1eb" font-size="11">walks B+Tree pages, follows row pointer, returns tuple</text>
+
+        <!-- Buffer pool -->
+        <rect x="120" y="250" width="200" height="80" rx="10" fill="#f4a259"/>
+        <text x="220" y="278" text-anchor="middle" fill="#3a2200" font-weight="700">Buffer Pool</text>
+        <text x="220" y="296" text-anchor="middle" fill="#3a2200" font-size="11">hot pages in RAM</text>
+        <text x="220" y="312" text-anchor="middle" fill="#3a2200" font-size="11">(root &amp; internal nodes)</text>
+
+        <!-- Index -->
+        <rect x="360" y="250" width="200" height="80" rx="10" fill="#00b4d8"/>
+        <text x="460" y="278" text-anchor="middle" fill="#fff" font-weight="700">Index (B+Tree)</text>
+        <text x="460" y="296" text-anchor="middle" fill="#cfefff" font-size="11">sorted keys → row ids</text>
+        <text x="460" y="312" text-anchor="middle" fill="#cfefff" font-size="11">depth 3–5</text>
+
+        <!-- Heap -->
+        <rect x="600" y="250" width="200" height="80" rx="10" fill="#2dc653"/>
+        <text x="700" y="278" text-anchor="middle" fill="#fff" font-weight="700">Heap / Table</text>
+        <text x="700" y="296" text-anchor="middle" fill="#e0ffe8" font-size="11">actual row data</text>
+        <text x="700" y="312" text-anchor="middle" fill="#e0ffe8" font-size="11">unordered pages</text>
+
+        <!-- WAL + Disk -->
+        <rect x="120" y="380" width="300" height="70" rx="10" fill="#1e2430" stroke="#4361ee"/>
+        <text x="270" y="405" text-anchor="middle" fill="#fff" font-weight="700">Write-Ahead Log (WAL)</text>
+        <text x="270" y="424" text-anchor="middle" fill="#c6d0e0" font-size="11">every change appended before commit</text>
+
+        <rect x="470" y="380" width="330" height="70" rx="10" fill="#1e2430" stroke="#4361ee"/>
+        <text x="635" y="405" text-anchor="middle" fill="#fff" font-weight="700">Disk / SSD</text>
+        <text x="635" y="424" text-anchor="middle" fill="#c6d0e0" font-size="11">pages: heap + all indexes + WAL</text>
+
+        <!-- Arrows read flow -->
+        <path d="M180 60 L220 60" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+        <path d="M350 60 L390 60" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+        <path d="M540 60 L580 60" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+        <path d="M465 90 L465 140" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+        <path d="M400 200 L280 250" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+        <path d="M470 200 L460 250" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+        <path d="M540 200 L680 250" stroke="#7fa2ff" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+
+        <!-- Write flow -->
+        <path d="M395 200 L270 380" stroke="#f4a259" stroke-width="2" fill="none" stroke-dasharray="6 4" marker-end="url(#arr2)"/>
+        <path d="M540 200 L635 380" stroke="#f4a259" stroke-width="2" fill="none" stroke-dasharray="6 4" marker-end="url(#arr2)"/>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#7fa2ff"></span>read path</span>
+      <span><span class="dot" style="background:#f4a259"></span>write path (WAL first)</span>
+      <span><span class="dot" style="background:#00b4d8"></span>index</span>
+      <span><span class="dot" style="background:#2dc653"></span>heap / table</span>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a B+Tree lookup walk from root to leaf</h2>
+    <p>The engine is looking for <code>WHERE id = 42</code> in a table with millions of rows. Without the index it would scan every page. With the index it walks a shallow tree: <strong>root → internal → leaf → heap</strong>. Each hop is a single disk-page read.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg" font-family="Inter,Segoe UI,Arial" font-size="13">
+        <defs>
+          <marker id="ax1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0L10 5L0 10z" fill="#00b4d8"/>
+          </marker>
+        </defs>
+
+        <!-- Query pill -->
+        <g id="q-pill" data-anim class="a-hidden">
+          <rect x="330" y="15" width="240" height="40" rx="20" fill="#4361ee"/>
+          <text x="450" y="41" text-anchor="middle" fill="#fff" font-weight="700">SELECT * WHERE id = 42</text>
+        </g>
+
+        <!-- Root node -->
+        <g id="root">
+          <rect x="330" y="90" width="240" height="50" rx="8" fill="#0f1420" stroke="#7fa2ff" stroke-width="2"/>
+          <text x="450" y="110" text-anchor="middle" fill="#7fa2ff" font-size="11" font-weight="700">ROOT PAGE</text>
+          <line x1="390" y1="118" x2="390" y2="140" stroke="#7fa2ff"/>
+          <line x1="450" y1="118" x2="450" y2="140" stroke="#7fa2ff"/>
+          <line x1="510" y1="118" x2="510" y2="140" stroke="#7fa2ff"/>
+          <text x="360" y="135" text-anchor="middle" fill="#c6d0e0">&lt;25</text>
+          <text x="420" y="135" text-anchor="middle" fill="#c6d0e0">25–50</text>
+          <text x="480" y="135" text-anchor="middle" fill="#c6d0e0">50–75</text>
+          <text x="540" y="135" text-anchor="middle" fill="#c6d0e0">≥75</text>
+        </g>
+
+        <!-- Internal nodes (children of root) -->
+        <g id="int1">
+          <rect x="60" y="200" width="180" height="50" rx="8" fill="#0f1420" stroke="#a3aabf" stroke-width="1.5"/>
+          <text x="150" y="220" text-anchor="middle" fill="#a3aabf" font-size="11">internal · 0–24</text>
+          <text x="150" y="240" text-anchor="middle" fill="#a3aabf" font-size="11">…</text>
+        </g>
+        <g id="int2">
+          <rect x="270" y="200" width="180" height="50" rx="8" fill="#0f1420" stroke="#7fa2ff" stroke-width="2"/>
+          <text x="360" y="220" text-anchor="middle" fill="#7fa2ff" font-size="11" font-weight="700">INTERNAL · 25–49</text>
+          <line x1="315" y1="228" x2="315" y2="250" stroke="#7fa2ff"/>
+          <line x1="360" y1="228" x2="360" y2="250" stroke="#7fa2ff"/>
+          <line x1="405" y1="228" x2="405" y2="250" stroke="#7fa2ff"/>
+          <text x="292" y="246" text-anchor="middle" fill="#c6d0e0" font-size="11">30</text>
+          <text x="337" y="246" text-anchor="middle" fill="#c6d0e0" font-size="11">40</text>
+          <text x="382" y="246" text-anchor="middle" fill="#c6d0e0" font-size="11">45</text>
+          <text x="427" y="246" text-anchor="middle" fill="#c6d0e0" font-size="11">49</text>
+        </g>
+        <g id="int3">
+          <rect x="480" y="200" width="180" height="50" rx="8" fill="#0f1420" stroke="#a3aabf" stroke-width="1.5"/>
+          <text x="570" y="220" text-anchor="middle" fill="#a3aabf" font-size="11">internal · 50–74</text>
+          <text x="570" y="240" text-anchor="middle" fill="#a3aabf" font-size="11">…</text>
+        </g>
+        <g id="int4">
+          <rect x="690" y="200" width="180" height="50" rx="8" fill="#0f1420" stroke="#a3aabf" stroke-width="1.5"/>
+          <text x="780" y="220" text-anchor="middle" fill="#a3aabf" font-size="11">internal · 75+</text>
+          <text x="780" y="240" text-anchor="middle" fill="#a3aabf" font-size="11">…</text>
+        </g>
+
+        <!-- Leaves -->
+        <g id="leafA">
+          <rect x="20" y="310" width="150" height="60" rx="8" fill="#0f1420" stroke="#a3aabf"/>
+          <text x="95" y="332" text-anchor="middle" fill="#a3aabf" font-size="11">leaf</text>
+          <text x="95" y="352" text-anchor="middle" fill="#a3aabf" font-size="10">30, 31, 33, 35 → rowid</text>
+        </g>
+        <g id="leafB">
+          <rect x="190" y="310" width="150" height="60" rx="8" fill="#0f1420" stroke="#a3aabf"/>
+          <text x="265" y="332" text-anchor="middle" fill="#a3aabf" font-size="11">leaf</text>
+          <text x="265" y="352" text-anchor="middle" fill="#a3aabf" font-size="10">36, 38, 39 → rowid</text>
+        </g>
+        <g id="leafC">
+          <rect x="360" y="310" width="150" height="60" rx="8" fill="#0f1420" stroke="#00b4d8" stroke-width="2"/>
+          <text x="435" y="332" text-anchor="middle" fill="#00b4d8" font-size="11" font-weight="700">LEAF PAGE</text>
+          <text x="435" y="352" text-anchor="middle" fill="#c6d0e0" font-size="10">40, 41, <tspan id="key42" fill="#c6d0e0" font-weight="700">42</tspan>, 43 → rowid</text>
+        </g>
+        <g id="leafD">
+          <rect x="530" y="310" width="150" height="60" rx="8" fill="#0f1420" stroke="#a3aabf"/>
+          <text x="605" y="332" text-anchor="middle" fill="#a3aabf" font-size="11">leaf</text>
+          <text x="605" y="352" text-anchor="middle" fill="#a3aabf" font-size="10">44, 45, 46 → rowid</text>
+        </g>
+        <g id="leafE">
+          <rect x="700" y="310" width="150" height="60" rx="8" fill="#0f1420" stroke="#a3aabf"/>
+          <text x="775" y="332" text-anchor="middle" fill="#a3aabf" font-size="11">leaf</text>
+          <text x="775" y="352" text-anchor="middle" fill="#a3aabf" font-size="10">47, 48, 49 → rowid</text>
+        </g>
+
+        <!-- Sibling pointers -->
+        <path d="M170 340 L190 340" stroke="#5b6677" stroke-dasharray="4 3"/>
+        <path d="M340 340 L360 340" stroke="#5b6677" stroke-dasharray="4 3"/>
+        <path d="M510 340 L530 340" stroke="#5b6677" stroke-dasharray="4 3"/>
+        <path d="M680 340 L700 340" stroke="#5b6677" stroke-dasharray="4 3"/>
+
+        <!-- Heap page -->
+        <g id="heap">
+          <rect x="330" y="430" width="240" height="70" rx="8" fill="#0f1420" stroke="#2dc653" stroke-width="2"/>
+          <text x="450" y="452" text-anchor="middle" fill="#2dc653" font-weight="700">HEAP PAGE (table row)</text>
+          <text x="450" y="472" text-anchor="middle" fill="#c6d0e0" font-size="11">id=42, name="Alice",</text>
+          <text x="450" y="488" text-anchor="middle" fill="#c6d0e0" font-size="11">email="alice@x.com", …</text>
+        </g>
+
+        <!-- Arrows: root -> int2, int2 -> leafC, leafC -> heap -->
+        <path id="arr1" data-anim class="a-hidden" d="M450 140 L360 200" stroke="#00b4d8" stroke-width="3" fill="none" marker-end="url(#ax1)"/>
+        <path id="arr2" data-anim class="a-hidden" d="M360 250 L435 310" stroke="#00b4d8" stroke-width="3" fill="none" marker-end="url(#ax1)"/>
+        <path id="arr3" data-anim class="a-hidden" d="M450 370 L450 430" stroke="#00b4d8" stroke-width="3" fill="none" marker-end="url(#ax1)"/>
+
+        <!-- Scan (loser) arrow -->
+        <g id="scan-mark" data-anim class="a-hidden">
+          <rect x="20" y="410" width="850" height="30" rx="6" fill="#f7567c" opacity=".2"/>
+          <text x="445" y="429" text-anchor="middle" fill="#f7567c" font-size="12" font-weight="700">
+            × full-table scan alternative would visit every row in the heap
+          </text>
+        </g>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'A B+Tree lookup for id = 42: root → correct internal node → leaf → heap. Four page reads on a billion-row table.',
+          interval: 1800,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.add('a-hidden');
+              el.classList.remove('a-glow');
+            });
+            ['root','int1','int2','int3','int4','leafA','leafB','leafC','leafD','leafE','heap'].forEach(id => {
+              const el = r.querySelector('#' + id);
+              if (el) { el.classList.remove('a-glow','a-dim'); }
+            });
+          },
+          steps: [
+            { caption: 'Query arrives: find id = 42. The engine will consult the index instead of scanning the whole table.',
+              apply: (r, $) => { $('#q-pill').classList.remove('a-hidden'); } },
+
+            { caption: 'Load the ROOT page — always hot in the buffer pool. The root says: 42 falls in the "25–50" child.',
+              apply: (r, $) => { $('#root').classList.add('a-glow'); ['int1','int2','int3','int4'].forEach(id => $('#'+id).classList.add('a-dim')); } },
+
+            { caption: 'Follow the pointer to the correct INTERNAL node (keys 25–49). One page read from disk.',
+              apply: (r, $) => { $('#arr1').classList.remove('a-hidden'); $('#int2').classList.remove('a-dim'); $('#int2').classList.add('a-glow'); $('#root').classList.remove('a-glow'); } },
+
+            { caption: 'Inside this internal node: 42 lies between the 40 and 45 separators, so descend into that leaf.',
+              apply: (r, $) => { ['leafA','leafB','leafD','leafE'].forEach(id => $('#'+id).classList.add('a-dim')); $('#int2').classList.remove('a-glow'); } },
+
+            { caption: 'Read the LEAF page. Leaves store the sorted keys plus a row pointer (rowid / heap tuple id).',
+              apply: (r, $) => { $('#arr2').classList.remove('a-hidden'); $('#leafC').classList.remove('a-dim'); $('#leafC').classList.add('a-glow'); } },
+
+            { caption: 'Binary-search within the leaf finds key 42 → rowid. Range/ORDER BY queries would now walk sibling leaves.',
+              apply: (r, $) => { $('#key42').setAttribute('fill','#00b4d8'); } },
+
+            { caption: 'Follow the rowid to the HEAP page and return the actual row. Total: 4 page reads instead of millions.',
+              apply: (r, $) => { $('#arr3').classList.remove('a-hidden'); $('#leafC').classList.remove('a-glow'); $('#heap').classList.add('a-glow'); } },
+
+            { caption: 'Compare: without the index, the executor would sweep every heap page linearly — that is the O(n) full scan.',
+              apply: (r, $) => { $('#scan-mark').classList.remove('a-hidden'); } },
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; return; }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. What an index actually is</h3>
+    <p>An index is <strong>a separate, sorted, redundant copy of one or more columns of a table, plus a pointer to the full row</strong>. Use-The-Index-Luke puts it bluntly: <em>"an index is pure redundancy."</em> That redundancy is the whole point — you trade a bit of disk, a bit of write overhead, and complexity in return for turning a linear scan into a logarithmic lookup. The base table is the "heap" (Postgres) or is itself organized as a clustered index (MySQL InnoDB, SQL Server). Any additional index is called a <strong>secondary index</strong> and holds <code>(indexed_key, row_pointer)</code> pairs.</p>
+
+    <h3>2. Why B+Tree, not binary search tree</h3>
+    <p>A plain binary tree of a billion keys is <strong>~30 levels deep</strong>. Since each level lives on a different disk page, that's 30 random disk reads per lookup — awful. A <strong>B+Tree</strong> fixes this by making each node <em>page-sized</em> (~8&nbsp;KB) and holding <em>hundreds</em> of keys per node. Fan-out of 100 means a billion rows fit in 5 levels; fan-out of 500 fits them in 4. The top 1–2 levels stay pinned in RAM in the buffer pool, so <strong>a real lookup is 2–3 disk I/Os</strong>. B+Trees also self-balance on insert/delete via node splits and merges, so the depth stays predictable as the table grows. Leaf nodes are chained in a <strong>doubly linked list</strong>, which is what makes range scans (<code>BETWEEN</code>, <code>ORDER BY</code>, <code>LIMIT</code>) essentially free — walk the list from where the tree landed you.</p>
+
+    <h3>3. Clustered vs secondary indexes</h3>
+    <p>A <strong>clustered index</strong> stores the table rows in the leaf pages of the index itself, sorted by the key — the table <em>is</em> the index. MySQL InnoDB and SQL Server default to this, keyed on the primary key. Lookups are one traversal, no extra hop to the heap. A <strong>secondary (non-clustered) index</strong> stores <code>(key → primary_key)</code> pairs; the engine then does a second walk of the clustered index to fetch the row. Postgres does not use clustered indexes; every index is secondary and points at a <code>ctid</code> (heap tuple id). Trade-off: clustered indexes are faster for the primary access pattern but every secondary index is one hop slower.</p>
+
+    <h3>4. Composite (multi-column) indexes and the leftmost-prefix rule</h3>
+    <p>An index on <code>(a, b, c)</code> is a single tree sorted first by <code>a</code>, then <code>b</code>, then <code>c</code>. It can serve queries filtering on <code>a</code>, on <code>(a, b)</code>, or on <code>(a, b, c)</code> — <strong>any leftmost prefix</strong>. It cannot serve a query that filters only on <code>b</code>, because the tree isn't sorted that way. MongoDB codifies this as the <strong>ESR rule</strong>: put <em>Equality</em> columns first, then <em>Sort</em> columns, then <em>Range</em> columns. This lets one composite index cover many query shapes and often eliminates the sort step entirely.</p>
+
+    <h3>5. Covering indexes and index-only scans</h3>
+    <p>If <em>every column the query needs</em> is already in the index, the engine can answer from the index alone and skip the heap lookup — an <strong>index-only scan</strong>. This is why you'll see indexes with <code>INCLUDE(...)</code> clauses (SQL Server, Postgres 11+) that attach extra columns to leaf nodes without adding them to the sort key. A covering index is often 2–5× faster than a normal one on read-heavy paths.</p>
+
+    <h3>6. Selectivity and cost-based planner choices</h3>
+    <p>An index is only useful if the predicate is <strong>selective</strong> — i.e. it narrows the result to a small fraction of the table. The planner uses <strong>histograms and statistics</strong> to estimate selectivity. For <code>WHERE gender = 'F'</code> (roughly 50 % of rows), the planner will pick a sequential scan because reading half the table in order is cheaper than doing millions of random index lookups. For <code>WHERE email = 'alice@x.com'</code> (1 in 500 million), the index wins hands down. A common bug: an index exists but stats are stale, and the planner "forgets" to use it. Fix: <code>ANALYZE table</code>.</p>
+
+    <h3>7. Write cost — the other side of the ledger</h3>
+    <p>Every <code>INSERT</code> or <code>UPDATE</code> must update the row plus <strong>every index that references any affected column</strong>. Ten indexes on a table = ten B+Tree modifications per write. Under heavy write load, engines like Cassandra, HBase, and RocksDB replace B+Trees with <strong>LSM trees</strong> (Log-Structured Merge trees): writes go to an in-memory sorted table (memtable), get flushed to immutable sorted files (SSTables), then merged in the background. LSMs make writes cheap and sequential at the cost of higher read amplification (a read may probe multiple SSTables, mitigated by bloom filters).</p>
+
+    <h3>8. Beyond B+Tree: the index zoo</h3>
+    <p>Different workloads need different structures. <strong>Hash indexes</strong> are O(1) but only serve equality — Postgres has them, and DynamoDB partitions by hash of the partition key. <strong>Inverted indexes</strong> map each term to a posting list of document ids — the heart of full-text search (Lucene, Elasticsearch, OpenSearch). <strong>Geospatial indexes</strong> like GiST, R-Tree, and geohash prefixes handle "within radius" queries. <strong>Bitmap indexes</strong> shine for low-cardinality columns in data warehouses and support fast AND/OR combinations. <strong>BRIN indexes</strong> summarize block ranges — a tiny structure for tables where physical order correlates with a column (timestamps in append-only logs). Choose the structure to match the workload; a wrong choice makes an index useless.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Indexes are a great "systems + data-structures" mashup. The right structure depends on the operation you want to be cheap:</p>
+    <table>
+      <thead><tr><th>Structure</th><th>Best for</th><th>Point lookup</th><th>Range scan</th><th>Insert</th><th>Real DB</th></tr></thead>
+      <tbody>
+        <tr><td><strong>B+Tree</strong></td><td>General OLTP, equality + range</td><td>O(log<sub>b</sub> n)</td><td>O(log n + k)</td><td>O(log n)</td><td>Postgres, MySQL, SQL Server, Oracle, SQLite</td></tr>
+        <tr><td><strong>LSM Tree</strong></td><td>Write-heavy, wide keys</td><td>O(log n) + bloom check per level</td><td>O(log n + k)</td><td>O(1) amortized</td><td>Cassandra, RocksDB, HBase, DynamoDB storage engine</td></tr>
+        <tr><td><strong>Hash</strong></td><td>Exact-match only</td><td>O(1) avg</td><td>❌ not supported</td><td>O(1) avg</td><td>Postgres <code>USING hash</code>, DynamoDB partitions, Redis</td></tr>
+        <tr><td><strong>Inverted index</strong></td><td>Full-text / tags / arrays</td><td>O(log V) per term + posting merge</td><td>N/A</td><td>O(log V)</td><td>Lucene, Elasticsearch, Postgres GIN</td></tr>
+        <tr><td><strong>R-Tree / GiST / geohash</strong></td><td>Spatial (bounding box, KNN)</td><td>O(log n) avg</td><td>O(log n + k)</td><td>O(log n)</td><td>PostGIS, MySQL spatial, MongoDB 2dsphere</td></tr>
+        <tr><td><strong>Bitmap</strong></td><td>Low-cardinality analytics, AND/OR</td><td>O(1) per column, bitwise combine</td><td>N/A</td><td>Expensive</td><td>Oracle, Vertica, ClickHouse (roaring bitmaps)</td></tr>
+        <tr><td><strong>BRIN</strong></td><td>Huge tables, physically ordered column</td><td>O(pages/range)</td><td>O(pages/range)</td><td>O(1)</td><td>Postgres BRIN</td></tr>
+        <tr><td><strong>Trie / Radix</strong></td><td>Prefix search, autocomplete</td><td>O(k) k=key length</td><td>O(k + m)</td><td>O(k)</td><td>Postgres SP-GiST, autocomplete engines</td></tr>
+        <tr><td><strong>Bloom filter</strong></td><td>"Definitely not here" pre-check</td><td>O(k) hashes</td><td>N/A</td><td>O(k)</td><td>Bigtable, Cassandra SSTable filters</td></tr>
+      </tbody>
+    </table>
+    <p>Why each choice: <strong>B+Trees</strong> minimize disk seeks by keeping fan-out high; <strong>LSM trees</strong> convert random writes into sequential appends; <strong>hash</strong> beats trees when you only need equality; <strong>inverted indexes</strong> flip the direction of the map so "which docs contain X?" is one lookup instead of a full scan; <strong>bloom filters</strong> stop reads from ever touching disk for keys that don't exist.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping index concepts to AWS services</h2>
+    <p>You almost never "run your own B+Tree" on AWS — you pick a managed database and understand how <em>its</em> indexes work. Here's the map:</p>
+    <table>
+      <thead><tr><th>Workload</th><th>AWS service</th><th>Index internals</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>OLTP relational (Postgres/MySQL)</td><td><strong>Amazon RDS / Aurora</strong></td><td>B+Tree (default), GIN, GiST, BRIN, hash</td><td>Postgres/MySQL under the hood; full index toolbox; Aurora offloads storage I/O to a distributed log.</td></tr>
+        <tr><td>Serverless key-value / document</td><td><strong>DynamoDB</strong></td><td>Hash + range (partition + sort key); LSI &amp; GSI as secondary B-tree-like structures per partition</td><td>Single-digit-ms lookups at any scale via hash partitioning; GSIs let you index alternate access patterns.</td></tr>
+        <tr><td>Full-text / log / analytics search</td><td><strong>OpenSearch (Elasticsearch)</strong></td><td>Lucene inverted indexes + doc-values + BKD-trees for numeric/geo</td><td>Purpose-built for "which docs contain term X" and range/geo queries.</td></tr>
+        <tr><td>Data warehouse / OLAP</td><td><strong>Redshift</strong></td><td>Zone maps (min/max per block) + sort keys — a BRIN-flavored approach, no B-trees</td><td>Analytical scans over huge fact tables benefit more from columnar layout + zone maps than from row-level indexes.</td></tr>
+        <tr><td>Fast lookup cache</td><td><strong>ElastiCache Redis</strong></td><td>Hash tables + sorted sets (skip list) + streams</td><td>Sub-millisecond in-memory index for hot keys; sorted-set is essentially a range index over floats.</td></tr>
+        <tr><td>DynamoDB read acceleration</td><td><strong>DynamoDB DAX</strong></td><td>Item &amp; query cache on top of DynamoDB</td><td>Turns a cheap indexed read into a microsecond cache hit.</td></tr>
+        <tr><td>Data lake ad-hoc queries</td><td><strong>Athena / S3 + Iceberg</strong></td><td>Parquet page indexes, min/max stats, Iceberg partition + bloom + Puffin indexes</td><td>Prunes files and row groups so scans touch a fraction of the data.</td></tr>
+        <tr><td>Graph queries</td><td><strong>Neptune</strong></td><td>Vertex/edge indexes on top of RocksDB (LSM)</td><td>Traversals need dedicated adjacency indexes.</td></tr>
+      </tbody>
+    </table>
+    <p>Deployment story: for a typical CRUD service, put the transactional truth in <strong>Aurora Postgres</strong> and index it aggressively with B-trees + a couple of composite indexes tuned to top queries; front hot reads with <strong>ElastiCache Redis</strong>; push search/logs to <strong>OpenSearch</strong> via a stream; land raw data in <strong>S3</strong> and query it with <strong>Athena</strong> using Parquet + Iceberg for column-level indexing. That's a "polyglot persistence" story an interviewer expects you to be able to draw.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — a minimal B+Tree-style index</h2>
+    <p>Real database B+Trees are page-oriented, on-disk, concurrent, and crash-safe. The idea, though, fits in ~120 lines of C#. Below is a simplified in-memory B+Tree that supports <code>Insert</code>, <code>Get</code> (point lookup) and <code>Range</code> (range scan via the leaf-linked-list). It compiles and shows the shape of the algorithm — the same shape used by SQL Server and Postgres just with pages instead of C# nodes.</p>
+    <pre><code><span class="kw">using</span> System;
+<span class="kw">using</span> System.Collections.Generic;
+
+<span class="cmt">// Simple B+Tree for demo. Keys are int, values are string.
+// Order = max keys per leaf; internal nodes hold up to Order separator keys.</span>
+<span class="kw">public class</span> <span class="typ">BPlusTree</span> {
+    <span class="kw">private const int</span> Order = 4;   <span class="cmt">// tiny fan-out to keep the picture clear</span>
+
+    <span class="kw">abstract class</span> Node { <span class="kw">public</span> List&lt;<span class="typ">int</span>&gt; Keys = <span class="kw">new</span>(); }
+
+    <span class="kw">class</span> Leaf : Node {
+        <span class="kw">public</span> List&lt;<span class="typ">string</span>&gt; Values = <span class="kw">new</span>();
+        <span class="kw">public</span> Leaf Next;          <span class="cmt">// linked list of leaves → range scans</span>
+    }
+
+    <span class="kw">class</span> Internal : Node {
+        <span class="kw">public</span> List&lt;Node&gt; Children = <span class="kw">new</span>();
+    }
+
+    <span class="kw">private</span> Node _root = <span class="kw">new</span> Leaf();
+
+    <span class="cmt">// ---- Point lookup: O(log_b n) ----</span>
+    <span class="kw">public string</span> <span class="fn">Get</span>(<span class="kw">int</span> key) {
+        <span class="kw">var</span> leaf = FindLeaf(_root, key);
+        <span class="kw">int</span> i = leaf.Keys.BinarySearch(key);
+        <span class="kw">return</span> i &gt;= 0 ? leaf.Values[i] : <span class="kw">null</span>;
+    }
+
+    <span class="cmt">// ---- Range scan: walk one branch down, then hop leaves ----</span>
+    <span class="kw">public</span> IEnumerable&lt;(<span class="typ">int</span> k, <span class="typ">string</span> v)&gt; <span class="fn">Range</span>(<span class="kw">int</span> lo, <span class="kw">int</span> hi) {
+        <span class="kw">var</span> leaf = FindLeaf(_root, lo);
+        <span class="kw">while</span> (leaf != <span class="kw">null</span>) {
+            <span class="kw">for</span> (<span class="kw">int</span> i = 0; i &lt; leaf.Keys.Count; i++) {
+                <span class="kw">if</span> (leaf.Keys[i] &gt; hi) <span class="kw">yield break</span>;
+                <span class="kw">if</span> (leaf.Keys[i] &gt;= lo) <span class="kw">yield return</span> (leaf.Keys[i], leaf.Values[i]);
+            }
+            leaf = leaf.Next;
+        }
+    }
+
+    <span class="kw">private</span> Leaf <span class="fn">FindLeaf</span>(Node n, <span class="kw">int</span> key) {
+        <span class="kw">while</span> (n <span class="kw">is</span> Internal ni) {
+            <span class="kw">int</span> i = 0;
+            <span class="kw">while</span> (i &lt; ni.Keys.Count &amp;&amp; key &gt;= ni.Keys[i]) i++;
+            n = ni.Children[i];                <span class="cmt">// descend along the separator</span>
+        }
+        <span class="kw">return</span> (Leaf)n;
+    }
+
+    <span class="cmt">// ---- Insert: recursive; splits propagate upward, may grow tree height ----</span>
+    <span class="kw">public void</span> <span class="fn">Insert</span>(<span class="kw">int</span> key, <span class="kw">string</span> val) {
+        <span class="kw">var</span> split = InsertRec(_root, key, val);
+        <span class="kw">if</span> (split.HasValue) {                     <span class="cmt">// root split → new root, tree grows one level</span>
+            <span class="kw">var</span> nr = <span class="kw">new</span> Internal();
+            nr.Keys.Add(split.Value.pivot);
+            nr.Children.Add(_root);
+            nr.Children.Add(split.Value.right);
+            _root = nr;
+        }
+    }
+
+    <span class="kw">private</span> (<span class="kw">int</span> pivot, Node right)? <span class="fn">InsertRec</span>(Node n, <span class="kw">int</span> key, <span class="kw">string</span> val) {
+        <span class="kw">if</span> (n <span class="kw">is</span> Leaf lf) {
+            <span class="kw">int</span> pos = lf.Keys.BinarySearch(key);
+            <span class="kw">if</span> (pos &gt;= 0) { lf.Values[pos] = val; <span class="kw">return null</span>; } <span class="cmt">// upsert</span>
+            pos = ~pos;
+            lf.Keys.Insert(pos, key);
+            lf.Values.Insert(pos, val);
+            <span class="kw">if</span> (lf.Keys.Count &lt;= Order) <span class="kw">return null</span>;
+            <span class="kw">return</span> SplitLeaf(lf);
+        }
+        <span class="kw">var</span> nd = (Internal)n;
+        <span class="kw">int</span> ci = 0;
+        <span class="kw">while</span> (ci &lt; nd.Keys.Count &amp;&amp; key &gt;= nd.Keys[ci]) ci++;
+        <span class="kw">var</span> childSplit = InsertRec(nd.Children[ci], key, val);
+        <span class="kw">if</span> (!childSplit.HasValue) <span class="kw">return null</span>;
+        nd.Keys.Insert(ci, childSplit.Value.pivot);
+        nd.Children.Insert(ci + 1, childSplit.Value.right);
+        <span class="kw">if</span> (nd.Keys.Count &lt;= Order) <span class="kw">return null</span>;
+        <span class="kw">return</span> SplitInternal(nd);
+    }
+
+    <span class="kw">private</span> (<span class="kw">int</span>, Node) <span class="fn">SplitLeaf</span>(Leaf lf) {
+        <span class="kw">int</span> mid = lf.Keys.Count / 2;
+        <span class="kw">var</span> right = <span class="kw">new</span> Leaf {
+            Keys   = lf.Keys.GetRange(mid, lf.Keys.Count - mid),
+            Values = lf.Values.GetRange(mid, lf.Values.Count - mid),
+            Next   = lf.Next
+        };
+        lf.Keys.RemoveRange(mid, lf.Keys.Count - mid);
+        lf.Values.RemoveRange(mid, lf.Values.Count - mid);
+        lf.Next = right;
+        <span class="kw">return</span> (right.Keys[0], right);   <span class="cmt">// pivot copied up (B+Tree semantics)</span>
+    }
+
+    <span class="kw">private</span> (<span class="kw">int</span>, Node) <span class="fn">SplitInternal</span>(Internal nd) {
+        <span class="kw">int</span> mid = nd.Keys.Count / 2;
+        <span class="kw">int</span> pivot = nd.Keys[mid];
+        <span class="kw">var</span> right = <span class="kw">new</span> Internal {
+            Keys     = nd.Keys.GetRange(mid + 1, nd.Keys.Count - mid - 1),
+            Children = nd.Children.GetRange(mid + 1, nd.Children.Count - mid - 1)
+        };
+        nd.Keys.RemoveRange(mid, nd.Keys.Count - mid);
+        nd.Children.RemoveRange(mid + 1, nd.Children.Count - mid - 1);
+        <span class="kw">return</span> (pivot, right);           <span class="cmt">// pivot moves up (not kept in either child)</span>
+    }
+}
+
+<span class="cmt">// Usage:
+//   var idx = new BPlusTree();
+//   idx.Insert(42, "Alice");
+//   idx.Insert(43, "Bob");
+//   Console.WriteLine(idx.Get(42));            // Alice
+//   foreach (var (k,v) in idx.Range(40, 45))
+//       Console.WriteLine($"{k}: {v}");</span>
+</code></pre>
+
+    <p>Notes for the interviewer: real databases add <strong>concurrent latch-crabbing</strong> so multiple readers/writers can walk the tree at once; keys are stored as byte slices, not <code>int</code>; pages have prefix compression; and after a crash the tree is rebuilt by replaying the WAL. The core algorithm is exactly what's above. If the interviewer swaps the language, in Java you'd use <code>Collections.binarySearch</code>, in Python <code>bisect</code>, in Go <code>sort.Search</code> — the shape is identical.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>The fundamental trade-off: reads vs writes vs space</h3>
+    <p>Every index makes reads faster but writes slower and consumes disk. A table with ten indexes needs ten B+Tree updates per row change. On a write-heavy workload (event ingestion, high-frequency trading, IoT) the write amplification eats you alive, which is why systems like Cassandra and DynamoDB adopt <strong>LSM trees</strong> — writes become cheap sequential appends, at the cost of read amplification that bloom filters partially hide.</p>
+
+    <h3>Selectivity — the reason indexes get ignored</h3>
+    <p>If a predicate matches more than roughly 10–20 % of the table, a sequential scan is usually cheaper than millions of random index+heap lookups. The planner uses statistics (histograms, <code>pg_stats</code>) to decide. If your statistics are stale, the planner picks the wrong plan — always run <code>ANALYZE</code> after big data changes.</p>
+
+    <h3>Hot-spot writes and index contention</h3>
+    <p>An auto-increment primary key concentrates <em>all</em> inserts at the rightmost leaf of the B+Tree, which creates lock contention under high concurrency. Solutions: hash-partitioned primary keys (UUIDv4, ULIDs), MySQL's <code>INSTANT</code> DDL, or splitting the write path across partitions.</p>
+
+    <h3>Index bloat and vacuum</h3>
+    <p>Postgres uses MVCC: updates create new tuple versions, and until <code>VACUUM</code> runs, old versions linger in the heap <em>and</em> in every index. On a heavily updated table indexes can double in size. Solutions: <code>REINDEX CONCURRENTLY</code>, HOT updates (Heap-Only Tuple — when no indexed column changed, updates skip the index), and monitoring <code>pg_stat_user_indexes</code>.</p>
+
+    <h3>Likely follow-up questions</h3>
+
+    <div class="qa">
+      <p class="q">Q: Why B+Tree instead of B-tree?</p>
+      <p class="a">A: In a B+Tree, only leaves store values and they are chained together. Internal nodes hold only routing keys, so fan-out is higher, the tree is shallower, and range scans (<code>ORDER BY</code>, <code>BETWEEN</code>) become a linear walk over the leaf linked list instead of a repeated tree descent.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: When is a hash index better than a B+Tree?</p>
+      <p class="a">A: When you only need equality lookups and nothing else — no range, no sorting, no prefix matching. Hash gives O(1) average vs B+Tree's O(log n). Postgres supports it via <code>USING hash</code>; DynamoDB partitions data by the hash of the partition key.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: How does an inverted index differ from a B+Tree?</p>
+      <p class="a">A: An inverted index maps each <em>term</em> to a posting list of document ids (<code>"cat" → [3, 17, 42]</code>). It flips the direction of the map so full-text queries become O(terms × posting-list-merge) instead of a full scan. That's what Lucene/Elasticsearch and Postgres GIN do.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: What is a covering index?</p>
+      <p class="a">A: An index that contains every column the query needs, so the engine can answer from the index alone and skip the heap fetch — an "index-only scan." Attach non-key columns via <code>INCLUDE(...)</code>. Great for hot read paths.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: I created an index but the query plan still shows a Seq Scan. Why?</p>
+      <p class="a">A: Most common causes: (1) the predicate isn't selective enough — the planner thinks the scan is cheaper; (2) statistics are stale — run <code>ANALYZE</code>; (3) the predicate isn't sargable — e.g. <code>WHERE LOWER(email) = ?</code> defeats an index on <code>email</code> unless you have a functional index on <code>LOWER(email)</code>; (4) an implicit cast (e.g. text vs varchar) prevents index use.</p>
+    </div>
+
+    <div class="qa">
+      <p class="q">Q: What does the "leftmost prefix" rule mean for composite indexes?</p>
+      <p class="a">A: An index on <code>(a, b, c)</code> can serve <code>WHERE a=?</code>, <code>WHERE a=? AND b=?</code>, and <code>WHERE a=? AND b=? AND c=?</code>. It <em>cannot</em> serve <code>WHERE b=?</code> alone. Design the column order to match the equality-then-sort-then-range shape of your top queries.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "An index is a redundant, sorted copy of a column plus a pointer to the row, so lookups become O(log n) tree walks instead of O(n) scans. Databases use B+Trees for the general case, LSM trees for write-heavy workloads, hash for equality-only, inverted indexes for full text, and specialised trees for spatial data. The trade-off is disk space and slower writes; the win is orders of magnitude faster reads."</p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Page size <strong>~8 KB</strong>, fan-out <strong>~100–500</strong>, depth <strong>3–5</strong> for tables up to a billion rows.</li>
+      <li>Full scan of a 100 GB table: <strong>~15+ minutes</strong> at 100 MB/s. Indexed lookup on the same table: <strong>~2–5 ms</strong>.</li>
+      <li>Index overhead: <strong>~10–20 % of table size</strong> per single-column B-tree.</li>
+      <li>Rule of thumb: if a predicate matches <strong>&gt; 10–20 %</strong> of rows, a sequential scan may beat the index.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li>"B+Tree, not binary tree — the whole point is <em>page-sized fan-out</em>, so we do 3 disk reads instead of 30."</li>
+      <li>"Leaf nodes are a linked list, which is why <code>ORDER BY</code> and <code>BETWEEN</code> are essentially free after the descent."</li>
+      <li>"Every index is a write tax — I would justify each one against actual query patterns, and drop unused ones (<code>pg_stat_user_indexes</code>)."</li>
+      <li>"For write-heavy workloads I'd reach for an LSM store (Cassandra, RocksDB, DynamoDB) — writes become sequential appends, bloom filters keep read amplification in check."</li>
+      <li>"Composite indexes follow the ESR rule: equality columns first, then sort, then range — one index can cover many query shapes."</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li>YouTube — <a href="https://www.youtube.com/watch?v=3G293is403I">"How do indexes make databases read faster?"</a> (the video that seeded this page)</li>
+      <li>Use-The-Index-Luke — <a href="https://use-the-index-luke.com/sql/anatomy">Anatomy of an SQL Index</a> (leaf-node doubly linked list + B-Tree explanation)</li>
+      <li>PostgreSQL Docs — <a href="https://www.postgresql.org/docs/current/indexes-types.html">Index Types</a> (B-tree, Hash, GiST, SP-GiST, GIN, BRIN)</li>
+      <li>MongoDB — <a href="https://www.mongodb.com/basics/database-index">Database Index</a> (B-tree default, hashed indexes for sharding, ESR rule)</li>
+      <li>GeeksforGeeks — <a href="https://www.geeksforgeeks.org/indexing-in-databases-set-1/">Indexing in Databases</a> (dense vs sparse, clustered vs non-clustered)</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

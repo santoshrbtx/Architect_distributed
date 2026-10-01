@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CAP Theorem & PACELC — Distributed Systems</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c; --scenario-bg: #fff0f4;
+    --reqs: #f4a259; --reqs-bg: #fff7ed;
+    --arch: #4361ee; --arch-bg: #eef2ff;
+    --dsa: #7048e8; --dsa-bg: #f3effe;
+    --aws: #ff9900; --aws-bg: #fff6e6;
+    --code-bg: #1e2430; --code-ink: #e7ecf3; --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08); --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .pillbar { display:flex; gap:10px; flex-wrap:wrap; margin:14px 0; }
+  .pill { padding:6px 14px; border-radius:999px; font-weight:700; font-size:.85rem; }
+  .pill.c { background:#eef2ff; color:#4361ee; border:1px solid #c7d2fe; }
+  .pill.a { background:#e7f8ee; color:#208b3a; border:1px solid #b7ebc8; }
+  .pill.p { background:#fff0f4; color:#f7567c; border:1px solid #fbc9d8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Distributed Systems · Interview Prep</div>
+    <h1>CAP Theorem & PACELC</h1>
+    <p>Consistency, Availability, Partition tolerance — pick two, but only during a partition. The single most-asked distributed-systems interview question, demystified.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Why it matters</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 The three letters</a>
+    <a href="#arch">🏗️ The trade-off</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 PACELC</a>
+    <a href="#aws">☁️ AWS mapping</a>
+    <a href="#code">💻 C# demo</a>
+    <a href="#tradeoffs">⚖️ Follow-ups</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>Why the CAP theorem matters</h2>
+    <p>Every time you pick a database or design a replicated service, you are making a CAP decision whether you name it or not. The CAP theorem — Brewer's theorem, proved formally by Gilbert and Lynch in 2002 — states that a distributed data store can provide at most <strong>two of three</strong> guarantees simultaneously: <strong>Consistency</strong>, <strong>Availability</strong>, and <strong>Partition tolerance</strong>. It is the vocabulary interviewers use to probe whether you understand that there is no free lunch in a networked system.</p>
+    <p>The reason it shows up everywhere is that real products live and die by this choice. A banking ledger refuses to show you a stale or divergent balance, so it will reject requests during a network fault (it chooses <strong>C</strong>). A shopping cart at Amazon scale would rather let you keep adding items and reconcile later than show an error, so it stays writable during a fault (it chooses <strong>A</strong>). DynamoDB, Cassandra, and Riak grew out of the availability camp; ZooKeeper, etcd, HBase, and single-primary RDBMS clusters grew out of the consistency camp. When an interviewer asks "what happens if the network splits your cluster in half?", they want to hear the CAP reasoning out loud.</p>
+    <div class="pillbar">
+      <span class="pill c">C · every read sees the latest write</span>
+      <span class="pill a">A · every request gets a (non-error) response</span>
+      <span class="pill p">P · system survives dropped/delayed messages</span>
+    </div>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The two ATM machines and a snipped phone line</h2>
+    <p>Imagine your bank has <strong>two ATM machines</strong> — one in Mumbai, one in Delhi. They are both supposed to show the exact same balance for your account, because they call each other on a phone line every time someone withdraws money. On a normal day this works beautifully.</p>
+    <p>Now one afternoon a construction worker <strong>accidentally cuts the phone line</strong> between the two cities. The two machines cannot talk to each other anymore. At that exact moment, you walk up to the Mumbai machine and try to take out 5,000 rupees. Your husband, without telling you, walks up to the Delhi machine and tries to take out 5,000 rupees from the same account. The account only has 6,000 rupees in it.</p>
+    <p>The bank has to pick one of two painful choices. <strong>Choice one</strong> — refuse both of you. The machine flashes "Sorry, cannot verify your balance right now, please try again later." Nobody's account gets messed up, but nobody gets money. This is called <strong>choosing consistency</strong> — the numbers stay honest, but the service goes to sleep.</p>
+    <p><strong>Choice two</strong> — give both of you the money anyway. You each walk away happy with 5,000 rupees. Then when the phone line is fixed the bank realises "wait, we handed out 10,000 rupees from an account that only had 6,000" and now some poor bank clerk has to phone one of you and ask for it back. This is called <strong>choosing availability</strong> — the service always answers, but sometimes the numbers are wrong for a while.</p>
+    <p>That is the whole idea. When two computers stop being able to talk to each other, <strong>you cannot both be perfectly correct AND keep answering everyone</strong>. Your ATM chooses correctness. A shopping cart on Amazon chooses "keep answering" — because losing a sale is worse than a duplicated item that gets fixed at checkout.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 The three letters, precisely</span>
+    <h2>What C, A, and P actually mean</h2>
+    <p>The single biggest interview mistake is using fuzzy definitions. Nail these exactly:</p>
+    <table>
+      <tr><th>Letter</th><th>Formal meaning</th><th>What it is NOT</th></tr>
+      <tr><td><strong>Consistency</strong></td><td>Every read receives the <em>most recent</em> write or an error. All nodes return the same value at the same logical instant. This is <strong>linearizability</strong> — a single-copy illusion.</td><td>NOT the "C" in ACID (that's about integrity constraints/invariants within one transaction).</td></tr>
+      <tr><td><strong>Availability</strong></td><td>Every request received by a <em>non-failing</em> node returns a non-error response — but the response is <em>not</em> guaranteed to be the most recent data.</td><td>NOT "high availability / uptime %". It's a binary liveness property: does a live node answer at all?</td></tr>
+      <tr><td><strong>Partition tolerance</strong></td><td>The system continues operating even when the network drops or arbitrarily delays messages between nodes, splitting them into groups that cannot talk.</td><td>NOT optional in practice. Networks fail; you cannot "choose" to not tolerate partitions if you're distributed.</td></tr>
+    </table>
+    <h3>The key insight interviewers reward</h3>
+    <p>Because "no distributed system is safe from network failures," partition tolerance is not really a choice — you must have <strong>P</strong>. So the honest framing is: <em>during a partition</em>, you must sacrifice either <strong>C</strong> or <strong>A</strong>. The famous "pick two" is misleading; the real theorem is "<strong>when a partition happens, pick C or A</strong>." When there is no partition — the normal case — you can have both C and A.</p>
+    <p>This is also why "CA" systems are a bit of a myth in the distributed world. A single-node database is trivially CA (no partitions possible), but as Brewer and others note, "there are no NoSQL databases one would classify as CA" — the moment you replicate across a network, P is forced upon you.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ The trade-off, visually</span>
+    <h2>What happens when the network splits</h2>
+    <p>Picture two replicas, N1 and N2, holding value <code>x = v0</code>. A client writes <code>x = v1</code> to N1. Then the link between N1 and N2 dies — a partition. Now another client reads <code>x</code> from N2. The system faces an unavoidable fork: either N2 <strong>refuses to answer</strong> (it can't confirm it has the latest write → choosing <strong>Consistency</strong>, sacrificing Availability), or N2 <strong>returns the stale v0</strong> (staying up but wrong → choosing <strong>Availability</strong>, sacrificing Consistency). There is no third option that keeps both, because the two nodes physically cannot communicate.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <defs>
+          <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#7aa2f7"/></marker>
+          <marker id="arrR" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#f7567c"/></marker>
+        </defs>
+        <!-- client write -->
+        <rect x="20" y="30" width="120" height="46" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="80" y="52" fill="#e7ecf3" font-size="13" text-anchor="middle">Client A</text>
+        <text x="80" y="68" fill="#9aa7bd" font-size="11" text-anchor="middle">write x=v1</text>
+        <!-- N1 -->
+        <rect x="300" y="20" width="150" height="66" rx="10" fill="#132a1c" stroke="#2dc653"/>
+        <text x="375" y="46" fill="#e7ecf3" font-size="14" text-anchor="middle">Node N1</text>
+        <text x="375" y="66" fill="#9ece6a" font-size="12" text-anchor="middle">x = v1 ✓</text>
+        <!-- N2 -->
+        <rect x="300" y="200" width="150" height="66" rx="10" fill="#2a1520" stroke="#f7567c"/>
+        <text x="375" y="226" fill="#e7ecf3" font-size="14" text-anchor="middle">Node N2</text>
+        <text x="375" y="246" fill="#f7a8bf" font-size="12" text-anchor="middle">x = v0 (stale)</text>
+        <!-- client read -->
+        <rect x="620" y="210" width="120" height="46" rx="10" fill="#1b2940" stroke="#f7567c"/>
+        <text x="680" y="232" fill="#e7ecf3" font-size="13" text-anchor="middle">Client B</text>
+        <text x="680" y="248" fill="#9aa7bd" font-size="11" text-anchor="middle">read x=?</text>
+        <!-- arrows -->
+        <line x1="140" y1="53" x2="298" y2="53" stroke="#7aa2f7" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="618" y1="233" x2="452" y2="233" stroke="#f7567c" stroke-width="2" marker-end="url(#arrR)"/>
+        <!-- broken replication link -->
+        <line x1="375" y1="86" x2="375" y2="200" stroke="#e0405e" stroke-width="3" stroke-dasharray="10 8"/>
+        <text x="470" y="150" fill="#e0405e" font-size="15" font-weight="bold">✂ PARTITION</text>
+        <text x="470" y="170" fill="#9aa7bd" font-size="11">replication blocked</text>
+        <!-- decision -->
+        <text x="375" y="120" fill="#ffd166" font-size="12" text-anchor="middle">N2 must now choose:</text>
+        <text x="375" y="145" fill="#9ece6a" font-size="11" text-anchor="middle">refuse → CP (consistent)</text>
+        <text x="375" y="162" fill="#f7a8bf" font-size="11" text-anchor="middle">answer v0 → AP (available)</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#4361ee"></span>write path</span>
+        <span><span class="dot" style="background:#f7567c"></span>read during partition</span>
+        <span><span class="dot" style="background:#e0405e"></span>severed link</span>
+      </div>
+    </div>
+    <p><strong>CP systems</strong> (etcd, ZooKeeper, HBase, MongoDB with majority reads, Spanner) sacrifice availability: the minority side stops serving to avoid divergence. <strong>AP systems</strong> (Cassandra, DynamoDB, Riak, CouchDB) sacrifice consistency: both sides keep serving and reconcile later via mechanisms like last-write-wins, vector clocks, or CRDTs.</p>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+    <h3>Why "pick two" is a lie you should correct in the interview</h3>
+    <p>Brewer clarified in his 2012 retrospective that the "2 of 3" formulation is misleading. In steady state — no partition — a well-built system delivers both consistency and availability. The trade-off is only forced <em>during</em> a partition, and even then it can be scoped: you might drop consistency for a shopping cart but keep it for the payment step, within the same product. Saying this out loud signals senior-level understanding.</p>
+    <h3>How AP systems heal: conflict resolution</h3>
+    <p>Choosing A doesn't mean chaos forever — it means <em>eventual</em> consistency. When the partition heals, replicas must reconcile divergent writes. Common strategies: <strong>Last-Write-Wins (LWW)</strong> using timestamps (simple, but can silently drop data), <strong>vector clocks</strong> to detect concurrent writes and surface conflicts to the app (Dynamo's approach), and <strong>CRDTs</strong> (Conflict-free Replicated Data Types) that are mathematically guaranteed to merge — counters, sets, and registers that converge regardless of order.</p>
+    <h3>How CP systems stay consistent: quorums & consensus</h3>
+    <p>CP systems typically require a <strong>majority quorum</strong> to serve. With replication factor N, if reads (R) and writes (W) satisfy <code>R + W &gt; N</code>, every read overlaps at least one node holding the latest write. The minority side of a partition can't form a quorum, so it stops — trading availability for a single-copy illusion. Underneath, they run a consensus protocol (Raft/Paxos) so the majority agrees on one linear history. See the <a href="../consensus-raft-paxos/index.html">consensus page</a> for the mechanics.</p>
+    <h3>Tunable consistency</h3>
+    <p>Modern stores blur the line. Cassandra lets you pick per-query consistency: <code>ONE</code> (fast, AP-leaning) up to <code>QUORUM</code> or <code>ALL</code> (CP-leaning). DynamoDB offers eventually-consistent reads (cheap, default) or strongly-consistent reads (double cost, single-region). The CAP letter is thus often a <em>per-operation</em> dial, not a whole-database label.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 PACELC — the better model</span>
+    <h2>PACELC: CAP plus the latency truth</h2>
+    <p>CAP only describes behavior <em>during</em> a partition, which is rare. PACELC (Abadi, 2010) completes the picture: <strong>if</strong> there is a <strong>P</strong>artition, trade off <strong>A</strong>vailability vs <strong>C</strong>onsistency (the CAP case); <strong>E</strong>lse — in normal operation — trade off <strong>L</strong>atency vs <strong>C</strong>onsistency. This matters because strong consistency requires cross-node coordination on <em>every</em> operation, which costs latency even when the network is perfectly healthy.</p>
+    <table>
+      <tr><th>System</th><th>PACELC classification</th><th>Meaning</th></tr>
+      <tr><td>DynamoDB / Cassandra</td><td><strong>PA/EL</strong></td><td>Favors availability during partitions, low latency otherwise. Consistency is the thing sacrificed on both sides.</td></tr>
+      <tr><td>Google Spanner</td><td><strong>PC/EC</strong></td><td>Always favors consistency — blocks during partitions AND pays latency (TrueTime waits) in normal operation.</td></tr>
+      <tr><td>MongoDB</td><td><strong>PC/EC</strong> (default)</td><td>Consistency-leaning; primary-based, majority write concern.</td></tr>
+      <tr><td>PNUTS (Yahoo)</td><td><strong>PC/EL</strong></td><td>Gives up availability under partition, but favors latency over consistency normally.</td></tr>
+    </table>
+    <h3>The complexity intuition</h3>
+    <table>
+      <tr><th>Guarantee</th><th>Coordination cost</th><th>Latency impact</th></tr>
+      <tr><td>Linearizable (strong)</td><td>Quorum / consensus round-trip per op</td><td>High — bounded by slowest majority node + network RTT</td></tr>
+      <tr><td>Causal</td><td>Track dependencies (metadata), no global sync</td><td>Medium</td></tr>
+      <tr><td>Eventual</td><td>Async background replication</td><td>Lowest — local read/write, converge later</td></tr>
+    </table>
+    <p>For the full ladder of models between strong and eventual, see the <a href="../consistency-models/index.html">consistency models page</a>.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS mapping</span>
+    <h2>CAP choices across AWS data services</h2>
+    <p>AWS gives you services on both sides of the CAP line — knowing which is which is a common cloud-interview probe.</p>
+    <table>
+      <tr><th>AWS service</th><th>CAP / PACELC lean</th><th>Why</th></tr>
+      <tr><td>DynamoDB (default reads)</td><td>AP / EL</td><td>Eventually-consistent reads, always writable, multi-AZ. Opt into strongly-consistent reads per query (single region).</td></tr>
+      <tr><td>DynamoDB Global Tables</td><td>AP</td><td>Multi-region active-active, last-writer-wins conflict resolution.</td></tr>
+      <tr><td>Amazon Aurora / RDS (single writer)</td><td>CP-leaning</td><td>Single primary for writes; failover blocks writes briefly to avoid split-brain.</td></tr>
+      <tr><td>ElastiCache Redis (cluster)</td><td>CP-leaning</td><td>Primary-replica; minority partition stops accepting writes.</td></tr>
+      <tr><td>Amazon MSK / Kafka</td><td>CP (with acks=all + min.insync.replicas)</td><td>Won't ack a write unless a quorum of replicas persist it.</td></tr>
+      <tr><td>S3</td><td>Strong read-after-write (2020+)</td><td>Internally quorum-based; presents strong consistency for object reads.</td></tr>
+    </table>
+    <p>The practical deployment lesson: spread replicas across <strong>Availability Zones</strong> so an AZ outage is a survivable partition, and choose the service whose CAP posture matches the data. Money and inventory → CP (Aurora, DynamoDB strong reads). Sessions, carts, feeds, telemetry → AP (DynamoDB default, ElastiCache).</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — a quorum read/write simulator</h2>
+    <p>The clearest way to <em>show</em> CAP in code is a tiny quorum store. With N replicas and the rule <code>R + W &gt; N</code>, a strongly-consistent read is guaranteed to overlap the latest write. During a partition, a node that can't reach a quorum must throw — that's the CP choice made explicit.</p>
+    <pre><span class="cmt">// A minimal N-replica quorum store showing the CAP dial: R + W &gt; N =&gt; strong.</span>
+<span class="kw">public sealed class</span> <span class="typ">QuorumStore</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">List</span>&lt;<span class="typ">Replica</span>&gt; _replicas;
+    <span class="kw">private readonly int</span> _n, _w, _r;
+
+    <span class="kw">public</span> <span class="fn">QuorumStore</span>(<span class="kw">int</span> n, <span class="kw">int</span> writeQuorum, <span class="kw">int</span> readQuorum)
+    {
+        _n = n; _w = writeQuorum; _r = readQuorum;
+        _replicas = <span class="typ">Enumerable</span>.Range(<span class="str">0</span>, n).Select(_ =&gt; <span class="kw">new</span> <span class="typ">Replica</span>()).ToList();
+        <span class="cmt">// R + W &gt; N is the linearizability condition for a single register.</span>
+    }
+
+    <span class="kw">public void</span> <span class="fn">Write</span>(<span class="kw">string</span> key, <span class="kw">string</span> value, <span class="kw">long</span> version)
+    {
+        <span class="kw">var</span> live = _replicas.Where(r =&gt; r.Reachable).ToList();
+        <span class="kw">if</span> (live.Count &lt; _w)                             <span class="cmt">// can't form a write quorum</span>
+            <span class="kw">throw new</span> <span class="typ">QuorumUnavailableException</span>(       <span class="cmt">// &lt;- the CP choice: refuse rather than diverge</span>
+                <span class="str">$"need {_w} replicas, only {live.Count} reachable"</span>);
+
+        <span class="kw">foreach</span> (<span class="kw">var</span> r <span class="kw">in</span> live.Take(_w))
+            r.Put(key, value, version);                 <span class="cmt">// versioned so reads can pick the newest</span>
+    }
+
+    <span class="kw">public string</span> <span class="fn">Read</span>(<span class="kw">string</span> key)
+    {
+        <span class="kw">var</span> live = _replicas.Where(r =&gt; r.Reachable).ToList();
+        <span class="kw">if</span> (live.Count &lt; _r)
+            <span class="kw">throw new</span> <span class="typ">QuorumUnavailableException</span>(<span class="str">"read quorum lost"</span>);
+
+        <span class="cmt">// Read from R replicas and return the highest version -&gt; latest write wins the overlap.</span>
+        <span class="kw">return</span> live.Take(_r)
+                   .Select(r =&gt; r.Get(key))
+                   .OrderByDescending(v =&gt; v.Version)
+                   .First().Value;
+    }
+}
+<span class="cmt">// Flip r.Reachable = false on the minority side to simulate a partition:
+//   * A CP store (this one) throws -&gt; sacrifices Availability.
+//   * An AP store would instead serve local/stale data and reconcile later.</span></pre>
+    <p>Other ecosystems solve the same problem with mature libraries: <strong>etcd/Consul</strong> (Raft) for CP coordination, <strong>Akka Distributed Data</strong> / <strong>Riak</strong> for AP CRDT stores, and <strong>Cassandra's</strong> tunable <code>ConsistencyLevel</code> enum which is the real-world version of the <code>R</code>/<code>W</code> dials above.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks & likely follow-ups</h2>
+    <div class="qa"><p class="q">"Can a system be CA?"</p><p class="a">Only a single node or a non-distributed system. The instant you replicate over a network, partitions are possible, so P is mandatory — and you're really choosing CP or AP. Interviewers love catching candidates who claim their multi-node RDBMS is "CA."</p></div>
+    <div class="qa"><p class="q">"Is the network partition really that common?"</p><p class="a">Partitions are rarer than node crashes, but they happen (switch failures, GC pauses, cross-region link loss, even long stop-the-world pauses look like partitions). That's exactly why PACELC is more useful day-to-day: the latency-vs-consistency tension exists on every request, partition or not.</p></div>
+    <div class="qa"><p class="q">"How do you get strong consistency AND high availability?"</p><p class="a">You can't have both during a partition, but you can minimize partition windows (redundant links, multi-AZ), use consensus (Raft) for a highly-available-in-practice CP system, or use Spanner-style TrueTime to keep linearizability with tight latency bounds. The honest answer: reduce the probability and blast radius of partitions, don't pretend to beat the theorem.</p></div>
+    <div class="qa"><p class="q">"What breaks first at scale?"</p><p class="a">For CP: write availability during failover and quorum latency across regions. For AP: conflict resolution complexity and the risk of silently lost writes under last-write-wins. Bottleneck management is choosing the right conflict strategy (CRDTs) or accepting bounded staleness.</p></div>
+    <div class="qa"><p class="q">"Does CAP's C equal ACID's C?"</p><p class="a">No — a classic trap. CAP-C is linearizability (all nodes agree on the latest value). ACID-C is integrity constraints staying valid within a transaction. Different concepts that happen to share a letter.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "CAP says that when a network partition happens, a distributed store must choose between Consistency — every read sees the latest write — and Availability — every live node still answers. Partition tolerance isn't optional because networks fail, so the real choice is CP or AP during a partition. PACELC extends this: even with no partition, you trade latency for consistency. So I pick per the data: CP for money and inventory, AP for carts, feeds, and sessions."</div>
+    <ul>
+      <li><strong>Correct the myth:</strong> it's not "pick 2 of 3" — it's "pick C or A <em>during a partition</em>."</li>
+      <li><strong>P is mandatory</strong> for any real distributed system; "CA" = single node only.</li>
+      <li><strong>CP</strong> = etcd, ZooKeeper, Spanner, HBase, RDBMS clusters. <strong>AP</strong> = Cassandra, DynamoDB, Riak, CouchDB.</li>
+      <li><strong>Quote PACELC</strong> to sound senior: DynamoDB = PA/EL, Spanner = PC/EC.</li>
+      <li><strong>Quorum rule:</strong> <code>R + W &gt; N</code> gives strong consistency; the minority side of a partition can't form a quorum and stops (CP) or serves stale (AP).</li>
+      <li><strong>CAP-C ≠ ACID-C.</strong> Say it before they ask.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://en.wikipedia.org/wiki/CAP_theorem">CAP theorem — Wikipedia</a></li>
+      <li><a href="https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/">Eric Brewer — "CAP Twelve Years Later: How the Rules Have Changed"</a></li>
+      <li><a href="https://en.wikipedia.org/wiki/PACELC_theorem">PACELC theorem — Wikipedia (Abadi, 2010)</a></li>
+      <li><a href="https://jepsen.io/consistency">Jepsen — Consistency Models</a></li>
+      <li>Gilbert &amp; Lynch (2002), "Brewer's Conjecture and the Feasibility of Consistent, Available, Partition-Tolerant Web Services."</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

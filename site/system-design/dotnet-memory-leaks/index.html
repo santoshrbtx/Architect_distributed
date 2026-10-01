@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>.NET Memory Leaks — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --laymen: #f4a259;
+    --laymen-bg: #fff7ed;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Memory Leaks in .NET Core / .NET Framework</h1>
+    <p>Yes, a garbage-collected runtime can still leak. Real production war stories, the five root causes, the retention-path detection workflow, and before/after C# fixes you can defend on a whiteboard.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA / GC</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>Why "we have a GC" is not the full story</h2>
+    <p>Every .NET engineer eventually gets paged for the same story: pods are healthy, latency looks fine — and then Kubernetes starts killing them every eight hours with an <strong>OOMKilled (137)</strong>. CPU is idle, GC counters look calm, but the working set climbs 30 MB every hour until it hits the container limit. The garbage collector is doing its job perfectly; the problem is that <em>something we wrote is still pointing at objects we no longer want</em>.</p>
+    <p>This is the .NET memory leak: not <strong>unreachable-and-unfreed</strong> (the C/C++ definition), but <strong>reachable-but-unwanted</strong>. The GC only reclaims objects nothing can point at. If a static field, an event delegate, a running timer, a captured closure, or a native handle keeps a reference alive, the object stays — and the graph it pins with it.</p>
+    <p>These leaks have real names and real bug trackers behind them. Simon Timms's 2016 <em>"You're using HttpClient wrong"</em> post is the reason <code>IHttpClientFactory</code> exists. Microsoft's ASP.NET Core memory doc walks through a <code>PhysicalFileProvider</code> native-handle leak filed as <code>dotnet/aspnetcore#844</code>. StackExchange's Nick Craver blogs have chronicled cache-without-eviction bugs that grew Stack Overflow's servers by gigabytes overnight. The interview question isn't <em>"what is a leak"</em> — it's <em>"tell me about one you found, and how"</em>.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The bathtub with a hidden drip</h2>
+    <p>Imagine your app is a <strong>bathtub</strong>. Water flowing in is memory your program uses; the drain at the bottom is the janitor — in .NET we call it the <strong>garbage collector</strong> — who pulls the plug and lets the water out whenever the tub gets full. Most of the time this works beautifully. You fill the tub, the janitor drains it, you fill it again. Nobody thinks about plumbing.</p>
+    <p>A <strong>memory leak</strong> is what happens when someone quietly leaves a rubber ducky floating in the tub. The janitor comes to drain, sees the ducky, and thinks, <em>"someone still wants this"</em> — so the water around the ducky stays. Every hour a new ducky gets left behind. The tub slowly fills, and eventually the whole thing overflows onto the floor. In production, "overflows onto the floor" is a server crash at 3 AM.</p>
+    <p>The tricky part is that the duckies aren't obviously garbage. They're things like <strong>a phone number you handed to a friend</strong> — you're done with the friendship, but the friend still has your number written on a slip of paper. As long as that paper exists, the janitor won't touch it. In code, that "slip of paper" is often an <strong>event subscription</strong>, a <strong>static cache</strong>, or a <strong>timer that nobody turned off</strong>.</p>
+    <p>Real products fight this every day. <strong>Instagram, Netflix, Stack Overflow, Azure services</strong> — every large .NET service has a story of a small piece of forgotten code that ate a few kilobytes per request until, three days later, machines started falling over. The fix is almost never "add more RAM"; it's <strong>find the slip of paper and tear it up</strong>.</p>
+    <p>Here's the everyday example: imagine you sign up for a magazine and forget to cancel. Every month a new issue arrives. Your mailbox slowly fills. The postman keeps delivering — from his side, everything is working. That's exactly what a subscription-that-was-never-cancelled looks like inside a .NET app.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What "healthy" looks like — and the numbers to quote</h2>
+    <p>A leak conversation in an interview has a very specific rhythm: state the symptom, then quote the number, then propose the tool. Here are the numbers an interviewer expects you to volunteer.</p>
+    <table>
+      <thead><tr><th>Setting / threshold</th><th>Value</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td>Large Object Heap (LOH) threshold</td><td><strong>85,000 bytes</strong></td><td>Any allocation ≥ 85 KB skips SOH and lands on the LOH, which is only collected in Gen 2 and (historically) not compacted. A single <code>byte[85_000]</code> per request destroys throughput.</td></tr>
+        <tr><td>Default <code>HttpMessageHandler</code> lifetime</td><td>2 minutes</td><td><code>IHttpClientFactory</code> rotates handlers so DNS changes are picked up. Set higher only if DNS is stable.</td></tr>
+        <tr><td>Ephemeral segment default (Server GC, 64-bit)</td><td>~1–4 GB per heap</td><td>One heap per logical CPU. On a 512 MB container this can size wrong pre-.NET Core 3.0.</td></tr>
+        <tr><td>TIME_WAIT socket retention</td><td>~240 s Windows / 60 s Linux</td><td>With 30k ephemeral ports, ~125 conns/sec exhausts them in ~4 minutes — the HttpClient trap.</td></tr>
+        <tr><td>Container OOM signal</td><td>SIGKILL (exit 137)</td><td>No finalizers run, no graceful shutdown → dumps must be collected <em>before</em> the kill, from a sidecar.</td></tr>
+        <tr><td>PerfView <code>AllocationTick</code></td><td>every 100 KB</td><td>The sampling grain for allocation profiling — used by dotnet-trace/PerfView to reconstruct who allocated what.</td></tr>
+        <tr><td>Full-GC pause budget</td><td>p99 ~5–50 ms Server, 100s ms Workstation</td><td>Cache-without-eviction leaks turn short GCs into long ones; ALB health checks start failing.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Functional vs non-functional</h3>
+    <p><strong>Functional:</strong> detect that memory is climbing; localise the retention path (which object roots the leak); apply the smallest fix that removes the root. <strong>Non-functional:</strong> do all that <em>on a live pod</em> without a restart (a restart hides the evidence), with tooling that ships with the .NET SDK, and with a repeatable playbook a junior can run at 3 AM.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>The .NET heap — the mental model interviewers listen for</h2>
+    <p>The whole conversation makes sense once you can draw the heap. Objects are born on the <strong>Small Object Heap (SOH)</strong> in <strong>Gen 0</strong>. Survive a collection → get promoted to <strong>Gen 1</strong>. Survive again → <strong>Gen 2</strong>, where objects live "forever" and only full collections reclaim them. Allocations ≥ 85,000 bytes skip SOH entirely and go on the <strong>Large Object Heap (LOH)</strong>. Pinned buffers (byte arrays used by native I/O) live on the <strong>Pinned Object Heap (POH)</strong> since .NET 5. Everything above is one .NET process; on top of that, roots — statics, running-thread locals, GC handles — anchor the graph the collector traces.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 820 360" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <!-- Roots column -->
+        <rect x="30" y="30" width="180" height="300" rx="12" fill="#1a2338" stroke="#2f3d5e"/>
+        <text x="120" y="58" text-anchor="middle" fill="#7fa2ff" font-family="Segoe UI" font-weight="700" font-size="14">GC Roots</text>
+        <rect x="50" y="78"  width="140" height="34" rx="8" fill="#2a3652" stroke="#4361ee"/><text x="120" y="100" text-anchor="middle" fill="#e7ecf3" font-size="12" font-family="Segoe UI">Static fields</text>
+        <rect x="50" y="122" width="140" height="34" rx="8" fill="#2a3652" stroke="#4361ee"/><text x="120" y="144" text-anchor="middle" fill="#e7ecf3" font-size="12" font-family="Segoe UI">Thread stacks (live locals)</text>
+        <rect x="50" y="166" width="140" height="34" rx="8" fill="#2a3652" stroke="#4361ee"/><text x="120" y="188" text-anchor="middle" fill="#e7ecf3" font-size="12" font-family="Segoe UI">CPU registers</text>
+        <rect x="50" y="210" width="140" height="34" rx="8" fill="#2a3652" stroke="#4361ee"/><text x="120" y="232" text-anchor="middle" fill="#e7ecf3" font-size="12" font-family="Segoe UI">GC handles (pinned)</text>
+        <rect x="50" y="254" width="140" height="34" rx="8" fill="#2a3652" stroke="#4361ee"/><text x="120" y="276" text-anchor="middle" fill="#e7ecf3" font-size="12" font-family="Segoe UI">Finalize queue</text>
+        <text x="120" y="316" text-anchor="middle" fill="#7f8aa0" font-size="11" font-style="italic">Anything reachable from these stays alive.</text>
+
+        <!-- Heap column -->
+        <rect x="260" y="30" width="530" height="300" rx="12" fill="#1a2338" stroke="#2f3d5e"/>
+        <text x="525" y="58" text-anchor="middle" fill="#7fa2ff" font-family="Segoe UI" font-weight="700" font-size="14">Managed Heap</text>
+
+        <rect x="280" y="80"  width="150" height="80" rx="10" fill="#0f2540" stroke="#2dc653"/>
+        <text x="355" y="104" text-anchor="middle" fill="#9bffb5" font-size="12" font-weight="700">Gen 0 (nursery)</text>
+        <text x="355" y="124" text-anchor="middle" fill="#c6d0e0" font-size="11">new objects</text>
+        <text x="355" y="142" text-anchor="middle" fill="#7f8aa0" font-size="10">collected fastest &amp; often</text>
+
+        <rect x="445" y="80"  width="150" height="80" rx="10" fill="#0f2540" stroke="#f4a259"/>
+        <text x="520" y="104" text-anchor="middle" fill="#ffce9d" font-size="12" font-weight="700">Gen 1 (buffer)</text>
+        <text x="520" y="124" text-anchor="middle" fill="#c6d0e0" font-size="11">survived one GC</text>
+        <text x="520" y="142" text-anchor="middle" fill="#7f8aa0" font-size="10">short-lived rebound</text>
+
+        <rect x="610" y="80"  width="160" height="80" rx="10" fill="#0f2540" stroke="#f7567c"/>
+        <text x="690" y="104" text-anchor="middle" fill="#ffb3c4" font-size="12" font-weight="700">Gen 2 (tenured)</text>
+        <text x="690" y="124" text-anchor="middle" fill="#c6d0e0" font-size="11">"lives forever"</text>
+        <text x="690" y="142" text-anchor="middle" fill="#7f8aa0" font-size="10">where leaks accumulate</text>
+
+        <rect x="280" y="185" width="240" height="80" rx="10" fill="#0f2540" stroke="#7048e8"/>
+        <text x="400" y="209" text-anchor="middle" fill="#c9baff" font-size="12" font-weight="700">LOH — Large Object Heap</text>
+        <text x="400" y="229" text-anchor="middle" fill="#c6d0e0" font-size="11">≥ 85,000 bytes → skips SOH</text>
+        <text x="400" y="247" text-anchor="middle" fill="#7f8aa0" font-size="10">swept, historically not compacted</text>
+
+        <rect x="540" y="185" width="230" height="80" rx="10" fill="#0f2540" stroke="#00b4d8"/>
+        <text x="655" y="209" text-anchor="middle" fill="#9be2f2" font-size="12" font-weight="700">POH — Pinned Object Heap</text>
+        <text x="655" y="229" text-anchor="middle" fill="#c6d0e0" font-size="11">.NET 5+, buffers that mustn't move</text>
+        <text x="655" y="247" text-anchor="middle" fill="#7f8aa0" font-size="10">used by network / interop</text>
+
+        <rect x="280" y="285" width="490" height="40" rx="10" fill="#0f2540" stroke="#5b6677"/>
+        <text x="525" y="309" text-anchor="middle" fill="#c6d0e0" font-size="11" font-family="Segoe UI">Native memory (unmanaged handles, sockets, GDI+, P/Invoke) — GC never touches this</text>
+
+        <!-- root → heap arrows -->
+        <path d="M195 95 C 240 95, 260 95, 280 105"  stroke="#7fa2ff" stroke-width="1.6" fill="none" marker-end="url(#ah1)"/>
+        <path d="M195 140 C 240 140, 260 140, 280 115" stroke="#7fa2ff" stroke-width="1.6" fill="none" marker-end="url(#ah1)"/>
+        <path d="M195 227 C 240 227, 260 227, 540 227" stroke="#7fa2ff" stroke-width="1.6" fill="none" marker-end="url(#ah1)"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#2dc653"></span>Gen 0 — most objects die here</span>
+        <span><span class="dot" style="background:#f4a259"></span>Gen 1 — buffer generation</span>
+        <span><span class="dot" style="background:#f7567c"></span>Gen 2 — leaks accumulate here</span>
+        <span><span class="dot" style="background:#7048e8"></span>LOH — 85 KB threshold</span>
+        <span><span class="dot" style="background:#00b4d8"></span>POH — pinned</span>
+      </div>
+    </div>
+    <p><strong>The interview line:</strong> "A leak means an object graph is still reachable from a live root — a static, an event delegate, a running timer, or a native handle — even though logically we're done with it. Because it's reachable, the GC won't collect it. My job is to find that root and cut the reference."</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch the classic event-handler leak grow, then get cut</h2>
+    <p>The canonical .NET leak in eight steps. A long-lived <code>WiFiManager</code> singleton lives on the right. Short-lived <code>StatusView</code> subscribers come and go on the left. Every <code>+=</code> adds a delegate to the manager's event, and the delegate's <code>Target</code> pins the subscriber — so even after the subscriber is "gone", the GC can't collect it. Watch Gen 2 climb. Then hit Reset and imagine the fix: an explicit <code>-=</code> in Dispose, or the weak-event pattern.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 860 360" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="alink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0 L10 5 L0 10 z" fill="#f7567c"/>
+          </marker>
+        </defs>
+        <!-- Left panel: subscribers -->
+        <text x="130" y="26" text-anchor="middle" fill="#7fa2ff" font-family="Segoe UI" font-weight="700" font-size="13">Short-lived StatusView instances</text>
+        <g id="sv1" data-anim class="a-el a-hidden">
+          <rect x="40"  y="50" width="180" height="44" rx="8" fill="#0f2540" stroke="#2dc653"/>
+          <text x="130" y="76" text-anchor="middle" fill="#e7ecf3" font-size="12" font-family="Segoe UI">StatusView #1 (created)</text>
+        </g>
+        <g id="sv2" data-anim class="a-el a-hidden">
+          <rect x="40" y="104" width="180" height="44" rx="8" fill="#0f2540" stroke="#2dc653"/>
+          <text x="130" y="130" text-anchor="middle" fill="#e7ecf3" font-size="12" font-family="Segoe UI">StatusView #2 (created)</text>
+        </g>
+        <g id="sv3" data-anim class="a-el a-hidden">
+          <rect x="40" y="158" width="180" height="44" rx="8" fill="#0f2540" stroke="#2dc653"/>
+          <text x="130" y="184" text-anchor="middle" fill="#e7ecf3" font-size="12" font-family="Segoe UI">StatusView #3 (created)</text>
+        </g>
+        <g id="sv4" data-anim class="a-el a-hidden">
+          <rect x="40" y="212" width="180" height="44" rx="8" fill="#0f2540" stroke="#2dc653"/>
+          <text x="130" y="238" text-anchor="middle" fill="#e7ecf3" font-size="12" font-family="Segoe UI">StatusView #4 (created)</text>
+        </g>
+
+        <!-- Right: WiFiManager singleton -->
+        <rect x="600" y="60" width="220" height="200" rx="12" fill="#1a2338" stroke="#4361ee"/>
+        <text x="710" y="90" text-anchor="middle" fill="#7fa2ff" font-size="13" font-weight="700">WiFiManager (singleton)</text>
+        <text x="710" y="108" text-anchor="middle" fill="#7f8aa0" font-size="10">SignalChanged: EventHandler</text>
+        <text x="710" y="128" text-anchor="middle" fill="#c6d0e0" font-size="11">delegate invocation list ↓</text>
+        <g id="d1" data-anim class="a-el a-hidden"><rect x="620" y="140" width="180" height="20" rx="5" fill="#3a1f2c" stroke="#f7567c"/><text x="710" y="154" text-anchor="middle" fill="#ffb3c4" font-size="10">→ handler for SV#1</text></g>
+        <g id="d2" data-anim class="a-el a-hidden"><rect x="620" y="164" width="180" height="20" rx="5" fill="#3a1f2c" stroke="#f7567c"/><text x="710" y="178" text-anchor="middle" fill="#ffb3c4" font-size="10">→ handler for SV#2</text></g>
+        <g id="d3" data-anim class="a-el a-hidden"><rect x="620" y="188" width="180" height="20" rx="5" fill="#3a1f2c" stroke="#f7567c"/><text x="710" y="202" text-anchor="middle" fill="#ffb3c4" font-size="10">→ handler for SV#3</text></g>
+        <g id="d4" data-anim class="a-el a-hidden"><rect x="620" y="212" width="180" height="20" rx="5" fill="#3a1f2c" stroke="#f7567c"/><text x="710" y="226" text-anchor="middle" fill="#ffb3c4" font-size="10">→ handler for SV#4</text></g>
+
+        <!-- delegate → target arrows -->
+        <path id="e1" data-anim class="a-el a-hidden" d="M620 150 C 500 150, 320 72, 220 72" stroke="#f7567c" stroke-width="1.6" fill="none" marker-end="url(#alink)"/>
+        <path id="e2" data-anim class="a-el a-hidden" d="M620 174 C 500 174, 320 126, 220 126" stroke="#f7567c" stroke-width="1.6" fill="none" marker-end="url(#alink)"/>
+        <path id="e3" data-anim class="a-el a-hidden" d="M620 198 C 500 198, 320 180, 220 180" stroke="#f7567c" stroke-width="1.6" fill="none" marker-end="url(#alink)"/>
+        <path id="e4" data-anim class="a-el a-hidden" d="M620 222 C 500 222, 320 234, 220 234" stroke="#f7567c" stroke-width="1.6" fill="none" marker-end="url(#alink)"/>
+
+        <!-- Gen 2 heap gauge -->
+        <text x="430" y="290" text-anchor="middle" fill="#7fa2ff" font-size="12" font-weight="700">Gen 2 heap size</text>
+        <rect x="240" y="300" width="380" height="18" rx="9" fill="#0f2540" stroke="#2f3d5e"/>
+        <rect id="gauge" data-anim x="240" y="300" width="0" height="18" rx="9" fill="#f7567c"/>
+        <text id="gaugelbl" data-anim x="430" y="336" text-anchor="middle" fill="#c6d0e0" font-size="11">idle</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        function setGauge(w, text, color) {
+          const g = $('#gauge');
+          g.setAttribute('width', String(w));
+          if (color) g.setAttribute('fill', color);
+          $('#gaugelbl').textContent = text;
+        }
+
+        const CFG = {
+          intro: 'Watch delegates pile up on the singleton — the subscribers can never be collected.',
+          interval: 1600,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.add('a-hidden');
+              el.classList.remove('a-glow','a-dim');
+            });
+            setGauge(0, 'idle', '#f7567c');
+            $('#gauge').classList.remove('a-hidden');
+            $('#gaugelbl').classList.remove('a-hidden');
+          },
+          steps: [
+            { caption: 'StatusView #1 is created and calls  mgr.SignalChanged += OnSignal.',
+              apply: (r,$) => { $('#sv1').classList.remove('a-hidden'); $('#d1').classList.remove('a-hidden'); $('#e1').classList.remove('a-hidden'); setGauge(45,'Gen 2 ≈ 12 MB'); } },
+            { caption: 'The delegate is added to WiFiManager\'s invocation list. Its Target field points BACK at StatusView #1 — the subscriber is now rooted.',
+              apply: (r,$) => { $('#e1').classList.add('a-glow'); $('#d1').classList.add('a-glow'); } },
+            { caption: 'StatusView #2 is created and subscribes. Same deal — a new delegate, a new back-reference.',
+              apply: (r,$) => { $('#sv2').classList.remove('a-hidden'); $('#d2').classList.remove('a-hidden'); $('#e2').classList.remove('a-hidden'); $('#d1').classList.remove('a-glow'); $('#e1').classList.remove('a-glow'); setGauge(110,'Gen 2 ≈ 40 MB'); } },
+            { caption: 'Callers "let go" of #1 and #2 — but the singleton still holds delegates to them, so GC leaves them alone. This is the leak.',
+              apply: (r,$) => { $('#sv1').classList.add('a-dim'); $('#sv2').classList.add('a-dim'); } },
+            { caption: 'Two more views come and subscribe. Gen 2 keeps growing — every subscription pins another object graph.',
+              apply: (r,$) => { $('#sv3').classList.remove('a-hidden'); $('#sv4').classList.remove('a-hidden'); $('#d3').classList.remove('a-hidden'); $('#d4').classList.remove('a-hidden'); $('#e3').classList.remove('a-hidden'); $('#e4').classList.remove('a-hidden'); setGauge(220,'Gen 2 ≈ 96 MB — climbing'); } },
+            { caption: 'Full GC runs. It traces from roots → WiFiManager → delegate list → every StatusView. Everything is reachable. Nothing is freed.',
+              apply: (r,$) => { $('#e1').classList.add('a-glow'); $('#e2').classList.add('a-glow'); $('#e3').classList.add('a-glow'); $('#e4').classList.add('a-glow'); setGauge(280,'Full GC: 0 bytes reclaimed','#f7567c'); } },
+            { caption: 'Fix: make StatusView IDisposable and call  mgr.SignalChanged -= OnSignal. The delegate is removed…',
+              apply: (r,$) => { $('#e1').classList.add('a-hidden'); $('#e2').classList.add('a-hidden'); $('#d1').classList.add('a-hidden'); $('#d2').classList.add('a-hidden'); setGauge(140,'delegates trimmed','#f4a259'); } },
+            { caption: '…so the subscribers are unreachable, GC reclaims them, and the heap flattens. Same code, one -= away.',
+              apply: (r,$) => { $('#sv1').classList.add('a-hidden'); $('#sv2').classList.add('a-hidden'); $('#e3').classList.add('a-hidden'); $('#e4').classList.add('a-hidden'); $('#d3').classList.add('a-hidden'); $('#d4').classList.add('a-hidden'); $('#sv3').classList.add('a-dim'); $('#sv4').classList.add('a-dim'); setGauge(35,'Gen 2 flat: leak fixed ✅','#2dc653'); } }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; return; }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => { if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; } goto(idx + 1); });
+        btnPrev && btnPrev.addEventListener('click', () => { if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; } goto(idx - 1); });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 The eight real-world scenarios you should be able to name</h2>
+    <p>An interviewer asking "tell me about a leak you've seen" wants concrete stories. These eight are the canon — each pulled from a real Microsoft doc, GitHub issue, or well-known engineering blog. Learn the symptom and the fix line for each.</p>
+
+    <h3>1. HttpClient socket exhaustion (the classic)</h3>
+    <p>Wrapping every outgoing call in <code>using (var c = new HttpClient()) { … }</code> looks textbook-correct — <code>HttpClient</code> is <code>IDisposable</code>, so of course you dispose it. But <code>HttpClient</code> owns a <code>HttpMessageHandler</code>, which owns a socket that stays in <strong>TIME_WAIT</strong> for ~240 s (Windows) after Dispose. Under load you exhaust ephemeral ports and start throwing <code>SocketException</code>. Simon Timms's 2016 post surfaced this; <code>IHttpClientFactory</code> in .NET Core 2.1 was the answer, pooling handlers and rotating them every 2 min so DNS changes are picked up.</p>
+
+    <h3>2. Singleton HttpClient that never sees DNS changes</h3>
+    <p>The naïve "fix" is <code>static readonly HttpClient _c = new()</code>. This solves sockets but creates a new bug (dotnet/runtime #18348): the underlying handler caches a resolved IP forever. A blue/green deploy or DNS failover looks broken on your side of the wire. Fix: <code>IHttpClientFactory</code>, or set <code>SocketsHttpHandler.PooledConnectionLifetime</code>.</p>
+
+    <h3>3. Event handler leak (WiFiManager pattern)</h3>
+    <p>A long-lived publisher's <code>event</code> holds a delegate; the delegate's <code>Target</code> is your subscriber; the subscriber can never be collected. In WPF/Blazor/WinForms this manifests as pages/views that "still work" invisibly and mutate stale UI state. Fix: <code>IDisposable</code> + <code>-=</code>, or weak-event pattern.</p>
+
+    <h3>4. Static cache without eviction</h3>
+    <p>Microsoft's official "Debug a memory leak" tutorial ships this exact bug: a <code>static CustomerCache : List&lt;Customer&gt;</code> that grows on every request. In the tutorial, <code>!dumpheap -stat</code> reveals 206,770 String instances (~19 MB) and <code>!gcroot</code> walks straight back to the static list. Fix: <code>IMemoryCache</code> with <code>SetSize</code> + <code>SizeLimit</code>, or Redis with TTL.</p>
+
+    <h3>5. LOH fragmentation from oversized buffers</h3>
+    <p>Any allocation ≥ 85,000 bytes lands on the LOH. Do that per-request and you trigger a Gen 2 collection every second and cut throughput in half — Microsoft's ASP.NET Core memory doc reproduces the chart. ASP.NET Core's own <code>ResponseCaching</code> middleware chunks entries below 85 KB precisely to dodge the LOH. Fix: <code>ArrayPool&lt;byte&gt;.Shared</code> or <code>MemoryPool&lt;byte&gt;</code>; return the buffer.</p>
+
+    <h3>6. Native handle leak (PhysicalFileProvider #844)</h3>
+    <p>Some managed APIs open OS resources. <code>new PhysicalFileProvider(TempPath).Watch("*.*")</code> registers an <code>inotify</code> / <code>ReadDirectoryChangesW</code> handle. Miss the Dispose and the managed heap looks perfectly flat while <strong>private bytes</strong> and file-descriptor counts climb — a native leak masquerading as a happy .NET process. Fix: <code>using</code> the file provider, or hold one instance for the process.</p>
+
+    <h3>7. EF Core change-tracker retention</h3>
+    <p>A singleton or forgotten-scoped <code>DbContext</code>, or reading millions of rows without <code>.AsNoTracking()</code>, keeps every entity in the change tracker → the context turns into a giant hash-map that grows until pod eviction. Fix: scoped lifetime + <code>AsNoTracking()</code> for read paths.</p>
+
+    <h3>8. Captive dependency (singleton captures scoped)</h3>
+    <p>You inject a scoped repository into a singleton service. The singleton is resolved once at startup and holds a reference to that first scope's DbContext, request-tenant, principal — everything — forever. Both the DI container and your monitoring will look normal. Fix: <code>IServiceScopeFactory</code> inside the singleton, or a scoped delegate factory.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA / GC behind it</span>
+    <h2>How the collector actually works — and why that matters for finding leaks</h2>
+    <p>You cannot debug a leak without a working model of the tracing collector. .NET's GC is a <strong>generational mark-and-sweep with compaction</strong>. On collection it starts at the roots, does a graph walk marking every reachable object, then sweeps the unreachable ones and compacts the survivors so allocation stays a pointer bump. The five interview words: <strong>root</strong>, <strong>reachability</strong>, <strong>generation</strong>, <strong>promotion</strong>, and <strong>retention path</strong>.</p>
+    <table>
+      <thead><tr><th>Structure / algorithm</th><th>Complexity</th><th>Why it matters for leaks</th></tr></thead>
+      <tbody>
+        <tr><td>Tracing GC (mark-sweep-compact)</td><td>O(live objects) per collection</td><td>Cost scales with the surviving set, not the total heap — a leak that grows Gen 2 makes every full GC slower.</td></tr>
+        <tr><td>Generational hypothesis</td><td>Amortised O(1) per alloc</td><td>Most objects die young → collecting Gen 0/1 is cheap and frequent; Gen 2 is rare and expensive.</td></tr>
+        <tr><td>Card table (write barriers)</td><td>O(1) per pointer write</td><td>Lets a Gen 0 collection skip Gen 2 objects unless they point down to a young object.</td></tr>
+        <tr><td>Reference graph traversal (<code>!gcroot</code>)</td><td>O(V + E)</td><td>SOS traces backwards from an object to a root — the single most valuable command for leak hunting.</td></tr>
+        <tr><td>Hash-set of live handles</td><td>O(1) lookup</td><td>How <code>GCHandle</code> pinned/weak references are tracked.</td></tr>
+        <tr><td>ArrayPool&lt;T&gt; (bucketed free lists)</td><td>O(1) rent/return</td><td>Fixes LOH pressure by reusing buffers instead of allocating.</td></tr>
+      </tbody>
+    </table>
+    <h3>The five words you must define</h3>
+    <ul>
+      <li><strong>Root</strong> — anything the runtime can point at without going through another managed object: static fields, JIT-tracked locals on live stacks, CPU registers, GC handles (incl. pinned), and the finalize queue.</li>
+      <li><strong>Reachability</strong> — the transitive closure of "pointed at by a root or by another reachable object". Only unreachable objects are collected.</li>
+      <li><strong>Generation</strong> — an age bucket. Gen 0 = new. Gen 1 = survived one GC. Gen 2 = survived two — treated as long-lived.</li>
+      <li><strong>Promotion</strong> — surviving a collection moves you up one generation, up to Gen 2.</li>
+      <li><strong>Retention path</strong> — the chain of references from a root to a leaked object. This is what <code>!gcroot</code> prints.</li>
+    </ul>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping .NET memory management to AWS operations</h2>
+    <p>Interviewers love this map — it proves you can run .NET at scale, not just write it. The trick is knowing which AWS metric mirrors which .NET counter.</p>
+    <table>
+      <thead><tr><th>Concern</th><th>AWS service / feature</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Container memory limit</td><td>ECS task <code>memory</code> / EKS pod limits</td><td>Maps to a Linux cgroup. .NET Core 3.0+ reads it automatically; older runtimes need <code>DOTNET_GCHeapHardLimit</code>.</td></tr>
+        <tr><td>Memory metrics + alarms</td><td>CloudWatch Container Insights → <code>MemoryUtilization</code></td><td>Alarm on &gt; 80 % + climbing over 30 min → almost certainly a leak.</td></tr>
+        <tr><td>Traffic drain when a task turns sick</td><td>ALB target-group + connection draining</td><td>A leaking task starts blowing p99 during full GC — health checks fail, ALB deregisters.</td></tr>
+        <tr><td>Correlate slow requests to GC pauses</td><td>AWS X-Ray + Application Insights</td><td>Traces show which endpoints spike; align with <code>dotnet-counters</code> pause events.</td></tr>
+        <tr><td>On-demand heap dumps from a live pod</td><td><code>dotnet-monitor</code> sidecar container</td><td>Exposes an HTTP endpoint that triggers <code>gcdump</code>/<code>dump</code> on running processes without a restart.</td></tr>
+        <tr><td>Post-mortem storage</td><td>S3 for dumps, CloudWatch Logs for stdout</td><td>Dumps are big (200 MB+). Ship them straight to S3 with a lifecycle rule.</td></tr>
+        <tr><td>Automated leak canaries</td><td>Lambda + CloudWatch scheduled event</td><td>Small canary that hits your API and asserts working-set stays flat over an hour.</td></tr>
+        <tr><td>Fargate specifics</td><td>No swap, SIGKILL when limit hit, ephemeral storage separate</td><td>Native leaks (P/Invoke, sockets) count against task memory; ephemeral disk does not.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Deployment note.</strong> Every long-running .NET service should ship with a <code>dotnet-monitor</code> sidecar and a runbook: "when working-set &gt; 80 % for 15 min, curl the sidecar for a gcdump, upload to S3, and page." That's the difference between finding a leak in ten minutes and finding it never.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# — before / after for the two most-quoted leaks</h2>
+
+    <h3>Event handler leak — before</h3>
+    <pre><span class="cmt">// ❌ Every StatusView subscribes to a long-lived singleton and never unsubscribes.
+// The delegate's Target field points back at the StatusView, so it stays rooted
+// as long as WiFiManager lives — which is forever.</span>
+<span class="kw">public class</span> <span class="typ">StatusView</span> {
+    <span class="kw">public</span> StatusView(<span class="typ">WiFiManager</span> mgr) {
+        mgr.SignalChanged += OnSignalChanged;
+    }
+    <span class="kw">void</span> <span class="fn">OnSignalChanged</span>(<span class="typ">object</span>? s, <span class="typ">EventArgs</span> e) {
+        <span class="cmt">// update UI…</span>
+    }
+}</pre>
+
+    <h3>Event handler leak — after (IDisposable + explicit unsubscribe)</h3>
+    <pre><span class="kw">public sealed class</span> <span class="typ">StatusView</span> : <span class="typ">IDisposable</span> {
+    <span class="kw">private readonly</span> <span class="typ">WiFiManager</span> _mgr;
+
+    <span class="kw">public</span> StatusView(<span class="typ">WiFiManager</span> mgr) {
+        _mgr = mgr;
+        _mgr.SignalChanged += OnSignalChanged;
+    }
+
+    <span class="kw">void</span> <span class="fn">OnSignalChanged</span>(<span class="typ">object</span>? s, <span class="typ">EventArgs</span> e) { <span class="cmt">/* update UI */</span> }
+
+    <span class="kw">public void</span> <span class="fn">Dispose</span>() {
+        _mgr.SignalChanged -= OnSignalChanged;  <span class="cmt">// ✅ delegate leaves the invocation list</span>
+    }
+}</pre>
+
+    <h3>HttpClient socket exhaustion — before</h3>
+    <pre><span class="cmt">// ❌ New handler + socket per call. TIME_WAIT (240 s on Windows) means ~125 conn/s
+// exhausts 30k ephemeral ports in ~4 minutes → SocketException.</span>
+[<span class="typ">HttpGet</span>(<span class="str">"/catalog/{id}"</span>)]
+<span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">IActionResult</span>&gt; <span class="fn">Get</span>(<span class="typ">int</span> id) {
+    <span class="kw">using var</span> c = <span class="kw">new</span> <span class="typ">HttpClient</span>();
+    <span class="kw">var</span> resp = <span class="kw">await</span> c.GetAsync(<span class="str">$"http://catalog/api/{id}"</span>);
+    <span class="kw">return</span> Content(<span class="kw">await</span> resp.Content.ReadAsStringAsync());
+}</pre>
+
+    <h3>HttpClient — after (IHttpClientFactory, typed client)</h3>
+    <pre><span class="cmt">// Program.cs — register a typed client. Handlers are pooled and rotated every 2 min
+// so DNS changes are picked up; no per-call socket churn.</span>
+builder.Services.<span class="fn">AddHttpClient</span>&lt;<span class="typ">CatalogClient</span>&gt;(c =&gt; {
+    c.BaseAddress = <span class="kw">new</span>(<span class="str">"http://catalog/"</span>);
+    c.Timeout     = <span class="typ">TimeSpan</span>.FromSeconds(2);
+})
+.SetHandlerLifetime(<span class="typ">TimeSpan</span>.FromMinutes(5));
+
+<span class="cmt">// CatalogClient.cs — inject and use like any DI service.</span>
+<span class="kw">public sealed class</span> <span class="typ">CatalogClient</span> {
+    <span class="kw">private readonly</span> <span class="typ">HttpClient</span> _http;
+    <span class="kw">public</span> CatalogClient(<span class="typ">HttpClient</span> http) =&gt; _http = http;
+
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">string</span>&gt; <span class="fn">Get</span>(<span class="typ">int</span> id) =&gt;
+        <span class="kw">await</span> _http.GetStringAsync(<span class="str">$"api/{id}"</span>);
+}</pre>
+
+    <h3>LOH pressure — use ArrayPool instead of new byte[]</h3>
+    <pre><span class="cmt">// ❌ byte[100_000] per request → LOH allocation, triggers Gen 2 GCs, halves throughput.</span>
+<span class="kw">var</span> buf = <span class="kw">new byte</span>[100_000];
+
+<span class="cmt">// ✅ Rent from a shared pool; return in a finally.</span>
+<span class="kw">var</span> buf = <span class="typ">ArrayPool</span>&lt;<span class="typ">byte</span>&gt;.Shared.Rent(100_000);
+<span class="kw">try</span> { <span class="cmt">/* use buf[0..100_000] */</span> }
+<span class="kw">finally</span> { <span class="typ">ArrayPool</span>&lt;<span class="typ">byte</span>&gt;.Shared.Return(buf); }</pre>
+
+    <h3>The detection one-liners you should be able to recite</h3>
+    <pre><span class="cmt"># Live monitor: GC gens, LOH, POH, allocation rate, pause time</span>
+dotnet-counters monitor -p &lt;pid&gt; --refresh-interval 1
+
+<span class="cmt"># Two lightweight heap snapshots ~2 min apart — great for diff</span>
+dotnet-gcdump collect -p &lt;pid&gt; -o t1.gcdump
+dotnet-gcdump collect -p &lt;pid&gt; -o t2.gcdump
+
+<span class="cmt"># Full dump for offline SOS analysis</span>
+dotnet-dump collect -p &lt;pid&gt;
+dotnet-dump analyze core_dump
+&gt; dumpheap -stat            <span class="cmt"># biggest types by total size</span>
+&gt; dumpheap -mt &lt;MT&gt;         <span class="cmt"># list instances of the offender</span>
+&gt; gcroot &lt;addr&gt;             <span class="cmt"># THE command — retention path back to the root</span></pre>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <p><strong>Server GC vs Workstation GC.</strong> Server GC (default for ASP.NET Core) uses one heap and one GC thread per logical CPU — high throughput, larger ephemeral segments (~1–4 GB), but a bigger footprint. Workstation is lower-footprint and better for small containers or client apps. On a 512 MB Fargate task, forcing Workstation with <code>&lt;ConcurrentGarbageCollection&gt;true&lt;/ConcurrentGarbageCollection&gt;</code> + <code>&lt;ServerGarbageCollection&gt;false&lt;/ServerGarbageCollection&gt;</code> can be the right call.</p>
+    <p><strong>Compact-on-full-GC vs sweep-only.</strong> Since .NET Core 3.0 the LOH can be compacted on demand (<code>GCSettings.LargeObjectHeapCompactionMode</code>). It's expensive — pauses can hit hundreds of ms — but it's the escape hatch when LOH fragmentation is real.</p>
+    <p><strong>The classic bottleneck sequence.</strong> Allocation rate too high → Gen 0/1 GCs frequent → objects survive into Gen 2 they didn't deserve → Gen 2 grows → full-GC pause grows → ALB health checks fail → tasks recycle → the surviving tasks take the traffic and start doing the same thing → thundering herd.</p>
+    <div class="qa">
+      <p class="q">How would you find a memory leak in production?</p>
+      <p class="a">Baseline with <code>dotnet-counters</code> on a live pod. If Gen 2 or working-set climbs while allocation rate stays flat, that's a leak. Take two <code>dotnet-gcdump</code> snapshots ~5–10 min apart, diff them in Visual Studio or PerfView, follow the biggest positive-delta type, and run <code>!gcroot</code> on one instance to get the retention path back to a root. Fix the root, redeploy, watch the graph go flat.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Why does .NET have leaks if it has a garbage collector?</p>
+      <p class="a">Because the GC only frees <strong>unreachable</strong> objects. A leak in .NET is <strong>reachable-but-unwanted</strong>: something we wrote is still pointing at an object we've logically finished with — a static field, an event delegate, a running timer, a captive closure, or a native handle. The GC is doing its job perfectly.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Difference from a C++ leak?</p>
+      <p class="a">C++ leaks are unreachable-and-unfreed — you forgot to <code>delete</code>. .NET leaks are reachable-and-unwanted — you forgot to <code>-=</code> or <code>Dispose</code>. Fix in C++ = smart pointers. Fix in .NET = cut the reference or add IDisposable + <code>using</code>.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Why was IHttpClientFactory added?</p>
+      <p class="a">To fix two bugs at once. <code>new HttpClient()</code> per call exhausts sockets (TIME_WAIT). A static singleton fixes sockets but caches DNS forever. <code>IHttpClientFactory</code> pools handlers and rotates them every 2 min so DNS changes propagate — best of both.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch">"A .NET leak is <strong>reachable-but-unwanted</strong> — the GC can't collect an object something still points to. My job is to find the retention path back to the root and cut it. The five roots that produce 90 % of leaks are <strong>statics, event delegates, timers, undisposed IDisposables, and native handles</strong>. I detect with <code>dotnet-counters</code> + two <code>dotnet-gcdump</code>s diffed; I confirm with <code>!gcroot</code> in SOS."</p>
+    <ul>
+      <li><strong>The one-line definition</strong> — reachable-but-unwanted (vs C++ unreachable-and-unfreed).</li>
+      <li><strong>Five leak sources to name</strong> — static cache, event handler, timer, undisposed handle, captive dependency.</li>
+      <li><strong>Three numbers to quote</strong> — LOH threshold 85,000 bytes; handler lifetime 2 min; TIME_WAIT ~240 s Windows / 60 s Linux.</li>
+      <li><strong>The tool chain</strong> — <code>dotnet-counters</code> → two <code>dotnet-gcdump</code>s → diff → <code>!gcroot</code>.</li>
+      <li><strong>The classic fix stories</strong> — <code>IHttpClientFactory</code>, weak-event pattern, <code>ArrayPool</code>, <code>AsNoTracking</code>, <code>IMemoryCache</code> with size limit.</li>
+      <li><strong>Container gotcha</strong> — OOMKilled 137 with flat managed heap = native leak; pre-3.0 runtimes ignored cgroup limits.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about .NET memory leaks and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ol>
+      <li><a href="https://learn.microsoft.com/en-us/dotnet/core/diagnostics/debug-memory-leak">Debug a memory leak — Microsoft Learn</a> (the canonical <code>CustomerCache</code> walkthrough with dotnet-counters / dotnet-dump / gcroot)</li>
+      <li><a href="https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/fundamentals">Fundamentals of garbage collection — Microsoft Learn</a> (roots, generations, Server vs Workstation, segment sizes)</li>
+      <li><a href="https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/large-object-heap">Large object heap — Microsoft Learn</a> (85,000-byte rule, sweep-not-compact, PerfView commands)</li>
+      <li><a href="https://learn.microsoft.com/en-us/dotnet/core/extensions/httpclient-factory">IHttpClientFactory — Microsoft Learn</a> (2-min handler lifetime, DNS problem, PooledConnectionLifetime)</li>
+      <li><a href="https://learn.microsoft.com/en-us/dotnet/architecture/microservices/implement-resilient-applications/use-httpclientfactory-to-implement-resilient-http-requests">Resilient HTTP requests with IHttpClientFactory — .NET Microservices eBook</a></li>
+      <li><a href="https://learn.microsoft.com/en-us/aspnet/core/performance/memory">Memory management and patterns in ASP.NET Core — Microsoft Learn</a> (PhysicalFileProvider #844, ArrayPool, LOH throughput cliff)</li>
+      <li><a href="https://michaelscodingspot.com/find-fix-and-avoid-memory-leaks-in-c-net-8-best-practices/">Find, Fix, and Avoid Memory Leaks in C# .NET — Michael Shpilt</a> (event-handler, timer, WPF binding, WeakReference unit-test pattern)</li>
+      <li><a href="https://aspnetmonsters.com/2016/08/2016-08-27-httpclientwrong/">You're using HttpClient wrong — ASP.NET Monsters (Simon Timms, 2016)</a> (the original post that motivated IHttpClientFactory)</li>
+    </ol>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

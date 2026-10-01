@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Request Flow — Browser → DNS → ISP → Cloudflare → WAF → LB → App</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;   --scenario-bg: #fff0f4;
+    --laymen: #ffd166;     --laymen-bg: #fffaeb;
+    --reqs: #f4a259;       --reqs-bg: #fff7ed;
+    --arch: #4361ee;       --arch-bg: #eef2ff;
+    --anim: #00b4d8;       --anim-bg: #eef9fc;
+    --dsa: #7048e8;        --dsa-bg: #f3effe;
+    --aws: #ff9900;        --aws-bg: #fff6e6;
+    --code-bg: #1e2430;    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.65;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px;
+    box-shadow: var(--shadow); margin-bottom: 24px;
+  }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.1rem; letter-spacing: -.5px; }
+  header.hero p  { margin: 0; font-size: 1.12rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); color: #7c5c00; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { position: relative; padding: 10px 0 10px 46px; margin: 0; border-bottom: 1px dashed var(--line); }
+  .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 10px; width: 30px; height: 30px; border-radius: 50%; background: var(--arch); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: .9rem; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; }
+  .faq-item .q::before { content: "Q "; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  .rung { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 10px 0; }
+  .rung h4 { margin: 0 0 6px; font-size: 1rem; color: var(--arch); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>The Full Request Flow — Browser to Application</h1>
+    <p>From a URL typed in Chrome to bytes hitting your controller — every hop, every layer, every trust boundary.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're modelling &amp; why it's an interview classic</h2>
+    <p>You type <code>https://app.example.com/orders/42</code> in your browser and half a second later a rendered page appears. In between, your packet crosses a dozen trust boundaries — the browser cache, the operating system's stub resolver, your ISP's recursive DNS, the DNS root and the <code>.com</code> TLD, Cloudflare's authoritative name servers, Cloudflare's Anycast edge (which is also your CDN, WAF, and DDoS shield), the public internet, an AWS <strong>Application Load Balancer</strong>, a Kubernetes / ECS ingress, and finally your application pod. Every hop makes a decision: cache, block, route, terminate TLS, add a header, or forward.</p>
+    <p>This is one of the most-asked <em>foundational</em> interview scenarios because every senior candidate is expected to sketch it on a whiteboard without hesitation. Real products that live exactly on this pattern: <strong>Shopify</strong>, <strong>Discord</strong>, and <strong>DoorDash</strong> (Cloudflare → AWS), <strong>Netflix</strong> (Open Connect + AWS ALB), <strong>Airbnb</strong> and <strong>Stripe</strong> (multi-CDN in front of AWS/GCP). Companies build it this way because it lets them scale reads at the edge, absorb DDoS before it reaches their VPC, roll out TLS certs centrally, and keep origin IPs private.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>How this works if you've never heard the words "server" or "load balancer"</h2>
+    <p><strong>Imagine you're sending a letter to a friend in a huge apartment complex.</strong> You know their name — "Priya at Sunrise Towers" — but not their exact flat number. The postal system has to figure that out for you.</p>
+    <p>When you type <code>example.com</code> in your browser, the same thing happens under the hood. The name <code>example.com</code> is <strong>friendly for humans</strong>, but computers on the internet only talk to each other using numbers, like <code>203.0.113.42</code>. So the first job is to <strong>look up the number for the name</strong> — like flipping open a phonebook. That's what <strong>DNS</strong> does. Your computer asks its neighbour ("your ISP" — the company that gives you internet) if it knows the number. If not, the ISP asks the internet's <strong>master directory</strong>, which walks up the tree: "who owns <code>.com</code>? Who owns <code>example.com</code> inside <code>.com</code>?" Bit by bit it finds the answer.</p>
+    <p>Now here's a twist. The number your computer gets back doesn't lead to your friend's flat directly. It leads to a <strong>front desk</strong> — a huge one, run by a company like <strong>Cloudflare</strong>, with copies sitting in every major city in the world. That front desk does three things before your letter goes any further. First, it looks in a <strong>drawer of common replies</strong> — if someone else just asked for the same page (say, the homepage), it hands over the copy immediately without disturbing the office at the back. That's called a <strong>cache</strong>. Second, it <strong>reads your letter for anything suspicious</strong> — a burglar disguised as a customer, a stack of forged requests — and throws those away. That's the <strong>firewall</strong> (WAF). Third, if the letter is real and not cached, it forwards it to the <strong>real office</strong> at the back — hidden behind a locked door only the front desk knows about.</p>
+    <p>The real office isn't one person either. It's a <strong>team of clerks</strong>, and a supervisor at the door decides which clerk takes each letter based on how busy they are. That supervisor is the <strong>load balancer</strong>. The clerk that finally handles your letter is the <strong>application</strong>. When they write the reply, it goes back the same way — clerk → supervisor → front desk → your computer.</p>
+    <p><strong>Why is this hard?</strong> Because millions of people send letters at the same second, and the front desk has to reject fake ones, cache smart, translate languages, and never lose a real letter. Every household name — <strong>Instagram, Uber, Netflix, WhatsApp</strong> — works this way. When you tap "like" on Instagram, your tap runs through this exact chain in under 200 milliseconds.</p>
+    <p><em>Tiny concrete example:</em> Ravi in Bangalore types <code>zomato.com</code>. His phone asks Airtel (his ISP), which asks the internet directory tree, and gets back an Anycast number owned by Cloudflare. His packet hits Cloudflare's Mumbai front desk. Cloudflare has a fresh copy of Zomato's homepage in its drawer — 3 milliseconds later, Ravi sees the page. Zomato's actual servers in AWS never even knew Ravi asked.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>What the system has to do, and how fast</h2>
+    <h3>Functional</h3>
+    <ul>
+      <li>Resolve a hostname (domain + subdomain) to an IP — for <em>every</em> request that isn't already in a cache.</li>
+      <li>Terminate TLS at the edge (Cloudflare) and, optionally, re-encrypt end-to-end to the origin ALB.</li>
+      <li>Cache eligible responses close to the user; serve stale-while-revalidate on origin failure.</li>
+      <li>Filter malicious traffic (OWASP Top-10, bot, rate-limit, DDoS) before it costs origin CPU.</li>
+      <li>Load-balance surviving requests across a fleet of healthy application instances.</li>
+      <li>Route by <strong>host</strong> (which app), <strong>path</strong> (which service), and sometimes header/cookie.</li>
+    </ul>
+    <h3>Non-functional targets</h3>
+    <table>
+      <tr><th>Metric</th><th>Target</th><th>Why</th></tr>
+      <tr><td>End-to-end p50 latency</td><td>&lt; 200 ms</td><td>Human perception of "instant"</td></tr>
+      <tr><td>DNS lookup (cold)</td><td>40–120 ms</td><td>Real numbers from typical resolvers</td></tr>
+      <tr><td>DNS lookup (warm cache)</td><td>&lt; 5 ms</td><td>Browser + OS + ISP caches all hit</td></tr>
+      <tr><td>TLS handshake (TLS 1.3, resumed)</td><td>1 RTT (~20-40 ms)</td><td>0-RTT possible with PSK</td></tr>
+      <tr><td>Edge cache hit ratio</td><td>&gt; 80% for static, &gt; 50% for API</td><td>Origin cost &amp; latency reduction</td></tr>
+      <tr><td>DDoS absorption</td><td>Tbps class</td><td>Cloudflare edge: 388 Tbps as of 2024</td></tr>
+      <tr><td>Availability (edge + origin)</td><td>99.99% (52 min/yr)</td><td>Multi-AZ ALB + multi-region CDN</td></tr>
+    </table>
+    <h3>Back-of-the-envelope</h3>
+    <p>A medium SaaS like Notion handles ~1M requests/sec at peak. If Cloudflare caches 70% at the edge, only ~300k RPS actually touch AWS. The ALB fans that across ~500 pods, so ~600 RPS/pod — perfectly reasonable for a well-tuned service. DNS TTL of 60 seconds on the apex means at most ~17k DNS queries/sec against the authoritative servers even at that peak — trivial for Anycast.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>The end-to-end picture</h2>
+    <p>The flow is best thought of as <strong>five trust boundaries</strong>, each of which can decide unilaterally to short-circuit the request. Read the diagram left-to-right; the labels above the arrows are the wire protocol on that hop.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 960 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Request flow diagram">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/>
+          </marker>
+          <marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/>
+          </marker>
+        </defs>
+        <style>
+          .box { fill: #1a2340; stroke: #4361ee; stroke-width: 1.5; rx: 8; }
+          .box.edge { stroke: #ff9900; }
+          .box.dns  { stroke: #7048e8; }
+          .box.aws  { stroke: #2dc653; }
+          .lbl { fill: #e7ecf3; font: 700 12px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .sub { fill: #a0aec0; font: 10px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .flow { stroke: #7fa2ff; stroke-width: 2; fill: none; }
+          .flow.g { stroke: #2dc653; }
+          .flow.a { stroke: #f4a259; stroke-dasharray: 4 3; }
+          .pl { fill: #7fa2ff; font: 700 10px monospace; text-anchor: middle; }
+          .pl.g { fill: #2dc653; }
+          .pl.a { fill: #f4a259; }
+        </style>
+
+        <!-- Row 1: DNS lookup path -->
+        <rect class="box" x="20"  y="30" width="130" height="52" rx="8"/>
+        <text class="lbl" x="85"  y="52">Browser</text>
+        <text class="sub" x="85"  y="70">local DNS cache</text>
+
+        <rect class="box dns" x="200" y="30" width="150" height="52" rx="8"/>
+        <text class="lbl" x="275" y="52">ISP Resolver</text>
+        <text class="sub" x="275" y="70">1.1.1.1 / 8.8.8.8</text>
+
+        <rect class="box dns" x="400" y="30" width="130" height="52" rx="8"/>
+        <text class="lbl" x="465" y="52">Root + .com</text>
+        <text class="sub" x="465" y="70">Anycast</text>
+
+        <rect class="box edge" x="580" y="30" width="170" height="52" rx="8"/>
+        <text class="lbl" x="665" y="52">Cloudflare Authoritative DNS</text>
+        <text class="sub" x="665" y="70">returns Anycast IP</text>
+
+        <!-- Row 2: transport -->
+        <rect class="box edge" x="20"  y="170" width="180" height="80" rx="8"/>
+        <text class="lbl" x="110" y="200">Cloudflare Edge PoP</text>
+        <text class="sub" x="110" y="216">TLS 1.3 · CDN cache</text>
+        <text class="sub" x="110" y="232">WAF · Bot mgmt · DDoS</text>
+
+        <rect class="box aws" x="240" y="170" width="180" height="80" rx="8"/>
+        <text class="lbl" x="330" y="200">AWS WAF (optional)</text>
+        <text class="sub" x="330" y="216">defense-in-depth</text>
+        <text class="sub" x="330" y="232">on ALB or CloudFront</text>
+
+        <rect class="box aws" x="460" y="170" width="180" height="80" rx="8"/>
+        <text class="lbl" x="550" y="200">Application LB</text>
+        <text class="sub" x="550" y="216">host/path rules</text>
+        <text class="sub" x="550" y="232">target groups · health</text>
+
+        <rect class="box aws" x="680" y="170" width="180" height="80" rx="8"/>
+        <text class="lbl" x="770" y="200">Ingress / Service Mesh</text>
+        <text class="sub" x="770" y="216">nginx / Envoy / Istio</text>
+        <text class="sub" x="770" y="232">mTLS · routing</text>
+
+        <!-- Row 3: pods -->
+        <rect class="box aws" x="330" y="340" width="130" height="52" rx="8"/>
+        <text class="lbl" x="395" y="362">API Pod</text>
+        <text class="sub" x="395" y="380">ASP.NET Core</text>
+
+        <rect class="box aws" x="490" y="340" width="130" height="52" rx="8"/>
+        <text class="lbl" x="555" y="362">Auth Pod</text>
+        <text class="sub" x="555" y="380">JWT verify</text>
+
+        <rect class="box aws" x="650" y="340" width="130" height="52" rx="8"/>
+        <text class="lbl" x="715" y="362">Worker Pod</text>
+        <text class="sub" x="715" y="380">background job</text>
+
+        <!-- DNS arrows -->
+        <path class="flow a" d="M150,56 L200,56" marker-end="url(#arrA)"/>
+        <text class="pl a" x="175" y="48">UDP/53</text>
+        <path class="flow a" d="M350,56 L400,56" marker-end="url(#arrA)"/>
+        <text class="pl a" x="375" y="48">UDP/53</text>
+        <path class="flow a" d="M530,56 L580,56" marker-end="url(#arrA)"/>
+        <text class="pl a" x="555" y="48">UDP/53</text>
+
+        <!-- DNS answer → browser (dashed loopback) -->
+        <path class="flow a" d="M665,82 C665,120 85,120 85,82" marker-end="url(#arrA)"/>
+        <text class="pl a" x="380" y="115">answer: Anycast IP (A / AAAA)</text>
+
+        <!-- Data path arrows -->
+        <path class="flow" d="M85,82 L110,170" marker-end="url(#arr)"/>
+        <text class="pl" x="70" y="130">HTTPS/443</text>
+
+        <path class="flow" d="M200,210 L240,210" marker-end="url(#arr)"/>
+        <text class="pl" x="220" y="200">TLS</text>
+
+        <path class="flow" d="M420,210 L460,210" marker-end="url(#arr)"/>
+        <text class="pl" x="440" y="200">HTTPS</text>
+
+        <path class="flow" d="M640,210 L680,210" marker-end="url(#arr)"/>
+        <text class="pl" x="660" y="200">HTTP/2 · gRPC</text>
+
+        <path class="flow" d="M770,250 L395,340" marker-end="url(#arr)"/>
+        <path class="flow" d="M770,250 L555,340" marker-end="url(#arr)"/>
+        <path class="flow" d="M770,250 L715,340" marker-end="url(#arr)"/>
+
+        <!-- Legend -->
+        <rect x="20" y="415" width="920" height="34" rx="6" fill="#0b1020"/>
+        <circle cx="40" cy="432" r="6" fill="#f4a259"/><text x="55" y="436" fill="#c6d0e0" font-size="12">DNS control-plane (UDP/53, Anycast)</text>
+        <circle cx="290" cy="432" r="6" fill="#7fa2ff"/><text x="305" y="436" fill="#c6d0e0" font-size="12">HTTPS data-plane (TLS-encrypted TCP)</text>
+        <circle cx="560" cy="432" r="6" fill="#2dc653"/><text x="575" y="436" fill="#c6d0e0" font-size="12">Inside VPC / mesh</text>
+      </svg>
+    </div>
+
+    <p>Two flows are actually happening: a <strong>DNS control-plane flow</strong> (top row, UDP/53, ~50 ms cold, sub-millisecond warm) that gives the browser an IP to connect to, and a <strong>data-plane flow</strong> (bottom row, HTTPS over TCP/443) that carries the actual HTTP request. The DNS flow returns an <strong>Anycast IP</strong> owned by Cloudflare — the browser has no idea AWS is behind it. This is what lets Cloudflare hide origin IPs and absorb DDoS.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a single request travel every hop</h2>
+    <p>Press <strong>▶ Play</strong> and follow one HTTPS request from Ravi's browser in Bangalore all the way to an ASP.NET Core pod in AWS Mumbai. Yellow packets are DNS, blue packets are the actual HTTP request, green is the response.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg" role="img">
+        <defs>
+          <marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <style>
+          .node { fill: #1a2340; stroke: #4361ee; stroke-width: 1.5; rx: 8; }
+          .node.dns { stroke: #7048e8; }
+          .node.edge{ stroke: #ff9900; }
+          .node.aws { stroke: #2dc653; }
+          .txt { fill: #e7ecf3; font: 700 11px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .sub { fill: #a0aec0; font: 10px 'Segoe UI', sans-serif; text-anchor: middle; }
+          .pkt { r: 8; }
+          .pkt.dns { fill: #f4a259; }
+          .pkt.req { fill: #7fa2ff; }
+          .pkt.res { fill: #2dc653; }
+          .pkt.bad { fill: #f7567c; }
+        </style>
+
+        <!-- Nodes -->
+        <rect class="node"      x="20"  y="180" width="110" height="52" rx="8"/>
+        <text class="txt" x="75"  y="202">Browser</text>
+        <text class="sub" x="75"  y="220">Ravi · BLR</text>
+
+        <rect class="node dns"  x="160" y="60"  width="120" height="52" rx="8"/>
+        <text class="txt" x="220" y="82">ISP Resolver</text>
+        <text class="sub" x="220" y="100">1.1.1.1</text>
+
+        <rect class="node dns"  x="330" y="30"  width="120" height="52" rx="8"/>
+        <text class="txt" x="390" y="52">Authoritative</text>
+        <text class="sub" x="390" y="70">Cloudflare NS</text>
+
+        <rect class="node edge" x="160" y="180" width="140" height="60" rx="8"/>
+        <text class="txt" x="230" y="204">Cloudflare Edge</text>
+        <text class="sub" x="230" y="220">Mumbai PoP</text>
+        <text class="sub" x="230" y="234">TLS · Cache · WAF</text>
+
+        <rect class="node aws"  x="360" y="180" width="120" height="52" rx="8"/>
+        <text class="txt" x="420" y="202">ALB</text>
+        <text class="sub" x="420" y="220">host/path rules</text>
+
+        <rect class="node aws"  x="530" y="180" width="120" height="52" rx="8"/>
+        <text class="txt" x="590" y="202">Ingress / Envoy</text>
+        <text class="sub" x="590" y="220">mTLS</text>
+
+        <rect class="node aws"  x="700" y="180" width="120" height="52" rx="8"/>
+        <text class="txt" x="760" y="202">App Pod</text>
+        <text class="sub" x="760" y="220">.NET 8 API</text>
+
+        <!-- Path guides (invisible) -->
+        <path id="p-dns1" d="M130,200 C160,140 160,120 160,90" fill="none" stroke="none"/>
+        <path id="p-dns2" d="M280,90 L330,60" fill="none" stroke="none"/>
+
+        <!-- Packets - initial positions -->
+        <circle class="pkt dns a-el a-hidden" id="pk-dns"  cx="130" cy="200"/>
+        <circle class="pkt req a-el a-hidden" id="pk-req"  cx="130" cy="210"/>
+        <circle class="pkt bad a-el a-hidden" id="pk-bad"  cx="130" cy="222"/>
+        <circle class="pkt res a-el a-hidden" id="pk-res"  cx="820" cy="210"/>
+
+        <!-- Overlay text -->
+        <text class="sub" id="tls" x="230" y="176" fill="#00b4d8" opacity="0"></text>
+        <text class="sub" id="hit" x="230" y="252" fill="#2dc653" opacity="0"></text>
+        <text class="sub" id="waf" x="230" y="264" fill="#f7567c" opacity="0"></text>
+
+        <text x="450" y="380" fill="#7f8aa0" font-size="10" text-anchor="middle">
+          🟠 DNS  ·  🔵 HTTP request  ·  🟢 Response  ·  🔴 Blocked
+        </text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        function setPos(sel, x, y) {
+          const el = $(sel); if (!el) return;
+          el.setAttribute('cx', x); el.setAttribute('cy', y);
+          el.classList.remove('a-hidden');
+        }
+        function hide(sel) { $(sel)?.classList.add('a-hidden'); }
+        function setText(sel, t) { const el = $(sel); if (el) { el.textContent = t; el.setAttribute('opacity','1'); } }
+        function clearText(sel) { const el = $(sel); if (el) { el.textContent = ''; el.setAttribute('opacity','0'); } }
+
+        const CFG = {
+          intro: 'A single HTTPS GET, from Bangalore to an AWS pod, hop by hop.',
+          interval: 1900,
+          reset: (r) => {
+            ['#pk-dns','#pk-req','#pk-bad','#pk-res'].forEach(hide);
+            $('#pk-dns').setAttribute('cx',130); $('#pk-dns').setAttribute('cy',200);
+            $('#pk-req').setAttribute('cx',130); $('#pk-req').setAttribute('cy',210);
+            $('#pk-bad').setAttribute('cx',130); $('#pk-bad').setAttribute('cy',222);
+            $('#pk-res').setAttribute('cx',820); $('#pk-res').setAttribute('cy',210);
+            clearText('#tls'); clearText('#hit'); clearText('#waf');
+          },
+          steps: [
+            { caption: '1. Browser has no cached A record for app.example.com — sends a DNS UDP/53 query to the ISP resolver.',
+              apply: (r,$) => setPos('#pk-dns', 220, 90) },
+            { caption: '2. Resolver walks Root → .com → Cloudflare authoritative NS. Cloudflare returns an Anycast IP.',
+              apply: (r,$) => setPos('#pk-dns', 390, 55) },
+            { caption: '3. Anycast routes the packet to the topologically nearest Cloudflare PoP — Mumbai, ~5 ms from Bangalore. Browser opens TCP+TLS 1.3.',
+              apply: (r,$) => { setPos('#pk-req', 230, 210); setText('#tls','TLS 1.3 · SNI = app.example.com'); } },
+            { caption: '4. Cloudflare WAF inspects headers/body. A malicious /admin?../etc/passwd probe from another client is blocked with 403 at the edge.',
+              apply: (r,$) => { setPos('#pk-bad', 230, 220); setText('#waf','⛔ SQLi/LFI rule — blocked'); } },
+            { caption: '5. Edge checks its cache with the cache-key (host+path+query). MISS for /orders/42. It also drops the bad packet — never leaves the edge.',
+              apply: (r,$) => { hide('#pk-bad'); setText('#hit','cache MISS · forward to origin'); } },
+            { caption: '6. Cloudflare opens a warm connection to the AWS ALB over its private backbone. AWS WAF (optional 2nd layer) inspects again.',
+              apply: (r,$) => setPos('#pk-req', 420, 210) },
+            { caption: '7. ALB matches listener rule Host=app.example.com AND Path=/orders/*, picks a healthy target from the target group.',
+              apply: (r,$) => setPos('#pk-req', 590, 210) },
+            { caption: '8. Ingress / Envoy handles mTLS between services, adds tracing headers, forwards to the API pod.',
+              apply: (r,$) => setPos('#pk-req', 760, 210) },
+            { caption: '9. ASP.NET Core controller renders JSON. Response streams back — pod → ingress → ALB → Cloudflare → browser.',
+              apply: (r,$) => { hide('#pk-req'); setPos('#pk-res', 590, 210); } },
+            { caption: '10. Cloudflare caches the response per Cache-Control headers so the next Bangalore user gets it in <10 ms with no origin hit.',
+              apply: (r,$) => { setPos('#pk-res', 75, 210); setText('#hit','cached · TTL 300s'); } }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; return; }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => { if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; } goto(idx + 1); });
+        btnPrev && btnPrev.addEventListener('click', () => { if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; } goto(idx - 1); });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive — every trust boundary, examined</h2>
+
+    <h3>1. Domain, subdomain, and DNS delegation</h3>
+    <p>A fully-qualified name like <code>app.example.com.</code> reads <em>right-to-left</em>. The trailing dot is the <strong>root zone</strong>. Then comes <strong><code>com</code></strong> — the TLD, whose zone is operated by Verisign. Then <strong><code>example</code></strong> — a domain registered to your company. Finally <strong><code>app</code></strong> — a subdomain, which can either live in the same zone as <code>example.com</code> or be <em>delegated</em> to a different set of name servers via <code>NS</code> records. Delegation is how a startup can run its marketing site on Vercel (<code>example.com</code>) while pointing <code>api.example.com</code> at AWS Route 53 — the two subtrees literally sit in different infrastructure. The key record types you'll be quizzed on:</p>
+    <table>
+      <tr><th>Type</th><th>Meaning</th><th>Example</th></tr>
+      <tr><td><code>A</code></td><td>IPv4 address</td><td><code>app 300 IN A 104.16.55.20</code></td></tr>
+      <tr><td><code>AAAA</code></td><td>IPv6 address</td><td><code>app 300 IN AAAA 2606:4700::1</code></td></tr>
+      <tr><td><code>CNAME</code></td><td>Alias to another name — <em>cannot</em> coexist with other records at the same name, so not usable at the zone apex</td><td><code>www 300 IN CNAME app.cdn.net.</code></td></tr>
+      <tr><td><code>ALIAS / ANAME</code></td><td>Vendor-specific apex CNAME — the DNS provider resolves it and returns an A record</td><td><code>example.com 60 IN ALIAS my-alb.us-east-1.elb.amazonaws.com.</code></td></tr>
+      <tr><td><code>NS</code></td><td>Delegates a subtree to other name servers</td><td><code>api 86400 IN NS ns-100.awsdns-12.com.</code></td></tr>
+      <tr><td><code>SOA</code></td><td>Start-of-authority — zone metadata (serial, refresh, TTL)</td><td>one per zone</td></tr>
+      <tr><td><code>MX</code></td><td>Mail exchanger (with priority)</td><td><code>example.com 3600 IN MX 10 mail.google.com.</code></td></tr>
+      <tr><td><code>CAA</code></td><td>Restricts which CAs can issue certs for the domain</td><td><code>example.com 3600 IN CAA 0 issue "letsencrypt.org"</code></td></tr>
+    </table>
+    <p><strong>TTL</strong> is the contract with every downstream cache: the record must not be re-used past this many seconds. Long TTLs (86400) reduce query load; short TTLs (60) enable fast failover. That's why load balancer DNS entries typically use 60 s.</p>
+
+    <h3>2. The ISP recursive resolver</h3>
+    <p>Your ISP (Airtel, Comcast, or a public one like Cloudflare's <code>1.1.1.1</code>) runs a <strong>recursive resolver</strong>. It doesn't own any records — it walks the tree on your behalf and caches everything it sees. From a cold cache, it makes three UDP queries: to a root server (Anycast, ~10–30 ms), to a <code>.com</code> TLD server (Anycast, ~20 ms), and to Cloudflare's authoritative NS (~20 ms), totalling ~50–100 ms. On a warm resolver, the answer is served from cache in under 5 ms. This is the single biggest reason DNS <em>feels</em> instant most of the time. The resolver also enforces <strong>DNSSEC</strong> validation if configured — it walks the signature chain from the root's KSK down to the record's RRSIG and returns <code>SERVFAIL</code> on any tampering.</p>
+
+    <h3>3. Cloudflare authoritative DNS + Anycast</h3>
+    <p>When your domain is on Cloudflare, its authoritative name servers respond to the recursive resolver — <em>but not with the origin IP</em>. For any record marked "proxied" (the orange cloud in the dashboard), Cloudflare returns an <strong>Anycast IP</strong> it owns. Anycast means the same IP is announced via BGP from every Cloudflare PoP (330+ cities as of 2024). The internet's routing fabric naturally sends the client packet to the nearest one. This gives Cloudflare three superpowers at once: it hides the origin IP (attackers can't target AWS directly), it puts a caching/security layer within ~10 ms of every internet user on earth, and it absorbs DDoS at the edge — a 388 Tbps combined capacity, larger than any single origin could survive.</p>
+
+    <h3>4. TLS termination at the edge</h3>
+    <p>The browser opens a TCP handshake to the Anycast IP, then negotiates TLS. In <strong>TLS 1.3</strong> the handshake is 1 RTT (or 0-RTT with a Pre-Shared Key). The client sends a <strong>Server Name Indication (SNI)</strong> extension — <code>server_name = app.example.com</code> — which lets Cloudflare's edge (a single IP hosting thousands of domains) pick the right certificate. Cloudflare then either serves the response entirely from cache <em>or</em> opens a second TLS connection to the origin ALB. That origin-side connection uses the customer's own cert on the ALB, giving genuine end-to-end encryption. <strong>Encrypted Client Hello (ECH)</strong> is the newer version that also encrypts the SNI so an on-path observer can't even see which site you're visiting.</p>
+
+    <h3>5. WAF and bot management</h3>
+    <p>The WAF sits inline with the TLS-terminated request stream. Cloudflare's WAF ships with the <strong>OWASP Core Rule Set</strong> (SQLi, XSS, RCE, path traversal, LFI) plus its own <em>Managed Ruleset</em> tuned from patterns Cloudflare sees across ~20% of all internet traffic. Rules fire on request headers, URI, body, and JA3/JA4 TLS fingerprints for bot detection. Rate-limiting (per IP, per session, per header) rejects abusive clients before they cost origin CPU. Anything the WAF blocks never reaches your VPC — this is the primary cost-saver at scale.</p>
+
+    <h3>6. CDN caching decisions</h3>
+    <p>For every request Cloudflare hits your origin for, the response is potentially cached at the edge. The <strong>cache key</strong> defaults to <code>(host, scheme, path, query)</code> and can be customised. Static assets (images, JS bundles) hit almost 100%. HTML with dynamic personalisation typically doesn't cache, but you can use <em>Edge Side Includes</em> or <em>stale-while-revalidate</em> to soften origin load spikes. <code>Cache-Control</code> and <code>CDN-Cache-Control</code> headers from your origin decide freshness; <code>Vary</code> headers key on things like <code>Accept-Encoding</code> or <code>Accept-Language</code>.</p>
+
+    <h3>7. The origin AWS Application Load Balancer</h3>
+    <p>Cloudflare's PoP now opens a TLS connection to your ALB's public DNS name (something like <code>my-alb-123.us-east-1.elb.amazonaws.com</code>). The ALB operates at OSI Layer 7 — it can read the HTTP request. Its behavior is defined by <strong>listeners</strong> (a port + protocol like 443/HTTPS) and <strong>rules</strong>. Each rule is <em>condition → action</em>: for example, <code>Host = app.example.com AND Path = /orders/*</code> → <code>forward to target group "orders-api"</code>. Target groups map to registered targets (EC2, ECS tasks, EKS pods, IPs, or Lambda), and the ALB does per-target health checks so an unhealthy pod stops receiving traffic within seconds. TLS termination on the ALB uses an ACM cert; SNI lets one ALB host many domains. Optionally an <strong>AWS WAF WebACL</strong> attaches to the ALB as a defense-in-depth layer.</p>
+
+    <h3>8. Kubernetes ingress / service mesh</h3>
+    <p>If the target group is an EKS cluster, the ALB forwards to the <strong>Ingress Controller</strong> (nginx, AWS Load Balancer Controller, or Envoy). The ingress applies its own path/host rules, terminates or passes through mTLS if you run <strong>Istio</strong>/<strong>Linkerd</strong>, adds tracing headers (<code>traceparent</code>, <code>x-request-id</code>), and routes to the right <code>Service</code>. kube-proxy or the service mesh sidecar picks a healthy pod IP via <code>iptables</code>/eBPF and forwards the connection.</p>
+
+    <h3>9. The application layer</h3>
+    <p>Finally the request reaches your ASP.NET Core / Spring Boot / Node process. The framework's routing table matches the method+path, runs middleware (auth, CORS, logging), invokes the controller, hits a database or cache, and returns a response. Same path — pod → ingress → ALB → Cloudflare → browser — for the reply.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms that make each hop work</h2>
+    <table>
+      <tr><th>Layer</th><th>DSA / algorithm</th><th>Why it's used</th><th>Complexity</th></tr>
+      <tr><td>DNS resolver cache</td><td>Hash map keyed on <code>(qname, qtype)</code> with expiring TTL entries; often a min-heap for expiry</td><td>O(1) lookup; heap gives O(log n) eviction</td><td>Lookup: <strong>O(1)</strong></td></tr>
+      <tr><td>DNS zone lookup</td><td>Radix / trie on domain labels (dot-separated segments reversed)</td><td>Fast longest-suffix matching for delegation</td><td>O(labels)</td></tr>
+      <tr><td>Anycast routing</td><td>BGP path selection — Dijkstra-like shortest AS-path</td><td>Chooses topologically nearest PoP</td><td>O(V log V) per BGP update</td></tr>
+      <tr><td>TLS session cache</td><td>Session-ID hash map or session-ticket AEAD</td><td>Skips full handshake on repeat visits</td><td>O(1)</td></tr>
+      <tr><td>WAF pattern match</td><td>Aho-Corasick multi-pattern automaton over rule set + Hyperscan for regex</td><td>All rules scanned in one pass over the input</td><td>O(n + m)</td></tr>
+      <tr><td>Rate limiting</td><td>Token bucket / sliding window counter in Redis</td><td>Constant-time decision per request</td><td>O(1)</td></tr>
+      <tr><td>Bot fingerprinting</td><td>JA3/JA4 hash of TLS ClientHello + count-min sketch for frequency</td><td>Cheap identity across IPs</td><td>O(1) hash</td></tr>
+      <tr><td>CDN cache lookup</td><td>Consistent-hash ring across edge nodes</td><td>Minimal reshuffling on node add/remove</td><td>O(log n)</td></tr>
+      <tr><td>ALB target selection</td><td>Round-robin or "least outstanding requests" heap</td><td>Balances load without stickiness by default</td><td>RR: O(1) · LOR: O(log n)</td></tr>
+      <tr><td>Health checks</td><td>Circuit breaker state machine (closed/open/half-open)</td><td>Isolates failing targets fast</td><td>O(1) per check</td></tr>
+      <tr><td>Ingress path routing</td><td>Trie over URI segments</td><td>Longest-prefix rule wins</td><td>O(path length)</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>The concrete service map</h2>
+    <table>
+      <tr><th>Layer in the flow</th><th>AWS service</th><th>Why this pick</th></tr>
+      <tr><td>Domain registration</td><td>Route 53 (or Namecheap, GoDaddy)</td><td>Anycast-backed registrar with API + private-DNS integration</td></tr>
+      <tr><td>Authoritative DNS</td><td>Route 53 (or Cloudflare)</td><td>100% SLA; supports ALIAS records for the zone apex pointing at an ALB</td></tr>
+      <tr><td>CDN + Edge WAF</td><td>Cloudflare (or CloudFront + AWS WAF)</td><td>Cloudflare's global PoP density &amp; DDoS scrubbing; CloudFront native for AWS-only shops</td></tr>
+      <tr><td>TLS certs</td><td>AWS Certificate Manager (ACM)</td><td>Free, auto-renewing; attaches to CloudFront and ALB natively</td></tr>
+      <tr><td>Origin firewall</td><td>AWS WAF (WebACL on ALB / CloudFront)</td><td>Managed rules for OWASP, bot control; per-request charge</td></tr>
+      <tr><td>Application load balancer</td><td>ALB</td><td>Layer-7 routing, host/path/header rules, WebSocket, gRPC, ACM SNI</td></tr>
+      <tr><td>TCP/UDP load balancer</td><td>NLB</td><td>Layer-4, millions of RPS, low latency, static IP — use in front of ALB where you need a static IP</td></tr>
+      <tr><td>Global entry point</td><td>AWS Global Accelerator</td><td>Anycast entry into AWS for multi-region ALBs</td></tr>
+      <tr><td>Container runtime</td><td>EKS / ECS Fargate</td><td>EKS for Kubernetes idioms; ECS Fargate for serverless containers</td></tr>
+      <tr><td>Service mesh</td><td>Istio / App Mesh / Envoy sidecars</td><td>mTLS, retries, circuit breaking, traffic shifting</td></tr>
+      <tr><td>Compute for Lambda-style APIs</td><td>API Gateway + Lambda</td><td>Skip ALB entirely for event/HTTP APIs at low RPS</td></tr>
+      <tr><td>DDoS shield</td><td>AWS Shield Standard/Advanced</td><td>Automatic for CloudFront/ALB; Advanced adds 24/7 response team</td></tr>
+      <tr><td>Observability</td><td>CloudWatch, X-Ray, VPC Flow Logs</td><td>Metrics, tracing, packet-level flow diagnostics</td></tr>
+    </table>
+    <p><strong>Typical deployment.</strong> Register the domain with Route 53. Delegate the whole zone to Cloudflare (change NS records at the registrar). Set an <code>A</code>-proxied record on <code>app.example.com</code> pointing at your ALB's DNS name (Cloudflare will resolve and serve traffic behind its Anycast IP). Provision an ALB with two listeners — 80 → 443 redirect, 443 with an ACM certificate — and rules that split by host/path into target groups. Each target group points at an EKS node group or ECS service. Slap an AWS WAF WebACL on the ALB for defense-in-depth. Route 53 private hosted zones handle internal service discovery. Done.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — a minimal end-to-end pipeline</h2>
+    <p>Below is a compact ASP.NET Core setup showing what the <em>application-side</em> of this flow actually looks like: forwarded-header handling (so <code>HttpContext.Connection.RemoteIpAddress</code> is the real client, not the ALB), CORS for the browser origin, health endpoints for ALB target-group probes, and a route that reads a header the WAF/Ingress added. This is what a Principal Engineer would show at a whiteboard.</p>
+<pre><span class="cmt">// Program.cs — ASP.NET Core 8. Behind Cloudflare → AWS WAF → ALB → Ingress.</span>
+<span class="kw">using</span> Microsoft.AspNetCore.HttpOverrides;
+
+<span class="kw">var</span> builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure&lt;<span class="typ">ForwardedHeadersOptions</span>&gt;(o =&gt;
+{
+    <span class="cmt">// ALB/Ingress set X-Forwarded-For and X-Forwarded-Proto.</span>
+    <span class="cmt">// Cloudflare adds CF-Connecting-IP with the real client IP.</span>
+    o.ForwardedHeaders = <span class="typ">ForwardedHeaders</span>.XForwardedFor | <span class="typ">ForwardedHeaders</span>.XForwardedProto;
+    o.KnownNetworks.Clear();  <span class="cmt">// trust the ingress/ALB CIDR only</span>
+    o.KnownProxies.Clear();
+});
+
+builder.Services.AddCors(p =&gt; p.AddDefaultPolicy(b =&gt;
+    b.WithOrigins(<span class="str">"https://app.example.com"</span>).AllowAnyHeader().AllowAnyMethod()));
+
+builder.Services.AddHealthChecks();       <span class="cmt">// /healthz for ALB target group</span>
+builder.Services.AddControllers();
+
+<span class="kw">var</span> app = builder.Build();
+
+app.UseForwardedHeaders();                <span class="cmt">// must run BEFORE anything reads RemoteIpAddress</span>
+app.UseHttpsRedirection();
+app.UseCors();
+
+<span class="cmt">// Cheap liveness probe — used by ALB target group + k8s liveness.</span>
+app.MapGet(<span class="str">"/healthz"</span>, () =&gt; <span class="typ">Results</span>.Ok(<span class="kw">new</span> { status = <span class="str">"ok"</span> }));
+
+<span class="cmt">// Real endpoint — reads the client IP the reverse proxies preserved for us.</span>
+app.MapGet(<span class="str">"/orders/{id:int}"</span>, (<span class="kw">int</span> id, <span class="typ">HttpContext</span> ctx) =&gt;
+{
+    <span class="kw">var</span> clientIp = ctx.Request.Headers[<span class="str">"CF-Connecting-IP"</span>].FirstOrDefault()
+                ?? ctx.Connection.RemoteIpAddress?.ToString();
+    <span class="kw">var</span> traceId = ctx.Request.Headers[<span class="str">"traceparent"</span>].FirstOrDefault();
+
+    <span class="cmt">// Auth, DB, business logic ...</span>
+    <span class="kw">return</span> <span class="typ">Results</span>.Ok(<span class="kw">new</span> { orderId = id, servedTo = clientIp, trace = traceId });
+});
+
+app.MapControllers();
+app.Run();
+</pre>
+    <p>Key things this snippet gets right that most demos get wrong: (1) <code>UseForwardedHeaders</code> runs <em>before</em> any middleware that inspects <code>RemoteIpAddress</code>; (2) it reads Cloudflare's <code>CF-Connecting-IP</code> header, which is the only reliable client IP when Cloudflare is in front; (3) a cheap <code>/healthz</code> endpoint lets the ALB target-group probe pass without touching a database.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <h3>Where it actually breaks</h3>
+    <p><strong>DNS is the silent single point of failure.</strong> If your authoritative NS goes down (Dyn 2016, AWS us-east-1 Route 53 2019), no client can find your site — even if the origin is perfectly healthy. Mitigation: use two DNS providers in <em>secondary</em> mode. <strong>Long TTLs kill failover.</strong> A 3600 s TTL on an A record means it takes an hour for the internet to notice a new IP. Use 60 s for anything that can move. <strong>Cloudflare origin exposure</strong> — if your origin IP leaks (misconfigured DNS record, cert transparency logs, email headers), attackers bypass the CDN entirely. Fix: restrict the origin security group to accept traffic only from Cloudflare's published IP ranges.</p>
+    <h3>Consistency &amp; caching</h3>
+    <p>CDN caching is <strong>eventually consistent</strong> — a purge doesn't hit all 330 PoPs at the exact same instant. If you need strict freshness, cache-bust via versioned URLs (<code>app.abc123.js</code>) instead of relying on purge. Personalised responses (auth'd APIs) usually mark themselves <code>Cache-Control: private, no-store</code> and never sit at the edge — which means the origin sees full traffic on those paths.</p>
+    <h3>TLS &amp; certs</h3>
+    <p>Certs expire. Automate with ACM or Let's Encrypt, and monitor days-to-expiry. Watch out for <strong>cipher-suite mismatches</strong> between Cloudflare and your ALB — you need at least one overlap or the origin fetch fails at handshake. TLS 1.3 negotiates in 1 RTT (down from 2 in TLS 1.2), which is a measurable page-load win.</p>
+
+    <h3>Interviewer follow-ups (with crisp answers)</h3>
+    <div class="qa">
+      <p class="q">Q. Why is <code>example.com</code> often an A record but <code>www.example.com</code> a CNAME?</p>
+      <p class="a">A. A CNAME can't sit at the zone apex because DNS forbids a CNAME to coexist with the required SOA/NS records. So the apex needs a real A/AAAA — or a vendor-specific ALIAS/ANAME record that the DNS provider resolves internally.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. What's Anycast vs Unicast?</p>
+      <p class="a">A. Unicast is one IP → one server. Anycast is one IP announced by many servers via BGP; internet routing picks the topologically nearest one. It's how Cloudflare has 388 Tbps of edge capacity behind a handful of IPs, and how the DNS root servers scale.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. Where does TLS actually terminate?</p>
+      <p class="a">A. Twice, usually. Once at Cloudflare (client → edge) so the WAF and cache can read the request. A second, separate TLS connection from Cloudflare to the origin ALB, using the customer's ACM cert. That's why "end-to-end encryption" here doesn't mean "no one in the middle sees plaintext" — it means every hop is encrypted, but Cloudflare deliberately sees plaintext to do its job.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. How does the ALB pick a pod?</p>
+      <p class="a">A. Listener rules match host/path/header conditions in priority order. The winning rule points at a target group. Within the target group, the algorithm is round-robin by default or "least outstanding requests"; unhealthy targets are removed via health checks. If sticky sessions are needed, an ALB-generated cookie pins subsequent requests to the same target.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. ALB or NLB — when do I pick which?</p>
+      <p class="a">A. ALB for HTTP/HTTPS/gRPC — anything where you want to route on path/headers or terminate TLS. NLB for TCP/UDP, extreme RPS, or when you need a static IP the client can whitelist. Many real deployments put an NLB in front of the ALB just to get the static IP.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Q. What happens on a total Cloudflare outage?</p>
+      <p class="a">A. Your users hit an error. Mitigation: multi-CDN setups (Cloudflare + Fastly or Akamai) with DNS-based failover, and — critically — you must be able to bypass the CDN and go direct to origin, which means the origin has to be able to survive the raw traffic and terminate its own certs. Most companies accept the risk and put a runbook in place.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "A request travels through five trust boundaries. First the <em>browser + OS + ISP</em> resolves the hostname via DNS — root, TLD, then the authoritative NS — and gets an Anycast IP owned by Cloudflare. Second, the packet hits the <em>nearest Cloudflare PoP</em>, where TLS 1.3 terminates and the WAF, DDoS shield, and CDN cache decide whether to answer or forward. Third, the surviving request crosses to the <em>AWS ALB</em>, which uses listener rules to pick a target group by host + path. Fourth, the ingress or service mesh handles internal routing and mTLS. Fifth, the request lands on the <em>application pod</em>. Each hop can short-circuit — the earlier it short-circuits, the more scale we get for free."</p>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>DNS cold-lookup: <strong>40–200 ms</strong>. Warm: <strong>&lt;5 ms</strong>.</li>
+      <li>Cloudflare edge: <strong>330+ cities</strong>, <strong>388 Tbps</strong> capacity.</li>
+      <li>TLS 1.3 handshake: <strong>1 RTT</strong> (0 with PSK).</li>
+      <li>Edge cache hit ratio target: <strong>&gt;80% static, &gt;50% API</strong>.</li>
+      <li>ALB is Layer-7; NLB is Layer-4.</li>
+      <li>Route 53 SLA: <strong>100%</strong>.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li>Draw the two flows separately — <em>DNS control-plane</em> (UDP/53) and <em>data-plane</em> (HTTPS). Interviewers love this.</li>
+      <li>Name the record types (A, AAAA, CNAME, ALIAS, NS, SOA, CAA) and explain the CNAME-at-apex rule.</li>
+      <li>Say "Anycast IP" — it's the single word that shows you understand how CDNs actually route.</li>
+      <li>Call out the two TLS terminations (edge and origin) and why they're not a security bug.</li>
+      <li>Discuss what <em>doesn't</em> hit origin — WAF blocks, cache hits, DDoS scrubbing — because that's where the cost story lives.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://developers.cloudflare.com/fundamentals/concepts/how-cloudflare-works/">Cloudflare Docs — How Cloudflare works (reverse proxy, Anycast, authoritative DNS)</a></li>
+      <li><a href="https://developer.mozilla.org/en-US/docs/Glossary/DNS">MDN Web Docs — DNS glossary</a></li>
+      <li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html">AWS Docs — Application Load Balancer: components, listeners, target groups</a></li>
+      <li><a href="https://datatracker.ietf.org/doc/html/rfc8446">RFC 8446 — TLS 1.3</a></li>
+      <li><a href="https://datatracker.ietf.org/doc/html/rfc1035">RFC 1035 — DNS specification</a></li>
+      <li><a href="https://datatracker.ietf.org/doc/html/rfc4033">RFC 4033 — DNSSEC introduction and requirements</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

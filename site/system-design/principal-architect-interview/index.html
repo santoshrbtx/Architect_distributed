@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FAANG Principal / Architect Interviews — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c; --scenario-bg: #fff0f4;
+    --reqs: #f4a259; --reqs-bg: #fff7ed;
+    --arch: #4361ee; --arch-bg: #eef2ff;
+    --dsa: #7048e8; --dsa-bg: #f3effe;
+    --aws: #ff9900; --aws-bg: #fff6e6;
+    --code-bg: #1e2430; --code-ink: #e7ecf3; --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08); --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #0b1f3a 0%, #4361ee 55%, #7048e8 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { position: relative; padding: 10px 0 10px 46px; margin: 0; border-bottom: 1px dashed var(--line); }
+  .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 10px; width: 30px; height: 30px; border-radius: 50%; background: var(--arch); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: .9rem; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .ql { background:#fff; border:1px solid var(--line); border-left:4px solid var(--arch); border-radius:10px; padding:10px 14px; margin:8px 0; }
+  .ql b { color:var(--arch); }
+  .tag { display:inline-block; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:2px 8px; border-radius:999px; background:#eef2ff; color:#4361ee; margin-left:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Interview Prep · Staff / Principal / Architect</div>
+    <h1>FAANG Principal &amp; Architect Interviews</h1>
+    <p>What changes when you interview at L7/E7/Principal: it stops being about whether you can build the system, and becomes about judgment, ambiguity, blast radius, and org-wide impact.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 What's different</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 The rubric</a>
+    <a href="#arch">🏗️ Loop & format</a>
+    <a href="#deep">🔍 Question bank</a>
+    <a href="#dsa">🧮 The framework</a>
+    <a href="#aws">☁️ Deep-dive topics</a>
+    <a href="#code">💻 Worked example</a>
+    <a href="#tradeoffs">⚖️ Behavioral</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 What actually changes at this level</span>
+    <h2>Not "can you build it" — "should we, and what breaks"</h2>
+    <p>At senior level (L5 / E5 / SDE III) the system-design interview asks whether you can produce a correct, scalable design when the interviewer steers. At <strong>Principal / Staff / Architect</strong> level (Amazon L7 Principal, Google L7 Staff / L8 Principal, Meta E7/E8, Microsoft Partner) the bar moves: the coding rounds shrink or vanish, and the loop optimizes for <strong>judgment under ambiguity, breadth of impact, and the quality of your trade-off reasoning</strong>. As interviewing.io puts it, "as you reach senior levels the expectation shifts to the interviewee" — <em>you</em> drive the direction and speed, and "an awkward pause will be held against you."</p>
+    <p>Concretely, the interviewer is no longer checking if you know what a load balancer is. They're probing: Can you take a deliberately vague, one-sentence prompt and <strong>scope it into the right problem</strong>? Do you state assumptions and <strong>commit to decisions</strong>, then adapt when challenged? Can you reason about <strong>failure, blast radius, migration, cost, and organizational cost</strong> — not just the happy path? Can you explain a hard technical concept to a skeptical staff engineer <em>and</em> to a VP in the same breath? Principal interviews are as much about <strong>influence and taste</strong> as about architecture.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Hiring a head chef, not testing a cook</h2>
+    <p>If you've ever watched a cooking show, there's a difference between the audition for the <strong>line cook</strong> and the audition for the <strong>head chef</strong>. When you audition to be a line cook, the judges hand you a recipe and watch how fast and cleanly you follow it — did you dice the onions right, did the sauce come out okay, was the plate hot. That's what a normal software interview feels like. Someone gives you a problem, and you show you can solve it.</p>
+    <p>The principal or architect interview is more like <strong>auditioning to be the head chef of a restaurant</strong>. Nobody hands you a recipe. Instead the owner sits across from you with a coffee and says, "We're opening a new place downtown. It might be Italian. What would you do?" That's the whole question. The room goes quiet. And now the owner is watching what you do <em>before you even pick up a knife</em>. Do you ask "who are the customers?" Do you ask "how much money do we have?" Do you ask "do you want us famous in six months, or profitable in two years?" Do you say "I would not do Italian, here is why"? Do you commit — "given all this, we're doing a small casual pasta bar, twelve items, opening November" — and then explain what you're gladly giving up to make that work?</p>
+    <p>The owner doesn't want the answer that sounds perfect. They want to hear <strong>you make the hard choices out loud</strong>. Because when a real disaster hits — the fridge breaks on New Year's Eve, half the staff quits, the rent doubles — the owner won't be in the kitchen. You will. So they need to know: does this person freeze? Does this person freak out? Or do they calmly say "here's the trade-off, here's what we save, here's what we lose, here's how we'll know in two weeks whether it worked" — the way a great head chef would. That is what your interviewer at Amazon or Google is really testing. Not the recipe. The <strong>judgment</strong> behind picking one.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 The competency rubric</span>
+    <h2>What each round is really scoring</h2>
+    <p>Across FAANG, principal-level rubrics converge on a handful of signals. Map every answer you give to one of these:</p>
+    <table>
+      <tr><th>Competency</th><th>Senior (L5/E5)</th><th>Principal/Staff (L7/E7+)</th></tr>
+      <tr><td><strong>Scope</strong></td><td>Owns a service/component</td><td>Owns a domain/platform spanning many teams; sets multi-year technical direction</td></tr>
+      <tr><td><strong>Ambiguity</strong></td><td>Solves a well-framed problem</td><td>Takes a vague mandate, frames the problem, and defines what "done" means</td></tr>
+      <tr><td><strong>Trade-offs</strong></td><td>Lists pros/cons</td><td>Commits to a decision, quantifies it, and names what they're explicitly sacrificing and why</td></tr>
+      <tr><td><strong>Blast radius</strong></td><td>Handles a service failing</td><td>Reasons about correlated failure, migration risk, and org-wide dependencies</td></tr>
+      <tr><td><strong>Influence</strong></td><td>Convinces their team</td><td>Aligns multiple orgs, resolves senior-eng disagreement, drives without authority</td></tr>
+      <tr><td><strong>Business sense</strong></td><td>Meets requirements</td><td>Ties architecture to cost, revenue, time-to-market, and opportunity cost</td></tr>
+    </table>
+    <div class="ql"><b>The one-line filter:</b> a Principal answer always includes <em>"here's what I'd give up, here's the number that justifies it, and here's how I'd de-risk being wrong."</em></div>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ The loop & round format</span>
+    <h2>What a principal loop looks like</h2>
+    <p>A principal/architect loop is typically 5–7 rounds. Coding is lighter (often a pragmatic/API round rather than LeetCode-hard), and the weight shifts to system design (frequently <em>two</em> rounds — one greenfield, one deep-dive/operational), architecture review, and multiple behavioral/leadership rounds — plus, uniquely at this level, a <strong>bar-raiser</strong> or <strong>hiring-committee</strong> round focused on scope and impact.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <rect x="20" y="40" width="130" height="70" rx="12" fill="#1e1a33" stroke="#7048e8"/>
+        <text x="85" y="70" fill="#e7ecf3" font-size="12" text-anchor="middle">System Design ×2</text>
+        <text x="85" y="90" fill="#9aa7bd" font-size="9.5" text-anchor="middle">greenfield + deep-dive</text>
+        <rect x="170" y="40" width="130" height="70" rx="12" fill="#152233" stroke="#4361ee"/>
+        <text x="235" y="70" fill="#e7ecf3" font-size="12" text-anchor="middle">Architecture</text>
+        <text x="235" y="90" fill="#9aa7bd" font-size="9.5" text-anchor="middle">review your past work</text>
+        <rect x="320" y="40" width="130" height="70" rx="12" fill="#2a2410" stroke="#ffd166"/>
+        <text x="385" y="66" fill="#ffd166" font-size="12" text-anchor="middle">Coding</text>
+        <text x="385" y="86" fill="#9aa7bd" font-size="9.5" text-anchor="middle">pragmatic / API,</text>
+        <text x="385" y="99" fill="#9aa7bd" font-size="9.5" text-anchor="middle">lighter weight</text>
+        <rect x="470" y="40" width="140" height="70" rx="12" fill="#2a1520" stroke="#f7567c"/>
+        <text x="540" y="66" fill="#f7a8bf" font-size="12" text-anchor="middle">Leadership ×2–3</text>
+        <text x="540" y="86" fill="#9aa7bd" font-size="9.5" text-anchor="middle">influence, conflict,</text>
+        <text x="540" y="99" fill="#9aa7bd" font-size="9.5" text-anchor="middle">failure, scope</text>
+        <rect x="630" y="40" width="110" height="70" rx="12" fill="#132a1c" stroke="#2dc653"/>
+        <text x="685" y="66" fill="#2dc653" font-size="12" text-anchor="middle">Bar-raiser /</text>
+        <text x="685" y="82" fill="#2dc653" font-size="12" text-anchor="middle">Hiring cmte</text>
+        <text x="685" y="99" fill="#9aa7bd" font-size="9" text-anchor="middle">scope &amp; impact</text>
+        <text x="380" y="150" fill="#9aa7bd" font-size="12" text-anchor="middle">Weighting shifts LEFT→RIGHT: less code, more judgment, influence &amp; impact</text>
+        <rect x="60" y="175" width="640" height="16" rx="8" fill="url(#grad)"/>
+        <defs><linearGradient id="grad" x1="0" x2="1"><stop offset="0" stop-color="#ffd166"/><stop offset="1" stop-color="#f7567c"/></linearGradient></defs>
+        <text x="70" y="215" fill="#9aa7bd" font-size="10">technical execution</text>
+        <text x="690" y="215" fill="#9aa7bd" font-size="10" text-anchor="end">org-wide impact &amp; leadership</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7048e8"></span>design</span>
+        <span><span class="dot" style="background:#ffd166"></span>coding</span>
+        <span><span class="dot" style="background:#f7567c"></span>leadership</span>
+        <span><span class="dot" style="background:#2dc653"></span>impact</span>
+      </div>
+    </div>
+    <p>The <strong>architecture-review round</strong> is distinctive to this level: you present a real system <em>you</em> designed, and interviewers stress-test your decisions ("why not X?", "what did you get wrong?", "what would you do differently at 100×?"). Prepare 2–3 systems you can go deep on, including the failures and what they taught you — owning your mistakes reads as senior, hiding them reads as junior.</p>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 The question bank — what actually gets asked</h2>
+    <h3>System design (open-ended, deliberately vague)</h3>
+    <p>At this level prompts are one sentence and under-specified <em>on purpose</em> — the scoping <em>is</em> the test. Expect classics with a principal twist ("...now make it multi-region and exactly-once").</p>
+    <ul>
+      <li>Design a globally-distributed rate limiter used by every internal service <span class="tag">scale + correctness</span></li>
+      <li>Design the metadata/control plane for an object store like S3 <span class="tag">consistency</span></li>
+      <li>Design a system for exactly-once payment processing across regions <span class="tag">2PC / Saga</span></li>
+      <li>Design a multi-tenant feature-flag / config system with instant global propagation <span class="tag">consistency vs latency</span></li>
+      <li>Design a change-data-capture pipeline feeding 200 downstream consumers <span class="tag">decoupling</span></li>
+      <li>Design a schema-migration strategy for a 50 TB table with zero downtime <span class="tag">migration</span></li>
+      <li>We're at 10× traffic in 18 months — re-architect this monolith. What breaks first? <span class="tag">evolution</span></li>
+    </ul>
+    <h3>Architecture / trade-off probes (the follow-ups that decide it)</h3>
+    <ul>
+      <li>"You chose eventual consistency here — walk me through the exact user-visible anomaly and how you'd bound it."</li>
+      <li>"This design has a single coordinator. What's the blast radius when it fails, and how do you cap it?"</li>
+      <li>"Give me the back-of-envelope cost per month. Now cut it 40% — what do you trade?"</li>
+      <li>"Two staff engineers on your team disagree: SQL vs NoSQL for this. Adjudicate."</li>
+      <li>"What's the simplest thing that could possibly work, and why aren't we shipping that?"</li>
+    </ul>
+    <h3>Technical depth (they'll pick your claimed expertise and dig)</h3>
+    <ul>
+      <li>Explain how consensus (Raft) keeps your metadata store consistent under a partition — see <a href="../consensus-raft-paxos/index.html">consensus</a>.</li>
+      <li>Where exactly does CAP force your hand here? Is this CP or AP, and per-operation? — see <a href="../cap-theorem/index.html">CAP</a>.</li>
+      <li>Walk me through your sharding scheme and what happens on a re-shard — see <a href="../partitioning-sharding/index.html">partitioning</a>.</li>
+      <li>How do you guarantee idempotency and exactly-once effects end-to-end?</li>
+    </ul>
+    <h3>Leadership / behavioral (weighted heavily; often STAR-scored)</h3>
+    <ul>
+      <li>Tell me about the highest-scope technical decision you owned. How did you know it was right?</li>
+      <li>Describe a time you drove alignment across teams that didn't report to you.</li>
+      <li>Tell me about a major architectural bet that failed. What did you learn?</li>
+      <li>How have you influenced the technical direction of an org, not just a team?</li>
+      <li>When did you choose <em>not</em> to build something, and why was that the harder call?</li>
+    </ul>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The framework that reads as "Principal"</span>
+    <h2>A repeatable structure for the design round</h2>
+    <p>The framework isn't the differentiator — <em>how you run it</em> is. Use this skeleton but spend your minutes where a principal should: scoping and trade-offs, not drawing boxes.</p>
+    <ol class="steps">
+      <li><strong>Scope &amp; frame (drive here).</strong> Restate the vague prompt as a crisp problem. Ask 3–4 sharp questions, state assumptions out loud, and explicitly declare what's <em>out</em> of scope. "I'll assume 50M DAU, read-heavy, global, and I'm going to treat billing as out of scope — agreed?"</li>
+      <li><strong>Quantify.</strong> Back-of-envelope the numbers that drive the design: QPS, storage/yr, bandwidth, working-set size. Numbers justify every later trade-off.</li>
+      <li><strong>Define success (non-functional).</strong> Name the SLOs — p99 latency, availability target, consistency model, durability. State the <a href="../cap-theorem/index.html">CAP/PACELC</a> posture up front.</li>
+      <li><strong>High-level design.</strong> One clean diagram. Then immediately say "the interesting part is X" and go there — don't narrate the obvious CRUD.</li>
+      <li><strong>Deep-dive + trade-offs.</strong> Pick the 1–2 hardest components. For each: 2 options, a committed choice, the number that justifies it, and the sacrifice. This is 40% of your score.</li>
+      <li><strong>Failure &amp; blast radius.</strong> What fails, correlated failure, degradation strategy, blast-radius caps (cells/bulkheads), and the migration/rollback story.</li>
+      <li><strong>Evolve &amp; cost.</strong> What breaks at 10×, monthly cost order-of-magnitude, and the simplest v1 you'd actually ship first.</li>
+    </ol>
+    <table>
+      <tr><th>Time budget (45 min)</th><th>Senior spends</th><th>Principal spends</th></tr>
+      <tr><td>Scoping / requirements</td><td>5 min</td><td>10–12 min (this is the test)</td></tr>
+      <tr><td>High-level boxes</td><td>20 min</td><td>8 min</td></tr>
+      <tr><td>Deep-dive + trade-offs</td><td>15 min</td><td>18 min</td></tr>
+      <tr><td>Failure / cost / evolution</td><td>5 min</td><td>8 min</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ Deep-dive topics you must own</span>
+    <h2>The concepts a principal is expected to wield fluently</h2>
+    <p>You won't be asked to define these — you'll be expected to <em>reach for them</em> unprompted and defend the choice. Each links to a deep-dive on this hub.</p>
+    <table>
+      <tr><th>Topic</th><th>Why it comes up at principal level</th></tr>
+      <tr><td><a href="../cap-theorem/index.html">CAP / PACELC</a></td><td>You must state the consistency/availability posture per-operation and defend the latency cost of strong consistency.</td></tr>
+      <tr><td><a href="../consistency-models/index.html">Consistency models</a></td><td>Name the exact model (linearizable vs causal vs eventual) and the user-visible anomaly you're accepting.</td></tr>
+      <tr><td><a href="../consensus-raft-paxos/index.html">Consensus (Raft/Paxos)</a></td><td>How the control plane / metadata / leader election stays correct under partition.</td></tr>
+      <tr><td><a href="../two-phase-commit/index.html">2PC / Saga</a></td><td>Cross-service atomicity, the blocking problem, and when to choose Sagas instead.</td></tr>
+      <tr><td><a href="../partitioning-sharding/index.html">Partitioning &amp; sharding</a></td><td>Shard-key choice, hot shards, and the re-shard/migration story.</td></tr>
+      <tr><td><a href="../dynamodb-design/index.html">DynamoDB internals</a></td><td>A concrete example of hash partitioning + quorum replication done right.</td></tr>
+      <tr><td>Idempotency &amp; exactly-once</td><td>Dedup keys, outbox pattern, effectively-once via idempotent consumers.</td></tr>
+      <tr><td>Multi-region &amp; cell-based architecture</td><td>Blast-radius reduction, active-active vs active-passive, failover.</td></tr>
+      <tr><td>Backpressure, load-shedding, circuit breakers</td><td>Graceful degradation under overload — a favorite principal probe.</td></tr>
+    </table>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 A worked answer — "design a global rate limiter"</h2>
+    <p>Here's the <em>shape</em> of a principal-grade opening, compressed. Notice it leads with scoping and a committed trade-off, not boxes.</p>
+    <pre><span class="cmt">// The 30-second principal opening (spoken, not drawn):</span>
+
+<span class="str">"Before I design — let me scope. 'Rate limiter' could mean an edge DDoS
+ shield or a fairness limiter for internal APIs. I'll assume the latter:
+ every internal service calls a shared limiter, ~1M checks/sec globally,
+ p99 &lt; 1ms, and correctness matters more than being perfectly exact.
+
+ Key trade-off up front: a globally-EXACT limit needs a strongly-consistent
+ counter = a cross-region round-trip on every call = blows the 1ms budget.
+ So I'll COMMIT to per-cell local token buckets with async reconciliation:
+ I accept small over-admission at the edges (bounded to ~N_cells x burst)
+ in exchange for local, sub-ms decisions and no cross-region hot path.
+ If the business needs hard exactness for, say, billing quotas, I'd carve
+ THAT slice out to a strongly-consistent path and eat the latency there."</span>
+
+<span class="cmt">// Then — and only then — the algorithm, defended:</span>
+<span class="kw">public sealed class</span> <span class="typ">TokenBucket</span>            <span class="cmt">// per key, per cell, in Redis/local</span>
+{
+    <span class="kw">private double</span> _tokens;
+    <span class="kw">private long</span> _lastRefillUnixMs;
+    <span class="kw">private readonly double</span> _ratePerMs, _capacity;
+
+    <span class="kw">public bool</span> <span class="fn">TryAcquire</span>(<span class="kw">long</span> nowMs, <span class="kw">int</span> cost = <span class="str">1</span>)
+    {
+        <span class="cmt">// Lazily refill: no background timer, O(1) per call, clock-driven.</span>
+        _tokens = <span class="typ">Math</span>.Min(_capacity, _tokens + (nowMs - _lastRefillUnixMs) * _ratePerMs);
+        _lastRefillUnixMs = nowMs;
+        <span class="kw">if</span> (_tokens &gt;= cost) { _tokens -= cost; <span class="kw">return true</span>; }
+        <span class="kw">return false</span>;                    <span class="cmt">// 429 — with Retry-After from token deficit</span>
+    }
+}
+<span class="cmt">// Follow-ups I'd pre-empt: hot key -> shard the key; cell failure ->
+// fail-open vs fail-closed (a BUSINESS decision I'd surface, not assume);
+// reconciliation via gossip; cost = it's just RAM + a tiny CPU, ~cheap.</span></pre>
+    <p>That answer scores because it <strong>scoped the ambiguity, committed to a trade-off with a bounded cost, surfaced a business decision instead of assuming it, and pre-empted the failure follow-ups</strong> — the four things that separate principal from senior.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Behavioral / leadership — how to answer at principal scope</h2>
+    <div class="qa"><p class="q">"Tell me about your highest-scope decision."</p><p class="a">Pick something that affected multiple teams or set multi-year direction — not "I chose a library." Use STAR, quantify the impact ($, latency, headcount saved), and include how you <em>de-risked</em> being wrong. Scope is the signal.</p></div>
+    <div class="qa"><p class="q">"A bet you made that failed?"</p><p class="a">Choose a real one, own it without deflecting, and land on the systemic lesson you now apply. Hiding failure reads as junior; metabolizing it reads as principal. Bonus if you changed how a whole org operated afterward.</p></div>
+    <div class="qa"><p class="q">"How do you influence without authority?"</p><p class="a">Show you win with data, prototypes, and writing (design docs/RFCs) — not title. Describe aligning skeptical senior engineers by making the trade-offs explicit and letting the numbers decide. Name the disagreement and how you resolved it.</p></div>
+    <div class="qa"><p class="q">"When did you choose NOT to build?"</p><p class="a">Principals are measured on leverage and opportunity cost. Describe killing/deferring a project, buying vs building, or shipping a boring solution — and tie it to business impact. Restraint is a senior signal.</p></div>
+    <div class="qa"><p class="q">Common failure modes at this level</p><p class="a">Going too deep too early (drawing boxes before scoping), refusing to commit after listing pros/cons, name-dropping tech you can't defend ("say 'a queue', not 'Kafka'"), assuming instead of asking, and treating it as pure engineering when it's a judgment test.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>The mindset shift:</strong> "At senior, I prove I can build the system. At principal, I prove I can decide <em>which</em> system, frame the ambiguity, commit to trade-offs with numbers, cap the blast radius, and align the org — and I own my past mistakes to show I've earned the judgment."</div>
+    <ul>
+      <li><strong>Drive the room.</strong> You set direction and pace; silence and waiting-to-be-led is penalized above senior.</li>
+      <li><strong>Scope first, longest.</strong> Spend ~25% of the round framing the vague prompt and declaring what's out of scope.</li>
+      <li><strong>Commit + quantify + sacrifice.</strong> Every trade-off: a choice, the number justifying it, and what you're giving up.</li>
+      <li><strong>Blast radius &amp; migration</strong> beat happy-path throughput. Talk failure, cells/bulkheads, rollback, 10× evolution.</li>
+      <li><strong>Surface business decisions</strong> (fail-open vs fail-closed, cost cuts) instead of silently assuming them.</li>
+      <li><strong>Behavioral = scope + influence + owned failure.</strong> STAR, quantified, cross-org, and a real bet that failed.</li>
+      <li><strong>Don't name-drop</strong> tech you can't defend; say "a queue/a KV store" and justify when pressed.</li>
+      <li><strong>Prep 2–3 systems</strong> you can defend to bedrock, including what you got wrong.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://interviewing.io/guides/system-design-interview">interviewing.io — The System Design Interview (senior+ expectations)</a></li>
+      <li><a href="https://blog.pramp.com/principal-engineer-interview-questions">Pramp — Principal Engineer Interview Questions</a></li>
+      <li><a href="https://staffeng.com/">StaffEng — stories &amp; the staff/principal archetypes</a></li>
+      <li><a href="https://www.amazon.jobs/en/principles">Amazon Leadership Principles (bar-raiser / behavioral basis)</a></li>
+      <li><a href="https://github.com/donnemartin/system-design-primer">The System Design Primer (GitHub)</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

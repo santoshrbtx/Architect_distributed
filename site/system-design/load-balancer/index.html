@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Load Balancer — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #e8b4b8;
+    --laymen-bg: #fdf6f6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #00b4d8 55%, #2dc653 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen   .badge { background: #c07a7f; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+  .algo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 16px 0; }
+  .algo-grid .algo-card {
+    background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--dsa);
+    border-radius: 10px; padding: 14px;
+  }
+  .algo-grid .algo-card strong { display: block; margin-bottom: 6px; font-size: .98rem; }
+  .algo-grid .algo-card span { color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Load Balancer</h1>
+    <p>The single front door that fans traffic across a fleet — L4 vs L7, round-robin vs consistent hashing, health checks, session affinity, and how to make the load balancer itself fault-tolerant.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+    <p>A <strong>load balancer</strong> is the single public endpoint that sits in front of a fleet of servers, accepts every incoming request, and decides which backend gets it. It is the piece that lets an application scale beyond one machine, survive machine failures, deploy new versions safely, and terminate TLS in one place. Every large product you use is behind one: Netflix in front of its edge tier, Amazon in front of its retail API, WhatsApp in front of its chat servers, Uber in front of its dispatcher, GitHub in front of its API, your bank in front of its login page.</p>
+    <p>The load balancer answers three related questions at once. <em>How do we present one address to millions of clients?</em> Give clients one DNS name resolving to the LB. <em>How do we survive a server crash?</em> Health-check every backend and stop sending it traffic within seconds. <em>How do we scale horizontally?</em> Add another backend, register it with the LB, done. It also solves several bonus problems: TLS termination, WAF integration, cross-zone routing, canary/blue-green rollout, and hiding backend IPs from the world.</p>
+    <p>This is a classic interview question because it touches almost every distributed-systems concept: consistent hashing, health checks, session state, HA/failover, DNS, CAP trade-offs, and the difference between transport-layer (L4) and application-layer (L7) routing. Whether a candidate can whiteboard "here's how one request reaches one server, and here's what happens when that server dies" is a strong signal for senior-level system-design roles.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Explain it like I've never written code</h2>
+    <p>Imagine a <strong>huge, popular restaurant</strong>. There's one entrance, one host at the door — and behind them, thirty identical kitchens ready to cook. Every diner walks up to the same host, and the host quietly points them to a table near whichever kitchen has the shortest queue. Diners never see the kitchens. They never know which one cooked their meal. They just see the door, order their food, and eat.</p>
+    <p>That host is the <strong>load balancer</strong>. The kitchens are the servers. The magic isn't in the cooking — it's in the calm, invisible <em>dispatch</em>. Because the host spreads customers evenly, no single kitchen gets slammed while others sit idle. If one kitchen catches fire, the host stops sending anyone that way and diverts them to the others — the restaurant keeps serving without anyone noticing.</p>
+    <p>Now think about the tricky parts:</p>
+    <p><strong>How does the host know which kitchen is free?</strong> They quietly check every few seconds — "you still cooking? still cooking? still cooking?" — and if a kitchen doesn't respond, they mark it "closed" until it recovers. That's a <em>health check</em>.</p>
+    <p><strong>What if you're mid-meal at kitchen 7 and order dessert?</strong> The host remembers you and sends you back to the same kitchen so your table isn't split up. That's <em>session affinity</em>.</p>
+    <p><strong>What if the host themselves gets sick?</strong> A second host is standing right there, watching, ready to take over the exact moment the first one steps away. That's <em>high availability</em>. Without it, the whole restaurant would grind to a halt every time the host sneezes.</p>
+    <p>Every big website — <strong>Netflix, Amazon, WhatsApp, Uber, Instagram, your bank</strong> — is really a restaurant with tens of thousands of kitchens and a small army of hosts at the door working together. You just never notice, because they're doing the whole job in about one millisecond, forever.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Accept incoming connections on one virtual IP / DNS name and forward each to a healthy backend server.</li>
+      <li>Support multiple <strong>algorithms</strong> for target selection: round-robin, weighted, least-connections, IP-hash / consistent-hash.</li>
+      <li>Run <strong>active health checks</strong> against each backend and remove failing targets from the pool within seconds.</li>
+      <li>Optionally provide <strong>session affinity</strong> (sticky sessions) so a client keeps hitting the same backend.</li>
+      <li>Terminate TLS at the edge for L7 mode; pass through TCP/UDP for L4 mode.</li>
+      <li>Emit rich <strong>metrics and logs</strong> for every request/connection: latency, status, target, health-check state.</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Very high availability.</strong> The LB itself must not be a single point of failure — active/active across zones, DNS failover, floating VIP.</li>
+      <li><strong>Extremely low latency added.</strong> Sub-millisecond for L4, single-digit ms for L7.</li>
+      <li><strong>Millions of requests per second</strong> and tens of millions of concurrent connections at scale.</li>
+      <li><strong>Graceful drain</strong> on backend removal so in-flight requests complete.</li>
+      <li><strong>Observability</strong> — every routing decision explainable.</li>
+    </ul>
+
+    <h3>Back-of-the-envelope</h3>
+    <table>
+      <tr><th>Dimension</th><th>Typical number</th><th>Why</th></tr>
+      <tr><td>Peak RPS handled by one AWS ALB / NLB</td><td>Millions of req/sec (elastic)</td><td>ELB auto-scales; capacity is not a fixed limit for well-warmed LBs.</td></tr>
+      <tr><td>Latency added by L4 (NLB)</td><td>~100 µs</td><td>Just a flow-hash lookup + packet forward — near line rate.</td></tr>
+      <tr><td>Latency added by L7 (ALB / HAProxy)</td><td>~1–5 ms p50</td><td>TLS termination + HTTP parsing + policy eval.</td></tr>
+      <tr><td>Concurrent connections per node</td><td>~1M with tuned kernel</td><td>Ephemeral ports, file descriptors, and RAM per connection govern it.</td></tr>
+      <tr><td>Health-check interval</td><td>5–30 s</td><td>Too fast burns backend CPU; too slow leaves users hitting dead nodes.</td></tr>
+      <tr><td>Unhealthy threshold</td><td>2–3 consecutive fails</td><td>Balance false positives vs time-to-eject.</td></tr>
+      <tr><td>Connection drain timeout</td><td>30–300 s</td><td>Long enough for streams to finish, short enough not to stall deploys.</td></tr>
+      <tr><td>Cross-zone LB fan-out</td><td>3 AZs typical</td><td>Loss of one AZ leaves 2/3 capacity live.</td></tr>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+    <p>A production load balancer is not one box — it's a <strong>tier</strong>. DNS resolves the LB name to multiple <em>load-balancer node</em> IPs (one per zone). Each node runs the routing logic: parse the request, look up the target group, select a healthy backend using the configured algorithm, forward the packet or the HTTP request, and record the result. A separate <strong>health-check subsystem</strong> pings each backend on a schedule and updates the routing table when a target flips healthy/unhealthy. A <strong>control plane</strong> handles configuration updates, TLS certs, and target registration without dropping in-flight traffic.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 400" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/>
+          </marker>
+          <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#2dc653"/>
+          </marker>
+        </defs>
+
+        <!-- Clients -->
+        <rect x="20" y="60" width="120" height="60" rx="10" fill="#4361ee"/>
+        <text x="80" y="90" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">Clients</text>
+        <text x="80" y="108" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">browsers · apps · IoT</text>
+
+        <!-- DNS -->
+        <rect x="180" y="60" width="120" height="60" rx="10" fill="#7048e8"/>
+        <text x="240" y="90" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">Route 53 / DNS</text>
+        <text x="240" y="108" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">lb.example.com → VIPs</text>
+
+        <!-- LB nodes -->
+        <rect x="360" y="20" width="180" height="60" rx="10" fill="#00b4d8"/>
+        <text x="450" y="50" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">LB node — AZ-a</text>
+        <text x="450" y="68" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">listener · rules · TLS</text>
+
+        <rect x="360" y="100" width="180" height="60" rx="10" fill="#00b4d8"/>
+        <text x="450" y="130" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">LB node — AZ-b</text>
+        <text x="450" y="148" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">listener · rules · TLS</text>
+
+        <rect x="360" y="180" width="180" height="60" rx="10" fill="#00b4d8"/>
+        <text x="450" y="210" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">LB node — AZ-c</text>
+        <text x="450" y="228" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">listener · rules · TLS</text>
+
+        <!-- Health-check plane -->
+        <rect x="360" y="300" width="180" height="60" rx="10" fill="#f7567c"/>
+        <text x="450" y="330" text-anchor="middle" fill="#fff" font-weight="700" font-size="14">Health-check plane</text>
+        <text x="450" y="348" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">probes · thresholds</text>
+
+        <!-- Target group -->
+        <rect x="600" y="20" width="140" height="50" rx="10" fill="#2dc653"/>
+        <text x="670" y="49" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Server A · healthy</text>
+        <rect x="600" y="85" width="140" height="50" rx="10" fill="#2dc653"/>
+        <text x="670" y="114" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Server B · healthy</text>
+        <rect x="600" y="150" width="140" height="50" rx="10" fill="#2dc653"/>
+        <text x="670" y="179" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Server C · healthy</text>
+        <rect x="600" y="215" width="140" height="50" rx="10" fill="#5b6677"/>
+        <text x="670" y="244" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Server D · ejected</text>
+
+        <!-- Control plane -->
+        <rect x="780" y="80" width="100" height="120" rx="10" fill="#f4a259"/>
+        <text x="830" y="130" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Control</text>
+        <text x="830" y="150" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">plane</text>
+        <text x="830" y="170" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">registration</text>
+        <text x="830" y="186" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">TLS · config</text>
+
+        <!-- arrows -->
+        <line x1="140" y1="90" x2="180" y2="90" stroke="#c6d0e0" stroke-width="2" marker-end="url(#ah)"/>
+        <path d="M300,90 L360,50" stroke="#c6d0e0" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+        <path d="M300,90 L360,130" stroke="#c6d0e0" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+        <path d="M300,90 L360,210" stroke="#c6d0e0" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+
+        <path d="M540,50 L600,45" stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#ahg)"/>
+        <path d="M540,130 L600,110" stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#ahg)"/>
+        <path d="M540,210 L600,175" stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#ahg)"/>
+
+        <path d="M540,330 L600,240" stroke="#f7567c" stroke-width="2" fill="none" marker-end="url(#ah)"/>
+        <path d="M540,330 L600,110" stroke="#f7567c" stroke-width="2" fill="none" marker-end="url(#ah)" stroke-dasharray="4 3"/>
+        <line x1="780" y1="140" x2="740" y2="115" stroke="#f4a259" stroke-width="2" marker-end="url(#ah)"/>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#4361ee"></span>Client</span>
+      <span><span class="dot" style="background:#00b4d8"></span>LB data plane</span>
+      <span><span class="dot" style="background:#2dc653"></span>Healthy backend</span>
+      <span><span class="dot" style="background:#5b6677"></span>Ejected backend</span>
+      <span><span class="dot" style="background:#f7567c"></span>Health-check probe</span>
+      <span><span class="dot" style="background:#f4a259"></span>Control plane</span>
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch the core mechanic run, step by step</h2>
+    <p>The animation walks through a request landing on the LB, being routed to Server B via least-connections, a health check catching Server C going down, and a subsequent request being routed around the failure — the whole "what makes an LB an LB" cycle in one frame.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" fill="none">
+        <defs>
+          <marker id="a-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/>
+          </marker>
+        </defs>
+
+        <!-- Client -->
+        <rect id="client" x="30" y="150" width="110" height="60" rx="10" fill="#4361ee"/>
+        <text x="85" y="185" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Client</text>
+
+        <!-- LB -->
+        <rect id="lb" x="200" y="150" width="150" height="60" rx="10" fill="#00b4d8"/>
+        <text x="275" y="180" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Load balancer</text>
+        <text x="275" y="197" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">algorithm · health</text>
+
+        <!-- Servers -->
+        <rect id="sA" x="440" y="50"  width="140" height="60" rx="10" fill="#2dc653"/>
+        <text x="510" y="80" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Server A</text>
+        <text id="sA-conn" x="510" y="98" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">conns: 42</text>
+
+        <rect id="sB" x="440" y="150" width="140" height="60" rx="10" fill="#2dc653"/>
+        <text x="510" y="180" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Server B</text>
+        <text id="sB-conn" x="510" y="198" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">conns: 12</text>
+
+        <rect id="sC" x="440" y="250" width="140" height="60" rx="10" fill="#2dc653"/>
+        <text x="510" y="280" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Server C</text>
+        <text id="sC-conn" x="510" y="298" text-anchor="middle" fill="#fff" font-size="11" opacity=".85">conns: 27</text>
+
+        <!-- Health check plane -->
+        <rect id="hc" x="640" y="150" width="150" height="60" rx="10" fill="#f7567c" class="a-hidden" data-anim/>
+        <text id="hc-text1" x="715" y="180" text-anchor="middle" fill="#fff" font-weight="700" font-size="13" class="a-hidden" data-anim>Health-check</text>
+        <text id="hc-text2" x="715" y="197" text-anchor="middle" fill="#fff" font-size="11" opacity=".85" class="a-hidden" data-anim>probe every 10s</text>
+
+        <!-- Request packet -->
+        <circle id="pkt" cx="85" cy="180" r="10" fill="#7fa2ff" class="a-hidden" data-anim/>
+        <circle id="pkt2" cx="85" cy="180" r="10" fill="#7fa2ff" class="a-hidden" data-anim/>
+
+        <!-- Health probes -->
+        <circle id="probe" cx="715" cy="180" r="8" fill="#f7567c" class="a-hidden" data-anim/>
+
+        <!-- Cross on server C when unhealthy -->
+        <line id="xC1" x1="440" y1="250" x2="580" y2="310" stroke="#f7567c" stroke-width="4" class="a-hidden" data-anim/>
+        <line id="xC2" x1="580" y1="250" x2="440" y2="310" stroke="#f7567c" stroke-width="4" class="a-hidden" data-anim/>
+
+        <!-- Static arrows -->
+        <line x1="140" y1="180" x2="200" y2="180" stroke="#c6d0e0" stroke-width="2" marker-end="url(#a-ah)"/>
+        <path d="M350,175 L440,80"  stroke="#c6d0e0" stroke-width="2" fill="none" marker-end="url(#a-ah)"/>
+        <path d="M350,180 L440,180" stroke="#c6d0e0" stroke-width="2" fill="none" marker-end="url(#a-ah)"/>
+        <path d="M350,185 L440,280" stroke="#c6d0e0" stroke-width="2" fill="none" marker-end="url(#a-ah)"/>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'One LB, three backends, least-connections routing, and a failure that gets rerouted.',
+          interval: 1900,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.add('a-hidden');
+              el.classList.remove('a-glow', 'a-dim');
+              el.removeAttribute('transform');
+            });
+            $('#sC').setAttribute('fill', '#2dc653');
+            $('#sB').setAttribute('fill', '#2dc653');
+            $('#sA').setAttribute('fill', '#2dc653');
+            $('#sA-conn').textContent = 'conns: 42';
+            $('#sB-conn').textContent = 'conns: 12';
+            $('#sC-conn').textContent = 'conns: 27';
+          },
+          steps: [
+            { caption: 'A client sends a request toward the load balancer\'s single virtual IP.',
+              apply: (r, $) => {
+                $('#pkt').classList.remove('a-hidden');
+                $('#pkt').setAttribute('transform', 'translate(100,0)');
+              }
+            },
+            { caption: 'The LB inspects its target pool: A has 42 open connections, B has 12, C has 27.',
+              apply: (r, $) => {
+                $('#pkt').classList.remove('a-hidden');
+                $('#pkt').setAttribute('transform', 'translate(180,0)');
+                $('#sA').classList.add('a-dim');
+                $('#sB').classList.add('a-glow');
+                $('#sC').classList.add('a-dim');
+              }
+            },
+            { caption: 'Least-connections picks Server B — the request is forwarded there.',
+              apply: (r, $) => {
+                $('#pkt').classList.remove('a-hidden');
+                $('#pkt').setAttribute('transform', 'translate(360,0)');
+                $('#sB').classList.add('a-glow');
+                $('#sB-conn').textContent = 'conns: 13';
+              }
+            },
+            { caption: 'Meanwhile the health-check plane sends periodic probes to every backend.',
+              apply: (r, $) => {
+                $('#hc').classList.remove('a-hidden');
+                $('#hc-text1').classList.remove('a-hidden');
+                $('#hc-text2').classList.remove('a-hidden');
+                $('#probe').classList.remove('a-hidden');
+                $('#probe').setAttribute('transform', 'translate(-200,90)');
+              }
+            },
+            { caption: 'Server C misses two consecutive probes — the LB marks it unhealthy and ejects it.',
+              apply: (r, $) => {
+                $('#hc').classList.remove('a-hidden');
+                $('#hc-text1').classList.remove('a-hidden');
+                $('#hc-text2').classList.remove('a-hidden');
+                $('#probe').classList.remove('a-hidden');
+                $('#probe').setAttribute('transform', 'translate(-200,90)');
+                $('#sC').setAttribute('fill', '#5b6677');
+                $('#xC1').classList.remove('a-hidden');
+                $('#xC2').classList.remove('a-hidden');
+              }
+            },
+            { caption: 'A second request arrives — the LB sees only A and B are healthy and picks B (still fewest connections).',
+              apply: (r, $) => {
+                $('#sC').setAttribute('fill', '#5b6677');
+                $('#xC1').classList.remove('a-hidden');
+                $('#xC2').classList.remove('a-hidden');
+                $('#pkt2').classList.remove('a-hidden');
+                $('#pkt2').setAttribute('transform', 'translate(360,0)');
+                $('#sB').classList.add('a-glow');
+                $('#sB-conn').textContent = 'conns: 14';
+              }
+            },
+            { caption: 'Server C recovers on its next probe → re-added to the pool. Traffic distribution rebalances automatically.',
+              apply: (r, $) => {
+                $('#sC').setAttribute('fill', '#2dc653');
+                $('#hc').classList.remove('a-hidden');
+                $('#hc-text1').classList.remove('a-hidden');
+                $('#hc-text2').classList.remove('a-hidden');
+                $('#sC').classList.add('a-glow');
+              }
+            }
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>L4 vs L7 — the fundamental split</h3>
+    <p>A <strong>Layer 4 load balancer</strong> operates at the transport layer. It sees TCP/UDP packets, not HTTP requests. It picks a backend using a <em>flow hash</em> — a hash of <code>(src_ip, src_port, dst_ip, dst_port, protocol)</code> — and forwards every packet in that flow to the same target for the connection's lifetime. It doesn't parse anything above TCP. This makes it <strong>extremely fast</strong> (microseconds of added latency), protocol-agnostic (works for anything over TCP/UDP: TLS, MQTT, gRPC-over-TCP, database protocols), and blind to application semantics.</p>
+    <p>A <strong>Layer 7 load balancer</strong> terminates the TCP connection itself, parses the HTTP request, and routes based on <em>content</em>: the URL path, host header, cookies, method, query string. This is what lets you say "requests to <code>/api/v2/*</code> go to the v2 fleet" or "requests with cookie <code>canary=1</code> go to the canary pods." The trade-off is TLS + HTTP parsing add latency (single-digit ms) and expose it to HTTP-level attacks. Modern L7 LBs (envoy, nginx, HAProxy, ALB) also do TLS termination, WebSocket upgrade, HTTP/2 fan-out, and connection multiplexing.</p>
+
+    <h3>The routing algorithms</h3>
+    <div class="algo-grid">
+      <div class="algo-card"><strong>Round Robin</strong><span>Cycle through the pool in order. Simple, memoryless, ignores load. Fine when backends are identical and requests are uniform.</span></div>
+      <div class="algo-card"><strong>Weighted Round Robin</strong><span>Assign weights; bigger boxes get more turns. Handles heterogeneous fleets and canary ramps.</span></div>
+      <div class="algo-card"><strong>Least Connections</strong><span>Pick the backend with the fewest open connections right now. Best for long-lived or variable-length requests.</span></div>
+      <div class="algo-card"><strong>Least Response Time</strong><span>Combine "fewest connections" with recent p50 latency. Actively steers away from struggling backends.</span></div>
+      <div class="algo-card"><strong>IP Hash / Source Hash</strong><span>Hash client IP → same backend. Cheap session affinity without cookies. Breaks under NAT.</span></div>
+      <div class="algo-card"><strong>Consistent Hashing</strong><span>Backends and keys on a ring; keys go clockwise to the next node. Adding/removing a backend disturbs only 1/N keys — vital for caches.</span></div>
+      <div class="algo-card"><strong>Power of Two Choices</strong><span>Pick two random backends, take the less loaded. Near-optimal load balance at O(1) cost and no shared state.</span></div>
+      <div class="algo-card"><strong>Maglev / Rendezvous</strong><span>Consistent-hash variants used by Google and CDNs for stateless, memory-friendly, symmetric routing.</span></div>
+    </div>
+
+    <h3>Health checks</h3>
+    <p>Health checks are the LB's <strong>truth signal</strong> about the fleet. They come in two forms. <em>Active</em> health checks are probes the LB sends on a schedule — a TCP <code>SYN</code>, a TLS handshake, or an HTTP <code>GET /healthz</code> — and grade each backend. <em>Passive</em> checks watch real traffic and eject a backend that starts returning 5xxs or timing out (outlier detection). A well-tuned LB uses both.</p>
+    <p>Key parameters: <strong>interval</strong> (how often we probe — 5–30 s), <strong>timeout</strong> (how long to wait for a response — a few seconds), <strong>unhealthy threshold</strong> (consecutive failures before ejection — usually 2 or 3), and <strong>healthy threshold</strong> (consecutive successes before re-admission). Every parameter is a trade-off between false positives and time-to-detect.</p>
+
+    <h3>Session affinity (sticky sessions)</h3>
+    <p>Sometimes the backend keeps state per user — a shopping cart, a game session, an SSE stream. The LB then needs to send the same user back to the same server. Two approaches: <strong>cookie-based</strong> stickiness (the LB injects a cookie like <code>AWSALB=&lt;target-id&gt;</code> and honors it) or <strong>IP-hash / source-affinity</strong>. Cookies are more precise; IP-hash breaks when many clients share an IP (mobile CGNAT, corporate proxies). Both come at the cost of load imbalance — you're overriding the algorithm's judgment. The best answer is often "make the backend stateless and don't need affinity."</p>
+
+    <h3>High availability of the LB itself</h3>
+    <p>The load balancer is the front door — if it dies, everything dies. Production LBs achieve HA through <em>redundancy at every layer</em>. <strong>Multiple LB nodes</strong> run in parallel, one per availability zone; the DNS returns all their IPs so clients naturally shard across them. Inside a single VIP, <strong>ECMP (equal-cost multi-path routing)</strong> or a <em>floating VIP</em> managed by keepalived/VRRP lets a peer take over an address within milliseconds. Managed services like AWS ELB do this transparently; self-hosted setups (HAProxy + keepalived, nginx + Consul + BGP) reproduce the pattern.</p>
+
+    <h3>TLS termination and connection lifecycle</h3>
+    <p>Terminating TLS at the LB centralises certificate management (one cert, not one per backend), lets the LB inspect HTTP for routing, and offloads crypto from backends. Some architectures prefer <strong>re-encryption</strong> (mTLS to backends) for defense in depth. Long-lived connections (WebSocket, gRPC streaming) need <em>connection draining</em>: when a backend is deregistered, the LB stops sending new traffic to it but lets existing streams finish for up to 5 minutes.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+    <p>Under the hood, a load balancer is a small stack of very classical CS. Every routing decision must be O(1) or O(log N) — millions per second per node.</p>
+
+    <ul>
+      <li><strong>Round-robin counter</strong> — a single atomic integer modulo N. O(1) selection; the "hello world" algorithm.</li>
+      <li><strong>Min-heap on active connections</strong> — least-connections uses a heap keyed by connection count, giving O(log N) select and O(log N) increment/decrement on connect/disconnect.</li>
+      <li><strong>Consistent hash ring</strong> — nodes and keys hashed onto a 32-bit or 64-bit ring; a request finds "the next node clockwise" via binary search on a sorted array of hash points. O(log N) lookup, and adding/removing a backend disturbs only 1/N of keys. Used everywhere from Cassandra to memcached to Envoy's ring-hash LB.</li>
+      <li><strong>Maglev hashing</strong> — Google's improvement: a fixed-size lookup table where every entry maps to a backend and each backend gets a near-equal share. O(1) lookup; small disruption on membership changes; symmetric across nodes so any LB gets the same answer for the same 5-tuple.</li>
+      <li><strong>Rendezvous / HRW hashing</strong> — for each request key, compute <code>hash(key, node_i)</code> for every backend, take the max. O(N) but stateless and easy to reason about — used in some CDNs and cache tiers.</li>
+      <li><strong>Bloom filter of drained IDs</strong> — to answer "is this connection stuck to an old backend?" with a tiny memory footprint during rolling deployments.</li>
+      <li><strong>Ring buffer of health-check results</strong> — per backend, the last K probe outcomes. Sliding window O(1) decides "unhealthy" once ≥ threshold in the buffer are failures.</li>
+      <li><strong>Concurrent hash map</strong> — flow table mapping 5-tuple → backend, so every packet of an established TCP flow is routed to the same target without recomputing the hash.</li>
+    </ul>
+
+    <table>
+      <tr><th>Primitive</th><th>Where it lives</th><th>Complexity</th></tr>
+      <tr><td>Atomic counter</td><td>Round robin</td><td>O(1)</td></tr>
+      <tr><td>Min-heap</td><td>Least connections / least response time</td><td>O(log N)</td></tr>
+      <tr><td>Consistent hash ring (binary search)</td><td>Cache-aware LB, sticky sharding</td><td>O(log N) lookup, O(K/N) disturbance</td></tr>
+      <tr><td>Maglev table</td><td>Google's L4, CDN dataplanes</td><td>O(1) lookup, O(M) build</td></tr>
+      <tr><td>Flow table (concurrent map)</td><td>L4 connection stickiness</td><td>O(1) per packet</td></tr>
+      <tr><td>Sliding window on probe results</td><td>Health-check state machine</td><td>O(1)</td></tr>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <p>AWS ships four load-balancer flavors — each is the "right answer" for a different question, and knowing which is which is table stakes in an AWS-flavored interview.</p>
+    <table>
+      <tr><th>Service</th><th>Layer</th><th>Best for</th><th>Key traits</th></tr>
+      <tr><td><strong>ALB — Application Load Balancer</strong></td><td>L7</td><td>HTTP/HTTPS/gRPC APIs, path- and host-based routing, canaries, WAF integration.</td><td>HTTP/2, WebSockets, Lambda targets, header/cookie routing, redirects, fixed responses, TLS termination + re-encrypt.</td></tr>
+      <tr><td><strong>NLB — Network Load Balancer</strong></td><td>L4</td><td>Extreme throughput, static IPs, non-HTTP protocols, PrivateLink endpoints.</td><td>Millions of RPS, ~100 µs added latency, preserves source IP, per-AZ static IP, QUIC support, flow-hash routing.</td></tr>
+      <tr><td><strong>GWLB — Gateway Load Balancer</strong></td><td>L3+L4</td><td>Inserting third-party virtual appliances (firewalls, IDS) transparently into the traffic path.</td><td>GENEVE encapsulation, route-table reachability, flow-symmetry, no proxying.</td></tr>
+      <tr><td><strong>CLB — Classic Load Balancer</strong></td><td>L4/L7</td><td>Legacy EC2-Classic; new designs should not use it.</td><td>Deprecated in favor of ALB/NLB for new workloads.</td></tr>
+    </table>
+
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>DNS in front of the LB</td><td>Route 53 (alias record)</td><td>Health-checked, latency-based or geo routing; multi-region failover.</td></tr>
+      <tr><td>Global anycast entry point</td><td>Global Accelerator</td><td>Static anycast IPs + AWS backbone for fast, deterministic entry into regional LBs.</td></tr>
+      <tr><td>Public HTTPS API</td><td>ALB + ACM cert</td><td>TLS termination, HTTP/2, path routing, WAF association.</td></tr>
+      <tr><td>Ultra-low-latency TCP/UDP</td><td>NLB</td><td>PrivateLink source, gaming/streaming, database front-end.</td></tr>
+      <tr><td>Compute targets</td><td>EC2 / ECS / EKS / Lambda</td><td>ALB supports Lambda targets; both ALB and NLB support IP and instance targets.</td></tr>
+      <tr><td>Health checks</td><td>Target-group health checks + Route 53 checks</td><td>Two layers: LB-local for target ejection, Route 53 for regional failover.</td></tr>
+      <tr><td>Autoscaling behind LB</td><td>Auto Scaling group attached to target group</td><td>Backends scale in/out with traffic; the LB always sees the current set.</td></tr>
+      <tr><td>Traffic inspection</td><td>AWS WAF + Shield</td><td>Bot filtering, rate limiting, DDoS protection sitting on top of ALB.</td></tr>
+      <tr><td>Observability</td><td>CloudWatch + Access logs to S3</td><td>Per-target metrics, request logs for forensics.</td></tr>
+    </table>
+    <p>Concretely: for a typical web API, put an <strong>ALB</strong> in front of an EKS or ECS service with WAF attached; front it with Route 53 alias record; deploy the ALB across at least three AZs. For a stateless TCP service (game server, MQTT broker), use an <strong>NLB</strong> and preserve source IP so backends see real clients. For a global product, add <strong>Global Accelerator</strong> so users hit the nearest AWS edge and traverse the AWS backbone the rest of the way. NLB and ALB both auto-scale and hide the load-balancer HA plumbing behind a single DNS name.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>Below is a small, correct in-process load balancer core: a target pool with health tracking, three algorithms (round-robin, least-connections, consistent hashing), and a request-scoped lease that decrements the counter on <code>Dispose</code>. This is the exact shape you'd pull into a service mesh sidecar or a custom TCP proxy — swap the "pick a target" strategy and you have a real LB.</p>
+    <pre><span class="cmt">// A minimal load-balancer core: healthy target list + pluggable strategy + lease pattern.</span>
+
+<span class="kw">public sealed record</span> <span class="typ">Target</span>(<span class="typ">string</span> Id, <span class="typ">string</span> Endpoint, <span class="typ">int</span> Weight = 1);
+
+<span class="kw">public interface</span> <span class="typ">ILoadBalancer</span>
+{
+    <span class="typ">Task</span>&lt;<span class="typ">TargetLease?</span>&gt; <span class="fn">PickAsync</span>(<span class="typ">string?</span> flowKey = <span class="kw">null</span>, <span class="typ">CancellationToken</span> ct = <span class="kw">default</span>);
+    <span class="kw">void</span> <span class="fn">MarkHealthy</span>(<span class="typ">string</span> id);
+    <span class="kw">void</span> <span class="fn">MarkUnhealthy</span>(<span class="typ">string</span> id);
+}
+
+<span class="cmt">// Lease pattern — release decrements the active-connection counter when the caller Dispose()s.</span>
+<span class="kw">public sealed class</span> <span class="typ">TargetLease</span> : <span class="typ">IDisposable</span>
+{
+    <span class="kw">public</span> <span class="typ">Target</span> Target { <span class="kw">get</span>; }
+    <span class="kw">private readonly</span> <span class="typ">Action</span> _release;
+    <span class="kw">public</span> <span class="fn">TargetLease</span>(<span class="typ">Target</span> t, <span class="typ">Action</span> release) { Target = t; _release = release; }
+    <span class="kw">public void</span> <span class="fn">Dispose</span>() =&gt; _release();
+}
+
+<span class="cmt">// Backend state — atomic conn counter, atomic health flag.</span>
+<span class="kw">internal sealed class</span> <span class="typ">TargetState</span>
+{
+    <span class="kw">public required</span> <span class="typ">Target</span> Target { <span class="kw">get</span>; init; }
+    <span class="kw">public int</span> ActiveConnections; <span class="cmt">// Interlocked</span>
+    <span class="kw">public volatile bool</span> Healthy = <span class="kw">true</span>;
+}
+
+<span class="cmt">// ---------- Round Robin ----------</span>
+<span class="kw">public sealed class</span> <span class="typ">RoundRobinBalancer</span> : <span class="typ">ILoadBalancer</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">TargetState[]</span> _targets;
+    <span class="kw">private int</span> _cursor = -1;
+
+    <span class="kw">public</span> <span class="fn">RoundRobinBalancer</span>(<span class="typ">IEnumerable</span>&lt;<span class="typ">Target</span>&gt; targets)
+        =&gt; _targets = targets.<span class="fn">Select</span>(t =&gt; <span class="kw">new</span> <span class="typ">TargetState</span> { Target = t }).<span class="fn">ToArray</span>();
+
+    <span class="kw">public</span> <span class="typ">Task</span>&lt;<span class="typ">TargetLease?</span>&gt; <span class="fn">PickAsync</span>(<span class="typ">string?</span> _, <span class="typ">CancellationToken</span> __)
+    {
+        <span class="cmt">// Try each target at most once, starting after the current cursor.</span>
+        <span class="kw">for</span> (<span class="kw">int</span> i = 0; i &lt; _targets.Length; i++)
+        {
+            <span class="kw">int</span> idx = <span class="typ">Math</span>.<span class="fn">Abs</span>(<span class="typ">Interlocked</span>.<span class="fn">Increment</span>(<span class="kw">ref</span> _cursor)) % _targets.Length;
+            <span class="kw">var</span> t = _targets[idx];
+            <span class="kw">if</span> (!t.Healthy) <span class="kw">continue</span>;
+            <span class="typ">Interlocked</span>.<span class="fn">Increment</span>(<span class="kw">ref</span> t.ActiveConnections);
+            <span class="kw">return</span> <span class="typ">Task</span>.<span class="fn">FromResult</span>&lt;<span class="typ">TargetLease?</span>&gt;(<span class="kw">new</span> <span class="typ">TargetLease</span>(t.Target,
+                () =&gt; <span class="typ">Interlocked</span>.<span class="fn">Decrement</span>(<span class="kw">ref</span> t.ActiveConnections)));
+        }
+        <span class="kw">return</span> <span class="typ">Task</span>.<span class="fn">FromResult</span>&lt;<span class="typ">TargetLease?</span>&gt;(<span class="kw">null</span>); <span class="cmt">// no healthy targets → caller returns 503</span>
+    }
+
+    <span class="kw">public void</span> <span class="fn">MarkHealthy</span>(<span class="typ">string</span> id)   =&gt; <span class="fn">FindById</span>(id).Healthy = <span class="kw">true</span>;
+    <span class="kw">public void</span> <span class="fn">MarkUnhealthy</span>(<span class="typ">string</span> id) =&gt; <span class="fn">FindById</span>(id).Healthy = <span class="kw">false</span>;
+    <span class="kw">private</span> <span class="typ">TargetState</span> <span class="fn">FindById</span>(<span class="typ">string</span> id) =&gt; _targets.<span class="fn">First</span>(t =&gt; t.Target.Id == id);
+}
+
+<span class="cmt">// ---------- Least Connections ----------</span>
+<span class="kw">public sealed class</span> <span class="typ">LeastConnectionsBalancer</span> : <span class="typ">ILoadBalancer</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">TargetState[]</span> _targets;
+    <span class="kw">public</span> <span class="fn">LeastConnectionsBalancer</span>(<span class="typ">IEnumerable</span>&lt;<span class="typ">Target</span>&gt; targets)
+        =&gt; _targets = targets.<span class="fn">Select</span>(t =&gt; <span class="kw">new</span> <span class="typ">TargetState</span> { Target = t }).<span class="fn">ToArray</span>();
+
+    <span class="kw">public</span> <span class="typ">Task</span>&lt;<span class="typ">TargetLease?</span>&gt; <span class="fn">PickAsync</span>(<span class="typ">string?</span> _, <span class="typ">CancellationToken</span> __)
+    {
+        <span class="typ">TargetState?</span> best = <span class="kw">null</span>; <span class="kw">int</span> bestScore = <span class="kw">int</span>.MaxValue;
+        <span class="kw">foreach</span> (<span class="kw">var</span> t <span class="kw">in</span> _targets)
+        {
+            <span class="kw">if</span> (!t.Healthy) <span class="kw">continue</span>;
+            <span class="cmt">// Weight-aware: lower "conns / weight" wins.</span>
+            <span class="kw">int</span> score = t.ActiveConnections / <span class="typ">Math</span>.<span class="fn">Max</span>(1, t.Target.Weight);
+            <span class="kw">if</span> (score &lt; bestScore) { best = t; bestScore = score; }
+        }
+        <span class="kw">if</span> (best <span class="kw">is null</span>) <span class="kw">return</span> <span class="typ">Task</span>.<span class="fn">FromResult</span>&lt;<span class="typ">TargetLease?</span>&gt;(<span class="kw">null</span>);
+        <span class="typ">Interlocked</span>.<span class="fn">Increment</span>(<span class="kw">ref</span> best.ActiveConnections);
+        <span class="kw">return</span> <span class="typ">Task</span>.<span class="fn">FromResult</span>&lt;<span class="typ">TargetLease?</span>&gt;(<span class="kw">new</span> <span class="typ">TargetLease</span>(best.Target,
+            () =&gt; <span class="typ">Interlocked</span>.<span class="fn">Decrement</span>(<span class="kw">ref</span> best.ActiveConnections)));
+    }
+
+    <span class="kw">public void</span> <span class="fn">MarkHealthy</span>(<span class="typ">string</span> id)   =&gt; _targets.<span class="fn">First</span>(t =&gt; t.Target.Id == id).Healthy = <span class="kw">true</span>;
+    <span class="kw">public void</span> <span class="fn">MarkUnhealthy</span>(<span class="typ">string</span> id) =&gt; _targets.<span class="fn">First</span>(t =&gt; t.Target.Id == id).Healthy = <span class="kw">false</span>;
+}
+
+<span class="cmt">// ---------- Consistent Hashing ----------</span>
+<span class="kw">public sealed class</span> <span class="typ">ConsistentHashBalancer</span> : <span class="typ">ILoadBalancer</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">SortedDictionary</span>&lt;<span class="typ">uint</span>, <span class="typ">TargetState</span>&gt; _ring = <span class="kw">new</span>();
+    <span class="kw">private readonly</span> <span class="typ">Dictionary</span>&lt;<span class="typ">string</span>, <span class="typ">TargetState</span>&gt; _byId = <span class="kw">new</span>();
+    <span class="kw">private const int</span> Replicas = 150; <span class="cmt">// virtual nodes for balance</span>
+
+    <span class="kw">public</span> <span class="fn">ConsistentHashBalancer</span>(<span class="typ">IEnumerable</span>&lt;<span class="typ">Target</span>&gt; targets)
+    {
+        <span class="kw">foreach</span> (<span class="kw">var</span> t <span class="kw">in</span> targets)
+        {
+            <span class="kw">var</span> state = <span class="kw">new</span> <span class="typ">TargetState</span> { Target = t };
+            _byId[t.Id] = state;
+            <span class="kw">for</span> (<span class="kw">int</span> i = 0; i &lt; Replicas; i++)
+                _ring[<span class="fn">Hash</span>(<span class="str">$"{t.Id}-{i}"</span>)] = state;
+        }
+    }
+
+    <span class="kw">public</span> <span class="typ">Task</span>&lt;<span class="typ">TargetLease?</span>&gt; <span class="fn">PickAsync</span>(<span class="typ">string?</span> flowKey, <span class="typ">CancellationToken</span> _)
+    {
+        <span class="kw">if</span> (<span class="kw">string</span>.<span class="fn">IsNullOrEmpty</span>(flowKey) || _ring.Count == 0)
+            <span class="kw">return</span> <span class="typ">Task</span>.<span class="fn">FromResult</span>&lt;<span class="typ">TargetLease?</span>&gt;(<span class="kw">null</span>);
+
+        <span class="kw">var</span> h = <span class="fn">Hash</span>(flowKey);
+        <span class="cmt">// Walk clockwise from h, wrap around, skip unhealthy.</span>
+        <span class="kw">foreach</span> (<span class="kw">var</span> kv <span class="kw">in</span> _ring.<span class="fn">Where</span>(k =&gt; k.Key &gt;= h).<span class="fn">Concat</span>(_ring))
+        {
+            <span class="kw">if</span> (!kv.Value.Healthy) <span class="kw">continue</span>;
+            <span class="typ">Interlocked</span>.<span class="fn">Increment</span>(<span class="kw">ref</span> kv.Value.ActiveConnections);
+            <span class="kw">return</span> <span class="typ">Task</span>.<span class="fn">FromResult</span>&lt;<span class="typ">TargetLease?</span>&gt;(<span class="kw">new</span> <span class="typ">TargetLease</span>(kv.Value.Target,
+                () =&gt; <span class="typ">Interlocked</span>.<span class="fn">Decrement</span>(<span class="kw">ref</span> kv.Value.ActiveConnections)));
+        }
+        <span class="kw">return</span> <span class="typ">Task</span>.<span class="fn">FromResult</span>&lt;<span class="typ">TargetLease?</span>&gt;(<span class="kw">null</span>);
+    }
+
+    <span class="kw">public void</span> <span class="fn">MarkHealthy</span>(<span class="typ">string</span> id)   =&gt; _byId[id].Healthy = <span class="kw">true</span>;
+    <span class="kw">public void</span> <span class="fn">MarkUnhealthy</span>(<span class="typ">string</span> id) =&gt; _byId[id].Healthy = <span class="kw">false</span>;
+
+    <span class="kw">private static uint</span> <span class="fn">Hash</span>(<span class="typ">string</span> s)
+    {
+        <span class="kw">using var</span> md5 = <span class="typ">System.Security.Cryptography.MD5</span>.<span class="fn">Create</span>();
+        <span class="kw">var</span> b = md5.<span class="fn">ComputeHash</span>(<span class="typ">System.Text.Encoding</span>.UTF8.<span class="fn">GetBytes</span>(s));
+        <span class="kw">return</span> <span class="typ">BitConverter</span>.<span class="fn">ToUInt32</span>(b, 0);
+    }
+}
+
+<span class="cmt">// A background health-check loop. Real LBs use adaptive intervals and jitter.</span>
+<span class="kw">public sealed class</span> <span class="typ">HealthChecker</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">ILoadBalancer</span> _lb;
+    <span class="kw">private readonly</span> <span class="typ">HttpClient</span> _http;
+    <span class="kw">private readonly</span> <span class="typ">Target[]</span> _targets;
+    <span class="kw">private readonly</span> <span class="typ">Dictionary</span>&lt;<span class="typ">string</span>, <span class="typ">int</span>&gt; _fails = <span class="kw">new</span>();
+    <span class="kw">private const int</span> Threshold = 3;
+
+    <span class="kw">public</span> <span class="fn">HealthChecker</span>(<span class="typ">ILoadBalancer</span> lb, <span class="typ">HttpClient</span> http, <span class="typ">Target[]</span> targets)
+    { _lb = lb; _http = http; _targets = targets; }
+
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">RunAsync</span>(<span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">while</span> (!ct.IsCancellationRequested)
+        {
+            <span class="kw">await</span> <span class="typ">Task</span>.<span class="fn">WhenAll</span>(_targets.<span class="fn">Select</span>(<span class="fn">ProbeAsync</span>));
+            <span class="kw">await</span> <span class="typ">Task</span>.<span class="fn">Delay</span>(<span class="typ">TimeSpan</span>.<span class="fn">FromSeconds</span>(10), ct);
+        }
+    }
+
+    <span class="kw">private async</span> <span class="typ">Task</span> <span class="fn">ProbeAsync</span>(<span class="typ">Target</span> t)
+    {
+        <span class="kw">try</span>
+        {
+            <span class="kw">using var</span> cts = <span class="kw">new</span> <span class="typ">CancellationTokenSource</span>(<span class="typ">TimeSpan</span>.<span class="fn">FromSeconds</span>(2));
+            <span class="kw">var</span> res = <span class="kw">await</span> _http.<span class="fn">GetAsync</span>(<span class="str">$"{t.Endpoint}/healthz"</span>, cts.Token);
+            <span class="kw">if</span> (res.IsSuccessStatusCode) { _fails[t.Id] = 0; _lb.<span class="fn">MarkHealthy</span>(t.Id); }
+            <span class="kw">else</span> <span class="fn">RecordFail</span>(t);
+        }
+        <span class="kw">catch</span> { <span class="fn">RecordFail</span>(t); }
+    }
+
+    <span class="kw">private void</span> <span class="fn">RecordFail</span>(<span class="typ">Target</span> t)
+    {
+        _fails.<span class="fn">TryGetValue</span>(t.Id, <span class="kw">out</span> <span class="kw">var</span> f);
+        _fails[t.Id] = ++f;
+        <span class="kw">if</span> (f &gt;= Threshold) _lb.<span class="fn">MarkUnhealthy</span>(t.Id);
+    }
+}</pre>
+    <p>In production, you'd use a real hash (SHA-1, xxHash, MurmurHash3), replace the <code>SortedDictionary</code> with a sorted array + binary search for O(log N) with better cache behavior, and add outlier detection to fold passive signal (5xx rates, latency) into ejection decisions. The bones above are what tools like <em>YARP</em> (Microsoft's reverse proxy), <em>Envoy</em>, and <em>HAProxy</em> implement — just faster and in C++/Rust.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Where a load balancer hurts</h3>
+    <p><strong>It's still a bottleneck.</strong> Every packet flows through it, so its throughput ceiling is your ceiling. Solution: run many LB nodes and let DNS or ECMP fan out across them. AWS ELB does this transparently; self-hosted needs BGP or Anycast to scale beyond one box.</p>
+    <p><strong>L7 costs latency.</strong> Parsing HTTP and terminating TLS adds ~1–5 ms. If you don't need content-based routing, use L4 and preserve simplicity + speed.</p>
+    <p><strong>Sticky sessions kill load balance.</strong> Once a user is stuck to a warm backend, the algorithm can't rebalance them. Preferred fix: externalize session state (Redis, DynamoDB) and make backends stateless.</p>
+    <p><strong>Rebalancing is disruptive without consistent hashing.</strong> A modulo-N hash sends 100% of traffic to different backends when N changes. Consistent hashing (or Maglev) limits disturbance to 1/N — mandatory for cache tiers.</p>
+    <p><strong>Health checks lie.</strong> A backend can pass <code>/healthz</code> while its downstream DB is broken. Add <em>deep</em> health checks that exercise dependencies, and use passive outlier detection on real traffic to catch what active probes miss.</p>
+    <p><strong>Thundering herd on backend restart.</strong> When a large backend comes back healthy, least-connections routes a burst to it. Mitigate with <em>slow start</em> — the ALB supports this natively — where a new target ramps up over 30–900 s.</p>
+
+    <h3>Likely interview follow-ups</h3>
+    <div class="qa">
+      <p class="q">When would you pick NLB over ALB?</p>
+      <p class="a">Sub-millisecond latency, non-HTTP protocols (MQTT, gRPC over raw TCP, gaming UDP), static IPs, or you need to expose the service through PrivateLink. Otherwise ALB, because content-based routing and Lambda targets are worth the extra ms.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Why consistent hashing for caches specifically?</p>
+      <p class="a">Cache hit rate depends on the same key going to the same node. With plain modulo, adding one node invalidates ~<code>(N-1)/N</code> of the cache. Consistent hashing invalidates only ~<code>1/N</code>, keeping hit rates high through fleet changes.</p>
+    </div>
+    <div class="qa">
+      <p class="q">How does the LB avoid being a single point of failure?</p>
+      <p class="a">Redundant nodes across AZs, DNS with multiple A records, and a floating VIP (VRRP/keepalived) or ECMP so a peer takes the address within milliseconds. Managed LBs (ELB) handle all of this behind one DNS name.</p>
+    </div>
+    <div class="qa">
+      <p class="q">What happens to in-flight requests when you deregister a target?</p>
+      <p class="a">Connection draining — the LB stops sending new work but lets existing streams finish for up to a configurable timeout (30 s to 5 min). Only then is the target actually torn down.</p>
+    </div>
+    <div class="qa">
+      <p class="q">How do you handle sticky sessions without breaking scale?</p>
+      <p class="a">Best answer: don't. Push session state to Redis or a signed cookie, keep backends stateless. If you must, use LB-generated cookies (not IP-hash) so you're immune to NAT and can drain cleanly.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Round-robin vs least-connections vs power-of-two — when do they diverge?</p>
+      <p class="a">Uniform request cost → round-robin is fine. Highly variable request cost (WebSockets, long-poll, mixed API) → least-connections wins. Massive fleets where global state is expensive → power-of-two-choices gives near-least-connections quality with no shared state.</p>
+    </div>
+    <div class="qa">
+      <p class="q">Global Accelerator vs Route 53 latency routing — what's the difference?</p>
+      <p class="a">Route 53 answers DNS with the closest regional LB's name. Global Accelerator gives you a <em>fixed anycast IP</em> and moves traffic onto the AWS backbone at the nearest edge, reducing internet-path variance. Use Accelerator when clients don't cache DNS well or you need instant regional failover.</p>
+    </div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>The 30-second pitch:</strong> "A load balancer is the single-endpoint dispatcher in front of a horizontal fleet. Clients hit one DNS name; the LB picks a healthy backend using an algorithm — round-robin for uniform workloads, least-connections for variable ones, consistent hashing for cache affinity — and forwards the request. It runs continuous health checks to eject failed backends, terminates TLS, supports sticky sessions when needed, and is itself made HA by running redundant nodes across AZs with DNS or floating VIPs. On AWS: ALB for HTTP with content routing, NLB for extreme L4 throughput, GWLB for appliance insertion, Route 53 in front for regional failover."</p>
+    <ul>
+      <li><strong>Numbers to quote:</strong> NLB ~100 µs added latency, ALB single-digit ms; millions of RPS per LB; ~1M concurrent conns per node; health checks 5–30 s interval, 2–3 fails to eject; drain 30–300 s.</li>
+      <li><strong>Five talking points that win the round:</strong>
+        <ol>
+          <li>L4 vs L7: transport-layer flow hashing vs application-layer content routing — pick by latency vs feature need.</li>
+          <li>Algorithms: RR, weighted RR, least-connections, consistent hash, power-of-two — name them and know which fits which shape of load.</li>
+          <li>Health checks + connection draining: how a failed node is ejected fast and a deregistered node dies gracefully.</li>
+          <li>The LB's own HA: multi-AZ nodes, DNS spread, VIP failover — the front door must not be a SPOF.</li>
+          <li>AWS mapping: ALB / NLB / GWLB / Global Accelerator / Route 53 — which for which job.</li>
+        </ol>
+      </li>
+      <li><strong>Words to say:</strong> "flow hash", "5-tuple", "consistent hashing ring", "connection draining", "slow start", "outlier detection", "sticky sessions via LB cookie".</li>
+      <li><strong>Trade-offs to volunteer:</strong> sticky sessions vs balance; L7 features vs latency; naive modulo vs consistent hash; active vs passive health checks.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://aws.amazon.com/elasticloadbalancing/features/">Elastic Load Balancing feature comparison — AWS</a> — the authoritative ALB / NLB / GWLB / CLB matrix.</li>
+      <li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/network/introduction.html">AWS Network Load Balancer — Introduction</a> — flow-hash algorithm, static IPs, health checks, per-AZ node model.</li>
+      <li><a href="https://www.f5.com/glossary/load-balancer">F5 — What is a load balancer?</a> — round robin, least connections, IP hash, consistent hashing, L4 vs L7.</li>
+      <li><a href="https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/overview">Envoy — Load balancing overview</a> — production-grade algorithms (ring hash, Maglev, power-of-two), zone-aware routing, outlier detection.</li>
+      <li><a href="https://research.google/pubs/pub44824/">Maglev: A Fast and Reliable Software Network Load Balancer (Google, NSDI '16)</a> — the reference paper for CDN-scale consistent-hash LBs.</li>
+      <li><a href="https://www.haproxy.com/blog/how-haproxy-uses-active-passive-and-mixed-health-checks">HAProxy — Active, passive and mixed health checks</a>.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

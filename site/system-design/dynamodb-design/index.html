@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How DynamoDB Works — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb; --card: #ffffff; --ink: #1b2230; --muted: #5b6677; --line: #e6eaf0;
+    --scenario: #f7567c; --scenario-bg: #fff0f4;
+    --reqs: #f4a259; --reqs-bg: #fff7ed;
+    --arch: #4361ee; --arch-bg: #eef2ff;
+    --dsa: #7048e8; --dsa-bg: #f3effe;
+    --aws: #ff9900; --aws-bg: #fff6e6;
+    --code-bg: #1e2430; --code-ink: #e7ecf3; --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08); --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { position: relative; padding: 10px 0 10px 46px; margin: 0; border-bottom: 1px dashed var(--line); }
+  .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 10px; width: 30px; height: 30px; border-radius: 50%; background: var(--arch); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: .9rem; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .kv { display:flex; gap:10px; flex-wrap:wrap; margin:14px 0; }
+  .kv .box { background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px 16px; flex:1 1 150px; }
+  .kv .box b { display:block; font-size:1.35rem; color:var(--arch); }
+  .kv .box span { font-size:.82rem; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>How Amazon DynamoDB Works</h1>
+    <p>The internals of AWS's serverless NoSQL database: partitioning by hash, Multi-Paxos replication, single-digit-ms latency at any scale, and how to design tables for it.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 What it is</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Guarantees & limits</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ Capacity & features</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 What it is & where it's used</span>
+    <h2>A serverless key-value store that never slows down</h2>
+    <p>DynamoDB is AWS's fully-managed NoSQL database that delivers <strong>consistent single-digit-millisecond latency at any scale</strong> — whether your table holds a kilobyte or a petabyte, whether you do ten requests a second or twenty million. It descends from the 2007 <strong>Dynamo</strong> paper (the internal Amazon key-value store born from a Christmas-shopping outage), but the original Dynamo was disliked internally because teams still had to run and scale it themselves. DynamoDB, launched in January 2012, kept Dynamo's core ideas (consistent hashing, replication, tunable consistency) and <em>removed all the operational burden</em> — no servers, no manual sharding, no patching.</p>
+    <p>It powers the shopping cart and many core services at Amazon.com, and externally backs things like Snapchat's Memories, Disney+ watchlists, Lyft ride state, and countless session/leaderboard/IoT workloads. Interviewers ask about it because it forces you to think differently: unlike a relational database, DynamoDB makes you <strong>design your table around your access patterns first</strong> — get that wrong and no amount of scaling saves you. Explaining <em>why</em> it stays fast (the partitioning + replication model) and <em>how</em> to model data for it is the whole game.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>A library with a million drawers and a magic sorting hat</h2>
+    <p>Imagine the world's largest library, but instead of shelves it has <strong>a million tiny drawers</strong> lined up along a giant wall. When you walk in with a book to file — say a note about your grandmother's birthday — you don't wander around looking for space. You hand the book to a little assistant at the door who wears a <strong>magic sorting hat</strong>. The hat looks at the title of your book, whispers a number, and tells you "drawer number seven-hundred-and-forty-two, second row." You put the book in, done. Someone else walks in with a completely different book — the hat tells them "drawer number two-thousand-nine-hundred-and-eleven." Nobody ever has to fight over the same drawer.</p>
+    <p>Now here's the beautiful part. Because everyone gets sent to a different drawer, <strong>a thousand people can file books at the same time</strong> without bumping into each other. If suddenly ten million people show up, the library just builds more drawers along the wall and the hat starts pointing to those too. Nothing slows down. This is how Amazon's giant online store keeps working even during a huge Black Friday sale — every shopping cart is filed in its own little drawer.</p>
+    <p>To make sure nothing is ever lost, the library <strong>secretly makes three copies of every drawer</strong>, kept in three different buildings across the city. If one building burns down, your book is still safe in the other two. And when you go back to fetch your grandmother's birthday note, you again walk in the door, tell the hat the title, and it whispers the drawer number — you walk straight to it in one step. No searching, no wandering.</p>
+    <p>The one big rule is: <strong>you have to tell the hat in advance what titles you'll be searching by</strong>. If you file a book under "birthday note" but later try to find it by "grandmother's name," the hat shrugs — it wasn't told to remember that. This is why people who use DynamoDB spend a lot of time thinking about how they'll search before they store anything.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Guarantees, and the numbers to quote</span>
+    <h2>What DynamoDB promises — and its hard limits</h2>
+    <p>The value proposition is <strong>predictable performance</strong>: latency stays flat as you scale because data is spread across many small partitions, each independently served. Durability comes from synchronous replication across <strong>three Availability Zones</strong>; availability targets are 99.99% (single region) and 99.999% (global tables).</p>
+    <div class="kv">
+      <div class="box"><b>400 KB</b><span>max item size</span></div>
+      <div class="box"><b>10 GB</b><span>max data per partition</span></div>
+      <div class="box"><b>3,000 RCU</b><span>max reads/partition/sec</span></div>
+      <div class="box"><b>1,000 WCU</b><span>max writes/partition/sec</span></div>
+      <div class="box"><b>3 AZs</b><span>synchronous replicas</span></div>
+    </div>
+    <table>
+      <tr><th>Unit</th><th>Definition</th></tr>
+      <tr><td><strong>RCU</strong> (Read Capacity Unit)</td><td>1 strongly-consistent read/sec, OR 2 eventually-consistent reads/sec, for items up to <strong>4 KB</strong>. (Transactional reads cost 2×.)</td></tr>
+      <tr><td><strong>WCU</strong> (Write Capacity Unit)</td><td>1 write/sec for items up to <strong>1 KB</strong>. (Transactional writes cost 2×.)</td></tr>
+    </table>
+    <p>These three per-partition ceilings — 10 GB, 3,000 RCU, 1,000 WCU — are the key mental model: whenever a partition crosses any of them, DynamoDB automatically <strong>splits</strong> it into more partitions. That's the whole scaling story in one sentence.</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ Architecture</span>
+    <h2>Request routers, partitions, and Paxos replication</h2>
+    <p>A request flows through two tiers. First it hits a stateless <strong>request router</strong> — it authenticates, checks the <strong>metadata service</strong> to learn which partition owns your key, verifies you have capacity (admission control), and forwards the request. Second, it lands on the right <strong>storage node</strong>. Every partition is replicated to <strong>three storage nodes across three AZs</strong>, forming a <strong>replication group</strong>. One replica is the <strong>leader</strong>, elected via <strong>Multi-Paxos</strong>; the leader handles all writes and strongly-consistent reads, then replicates the write to the peers. A write is acknowledged once a <strong>quorum</strong> (the leader + at least one peer) has durably persisted it to its write-ahead log.</p>
+    <div class="diagram">
+      <svg viewBox="0 0 760 360" xmlns="http://www.w3.org/2000/svg" font-family="Segoe UI, sans-serif">
+        <defs>
+          <marker id="a1" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#7aa2f7"/></marker>
+          <marker id="a2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#2dc653"/></marker>
+        </defs>
+        <rect x="20" y="150" width="110" height="46" rx="10" fill="#1b2940" stroke="#4361ee"/>
+        <text x="75" y="172" fill="#e7ecf3" font-size="12" text-anchor="middle">Client SDK</text>
+        <text x="75" y="188" fill="#9aa7bd" font-size="10" text-anchor="middle">PutItem/GetItem</text>
+        <!-- router -->
+        <rect x="180" y="140" width="130" height="66" rx="10" fill="#152233" stroke="#4361ee"/>
+        <text x="245" y="166" fill="#e7ecf3" font-size="12" text-anchor="middle">Request Router</text>
+        <text x="245" y="184" fill="#9aa7bd" font-size="9.5" text-anchor="middle">auth · admission</text>
+        <text x="245" y="197" fill="#9aa7bd" font-size="9.5" text-anchor="middle">control · routing</text>
+        <!-- metadata -->
+        <rect x="180" y="30" width="130" height="44" rx="10" fill="#2a2410" stroke="#ffd166"/>
+        <text x="245" y="52" fill="#ffd166" font-size="11" text-anchor="middle">Metadata Service</text>
+        <text x="245" y="66" fill="#9aa7bd" font-size="9" text-anchor="middle">key → partition map</text>
+        <line x1="245" y1="140" x2="245" y2="76" stroke="#ffd166" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#a1)"/>
+        <!-- replication group -->
+        <rect x="400" y="20" width="340" height="320" rx="14" fill="none" stroke="#33405a" stroke-dasharray="6 6"/>
+        <text x="570" y="42" fill="#9aa7bd" font-size="11" text-anchor="middle">Replication group — 3 AZs, Multi-Paxos</text>
+        <rect x="430" y="70" width="120" height="56" rx="10" fill="#132a1c" stroke="#2dc653"/>
+        <text x="490" y="94" fill="#2dc653" font-size="13" text-anchor="middle">Leader</text>
+        <text x="490" y="112" fill="#9aa7bd" font-size="9" text-anchor="middle">AZ-a · writes+SC reads</text>
+        <rect x="590" y="70" width="120" height="56" rx="10" fill="#152233" stroke="#4361ee"/>
+        <text x="650" y="94" fill="#e7ecf3" font-size="12" text-anchor="middle">Replica</text>
+        <text x="650" y="112" fill="#9aa7bd" font-size="9" text-anchor="middle">AZ-b</text>
+        <rect x="510" y="160" width="120" height="56" rx="10" fill="#152233" stroke="#4361ee"/>
+        <text x="570" y="184" fill="#e7ecf3" font-size="12" text-anchor="middle">Replica</text>
+        <text x="570" y="202" fill="#9aa7bd" font-size="9" text-anchor="middle">AZ-c</text>
+        <!-- arrows -->
+        <line x1="130" y1="173" x2="178" y2="173" stroke="#7aa2f7" stroke-width="2" marker-end="url(#a1)"/>
+        <line x1="310" y1="150" x2="428" y2="100" stroke="#7aa2f7" stroke-width="2" marker-end="url(#a1)"/>
+        <line x1="550" y1="98" x2="588" y2="98" stroke="#2dc653" stroke-width="2" marker-end="url(#a2)"/>
+        <line x1="500" y1="126" x2="560" y2="158" stroke="#2dc653" stroke-width="2" marker-end="url(#a2)"/>
+        <text x="640" y="250" fill="#9aa7bd" font-size="10" text-anchor="middle">write ACK once</text>
+        <text x="640" y="266" fill="#9aa7bd" font-size="10" text-anchor="middle">quorum persists to WAL</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7aa2f7"></span>request path</span>
+        <span><span class="dot" style="background:#2dc653"></span>Paxos replication</span>
+        <span><span class="dot" style="background:#ffd166"></span>metadata lookup</span>
+      </div>
+    </div>
+    <p>Behind the scenes there are also <strong>log replicas</strong> (write-ahead-log-only nodes) that let DynamoDB restore a full replica quickly after a failure without a heavy copy, and an <strong>auto-admin</strong> service that continuously splits/moves partitions. The genius is that <em>every layer is horizontally scalable and stateless where possible</em> — routers scale out freely, storage scales by adding partitions.</p>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+    <h3>Partition keys and how data is placed</h3>
+    <p>Every item has a <strong>partition key (PK)</strong>, optionally plus a <strong>sort key (SK)</strong>. DynamoDB runs the partition key through an internal <strong>hash function</strong>; the hash determines which partition stores the item. Items sharing a PK live together on one partition, sorted by SK — which is what makes <code>Query</code> (fetch all items for one PK, optionally a SK range) so fast: it's a B-tree lookup within a single partition. Choosing a <strong>high-cardinality, evenly-accessed partition key</strong> is the single most important design decision, because it spreads load uniformly.</p>
+    <h3>Consistency options</h3>
+    <p>Reads come in two flavors. A <strong>strongly consistent read</strong> goes to the leader and always returns the latest write. An <strong>eventually consistent read</strong> (the default, and half the cost) hits any of the three replicas at random — so there's roughly a "1-in-3 chance" of reading a value from a replica that hasn't yet received the very latest write during the brief replication window. This is the <a href="../cap-theorem/index.html">CAP/PACELC</a> dial in action: DynamoDB is PA/EL — it favors availability and low latency, offering strong consistency only as an opt-in, single-region choice.</p>
+    <h3>Hot partitions & adaptive capacity</h3>
+    <p>The classic failure mode is a <strong>hot partition</strong>: a bad key (e.g., partitioning by "today's date" so all writes hit one partition) concentrates traffic and throttles even though the table has spare capacity. DynamoDB fights this with <strong>adaptive capacity</strong> (instantly borrows unused capacity for hot partitions), <strong>burst capacity</strong> (banks up to 5 minutes of unused throughput), and <strong>split-for-heat</strong> (isolates a hot key onto its own partition). But you should still design keys to avoid hotspots — <em>write sharding</em> (append a random suffix <code>#1..#N</code> to the PK) is the standard fix for an unavoidably hot key.</p>
+    <h3>Secondary indexes</h3>
+    <p>To query by an attribute that isn't the primary key, you add an index. A <strong>Local Secondary Index (LSI)</strong> keeps the same PK but a different SK (must be created at table creation, shares the partition's throughput). A <strong>Global Secondary Index (GSI)</strong> has a completely different PK/SK and is effectively a separate, asynchronously-maintained copy of the table (eventually consistent, its own capacity). A "log propagator" keeps indexes updated. Because each index adds write cost, a table is capped at a handful — favor GSIs for flexible query patterns.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Hashing, B-trees, quorums, and Merkle trees</h2>
+    <table>
+      <tr><th>Structure / algorithm</th><th>Where it's used</th><th>Why</th></tr>
+      <tr><td><strong>Hash function on PK</strong></td><td>Placing items into partitions</td><td>O(1) routing; spreads data uniformly across the keyspace. (Modern DynamoDB uses range-based partition assignment over the hash space rather than a pure consistent-hash ring.)</td></tr>
+      <tr><td><strong>B-tree</strong></td><td>Storage engine within a partition</td><td>Sorted by sort key ⇒ O(log n) point lookups and efficient range scans (the <code>Query</code> operation).</td></tr>
+      <tr><td><strong>Multi-Paxos</strong></td><td>Replication group leader election &amp; log agreement</td><td>Keeps 3 replicas consistent and picks a new leader in ~seconds if the leader's 1.5 s heartbeat is missed. See <a href="../consensus-raft-paxos/index.html">consensus</a>.</td></tr>
+      <tr><td><strong>Quorum (W=2 of 3)</strong></td><td>Durable write acknowledgement</td><td>ACK after a majority persists to the write-ahead log ⇒ survives one AZ loss with no data loss.</td></tr>
+      <tr><td><strong>Merkle trees / anti-entropy</strong></td><td>Detecting &amp; repairing replica divergence</td><td>Cheaply compares replicas and syncs only the differing ranges (inherited from Dynamo).</td></tr>
+      <tr><td><strong>Write-ahead log</strong></td><td>Every storage &amp; log replica</td><td>Durability: replay the log to recover; log replicas restore a failed node fast.</td></tr>
+    </table>
+    <h3>Capacity math worked example</h3>
+    <p>Say you store 6 KB items and need 500 strongly-consistent reads/sec. Each read rounds up to <code>ceil(6/4) = 2</code> RCU, so you need <code>500 × 2 = 1,000 RCU</code>. For 200 writes/sec of 2 KB items: <code>ceil(2/1) = 2</code> WCU each ⇒ <code>400 WCU</code>. Being able to do this arithmetic out loud is a common interview checkpoint.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ Capacity modes & ecosystem features</span>
+    <h2>Provisioned vs on-demand, and the surrounding toolkit</h2>
+    <table>
+      <tr><th>Feature</th><th>What it does</th><th>When to use</th></tr>
+      <tr><td><strong>On-demand capacity</strong></td><td>Pay per request; scales instantly to any traffic, zero capacity planning.</td><td>Spiky/unknown traffic, new apps, serverless.</td></tr>
+      <tr><td><strong>Provisioned + Auto Scaling</strong></td><td>Set target RCU/WCU; autoscaler adjusts to utilization.</td><td>Predictable traffic where you want lower cost.</td></tr>
+      <tr><td><strong>DynamoDB Streams</strong></td><td>Ordered change log of item mutations (24 h), consumed by Lambda.</td><td>CDC, event-driven fan-out, aggregations, replication.</td></tr>
+      <tr><td><strong>Global Tables</strong></td><td>Multi-region active-active replication, last-writer-wins conflict resolution.</td><td>Low-latency global apps, regional DR (99.999%).</td></tr>
+      <tr><td><strong>DAX</strong></td><td>In-memory write-through cache; microsecond reads.</td><td>Read-heavy, hot-item workloads.</td></tr>
+      <tr><td><strong>TTL</strong></td><td>Auto-expire items by timestamp attribute (free).</td><td>Sessions, ephemeral data.</td></tr>
+      <tr><td><strong>Transactions</strong></td><td><code>TransactWriteItems</code> — ACID across up to 100 items in one region.</td><td>All-or-nothing multi-item updates.</td></tr>
+    </table>
+    <p>The deployment norm: pick <strong>on-demand</strong> unless you can prove steady traffic, enable <strong>PITR</strong> (point-in-time recovery), front hot reads with <strong>DAX</strong>, wire <strong>Streams → Lambda</strong> for anything reactive, and reach for <strong>Global Tables</strong> only when you truly need multi-region.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation — single-table design in action</h2>
+    <p>The idiomatic DynamoDB pattern is <strong>single-table design</strong>: store multiple entity types in one table using overloaded, prefixed keys so related items co-locate under one partition key and one <code>Query</code> fetches an entire aggregate. Here's modeling a user and their orders, then reading them in a single round-trip with the AWS SDK for .NET.</p>
+    <pre><span class="cmt">// Single-table design: PK groups an aggregate, SK distinguishes entity type.</span>
+<span class="cmt">//   PK = "USER#123"   SK = "PROFILE"        -> the user row</span>
+<span class="cmt">//   PK = "USER#123"   SK = "ORDER#2024-..."  -> that user's orders</span>
+<span class="kw">var</span> client = <span class="kw">new</span> <span class="typ">AmazonDynamoDBClient</span>();
+
+<span class="cmt">// --- Write a profile and an order atomically (all-or-nothing) ---</span>
+<span class="kw">await</span> client.<span class="fn">TransactWriteItemsAsync</span>(<span class="kw">new</span> <span class="typ">TransactWriteItemsRequest</span>
+{
+    TransactItems = <span class="kw">new</span>()
+    {
+        <span class="kw">new</span>() { Put = <span class="kw">new</span> <span class="typ">Put</span> {
+            TableName = <span class="str">"AppTable"</span>,
+            Item = <span class="kw">new</span>() {
+                [<span class="str">"PK"</span>] = <span class="kw">new</span>(<span class="str">"USER#123"</span>),
+                [<span class="str">"SK"</span>] = <span class="kw">new</span>(<span class="str">"PROFILE"</span>),
+                [<span class="str">"name"</span>] = <span class="kw">new</span>(<span class="str">"Santosh"</span>)
+            }}},
+        <span class="kw">new</span>() { Put = <span class="kw">new</span> <span class="typ">Put</span> {
+            TableName = <span class="str">"AppTable"</span>,
+            Item = <span class="kw">new</span>() {
+                [<span class="str">"PK"</span>] = <span class="kw">new</span>(<span class="str">"USER#123"</span>),
+                [<span class="str">"SK"</span>] = <span class="kw">new</span>(<span class="str">"ORDER#2024-06-01#a91"</span>),
+                [<span class="str">"total"</span>] = <span class="kw">new</span> <span class="typ">AttributeValue</span> { N = <span class="str">"42.00"</span> }
+            }}}
+    }
+});
+
+<span class="cmt">// --- One Query returns the profile AND every order in a single partition read ---</span>
+<span class="kw">var</span> resp = <span class="kw">await</span> client.<span class="fn">QueryAsync</span>(<span class="kw">new</span> <span class="typ">QueryRequest</span>
+{
+    TableName = <span class="str">"AppTable"</span>,
+    KeyConditionExpression = <span class="str">"PK = :pk"</span>,        <span class="cmt">// hits exactly one partition -> fast</span>
+    ExpressionAttributeValues = <span class="kw">new</span>() { [<span class="str">":pk"</span>] = <span class="kw">new</span>(<span class="str">"USER#123"</span>) },
+    ConsistentRead = <span class="kw">false</span>                        <span class="cmt">// eventually consistent = cheaper (½ RCU)</span>
+});
+<span class="cmt">// resp.Items now holds the PROFILE row + all ORDER# rows, sorted by SK.</span>
+</pre>
+    <p>Alternatives worth naming: the higher-level <code>DynamoDBContext</code> (object mapper) for simple CRUD, <strong>PynamoDB</strong>/boto3 in Python, and <strong>PartiQL</strong> (SQL-like syntax) if the team prefers SQL. But the key skill is the <em>data model</em>, not the SDK — design keys around your access patterns before writing any code.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks & likely follow-ups</h2>
+    <div class="qa"><p class="q">"How does DynamoDB scale to millions of requests?"</p><p class="a">By partitioning: data is hashed across many partitions, each capped at 10 GB / 3,000 RCU / 1,000 WCU. Cross any ceiling and it auto-splits. Stateless request routers scale out independently. Latency stays flat because each partition is small and independently served.</p></div>
+    <div class="qa"><p class="q">"What's a hot partition and how do you fix it?"</p><p class="a">A poorly-chosen key concentrates traffic on one partition and throttles despite spare table capacity. Fixes: choose a high-cardinality key, write-shard by appending a random suffix, or lean on adaptive capacity + split-for-heat. Prevention via key design beats relying on the automatic mitigations.</p></div>
+    <div class="qa"><p class="q">"Strongly vs eventually consistent reads?"</p><p class="a">Strong reads go to the Paxos leader and always see the latest write, cost 1 RCU/4 KB, single-region. Eventual reads hit any replica, cost ½ RCU, and may briefly return stale data during the replication window. Default is eventual.</p></div>
+    <div class="qa"><p class="q">"When is DynamoDB the wrong choice?"</p><p class="a">When you need ad-hoc queries, complex joins, or flexible analytics — its access patterns must be known up front. For those, use Aurora/RDS, or stream to Redshift/OpenSearch/S3+Athena for analytics.</p></div>
+    <div class="qa"><p class="q">"LSI vs GSI?"</p><p class="a">LSI = same partition key, alternate sort key, shares partition throughput, must exist at table creation, supports strong reads. GSI = entirely different key, async/eventually consistent, own capacity, can be added anytime. Prefer GSIs for flexibility.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "DynamoDB is a serverless NoSQL store giving single-digit-ms latency at any scale. Items are hashed by partition key across many partitions, each capped at 10 GB, 3,000 RCU, 1,000 WCU — cross a ceiling and it auto-splits. Each partition is replicated across 3 AZs with a Multi-Paxos leader that handles writes and strong reads; writes ACK on a quorum. It's a PA/EL system — availability and low latency first, strong consistency as an opt-in. You design the table around access patterns using single-table design and pick a high-cardinality key to avoid hot partitions."</div>
+    <ul>
+      <li><strong>Numbers:</strong> 400 KB item, 10 GB/partition, 3,000 RCU &amp; 1,000 WCU/partition, 3 AZs. RCU = 4 KB strong read; WCU = 1 KB write.</li>
+      <li><strong>Placement:</strong> hash(PK) → partition; items with same PK sorted by SK ⇒ fast <code>Query</code>.</li>
+      <li><strong>Replication:</strong> 3 AZ replicas, Multi-Paxos leader, quorum write ACK, log replicas for fast recovery.</li>
+      <li><strong>Consistency:</strong> eventual (default, ½ cost, any replica) vs strong (leader). CAP = PA/EL.</li>
+      <li><strong>Hot partition</strong> = the #1 pitfall → high-cardinality key + write sharding.</li>
+      <li><strong>Toolkit:</strong> on-demand vs provisioned, Streams→Lambda, Global Tables, DAX, TTL, transactions, single-table design.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://en.wikipedia.org/wiki/Amazon_DynamoDB">Amazon DynamoDB — Wikipedia</a></li>
+      <li><a href="https://www.usenix.org/conference/atc22/presentation/elhemali">Elhemali et al. — "Amazon DynamoDB: A Scalable, Predictably Performant, and Fully Managed NoSQL Database Service" (USENIX ATC 2022)</a></li>
+      <li><a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf">DeCandia et al. — "Dynamo: Amazon's Highly Available Key-value Store" (SOSP 2007)</a></li>
+      <li><a href="https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.html">AWS Docs — DynamoDB: How It Works</a></li>
+      <li><a href="https://aws.amazon.com/builders-library/">Amazon Builders' Library — adaptive capacity, single-table design</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

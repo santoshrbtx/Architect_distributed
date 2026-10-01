@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../auth.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JWT & User Login Flow — System Design Interview</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker {
+    text-transform: uppercase; letter-spacing: .14em; font-size: .75rem;
+    font-weight: 700; opacity: .85; margin-bottom: 10px;
+  }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a {
+    text-decoration: none; color: var(--muted); font-size: .85rem;
+    padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid #f9c74f;         background: #fffbea; }
+  .laymen .badge   { background: #f9c74f; color: #533f04; }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) {
+    background: #eef1f6; padding: 2px 6px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 12px; overflow-x: auto;
+    font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55;
+  }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram {
+    background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0;
+    overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz {
+    background: #0f1420; border-radius: 12px; padding: 18px;
+    font-family: "SF Mono", Consolas, monospace; color: #c6d0e0;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    position: relative; padding: 10px 0 10px 46px; margin: 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 10px;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--arch); color: #fff; font-weight: 700;
+    display: grid; place-items: center; font-size: .9rem;
+  }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0;
+  }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat {
+    background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%);
+    color: #fff; border-radius: var(--radius); padding: 26px 32px;
+    box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch {
+    background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px;
+    font-size: 1.05rem;
+  }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  .statgrid { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 12px; margin: 16px 0; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .stat .n { font-size: 1.5rem; font-weight: 800; color: var(--arch); letter-spacing: -.5px; }
+  .stat .l { font-size: .82rem; color: var(--muted); margin-top: 2px; }
+  .prompt-card {
+    background: #0f1420; color: #e7ecf3; border-radius: 14px; padding: 22px 26px;
+    border-left: 6px solid #f7567c; margin: 4px 0 4px;
+  }
+  .prompt-card .ask { font-size: 1.08rem; font-weight: 600; margin: 0 0 10px; color:#fff; }
+  .prompt-card ul { margin: 8px 0 0; padding-left: 20px; color:#c6d0e0; }
+  .prompt-card .stage { color:#f7a072; font-weight:700; text-transform:uppercase; letter-spacing:.06em; font-size:.72rem; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · FAANG / Architect Interview</div>
+    <h1>JWT &amp; the User Login Flow</h1>
+    <p>"Design authentication for a service with 100M users." The classic security-design round — access/refresh tokens, sessions, OAuth, rotation, and revocation.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 The question</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Login flow</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#dsa">🧮 DSA / crypto</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 The interview question</span>
+    <h2>The prompt an architect-level candidate gets</h2>
+    <div class="prompt-card">
+      <p class="stage">The ask</p>
+      <p class="ask">"Design the authentication and login system for a web + mobile product with ~100 million users. Walk me through what happens when a user logs in, how we keep them logged in across requests without hammering the database, and how we handle logout, token theft, and 'sign out everywhere.'"</p>
+      <p class="stage">The follow-ups they'll drill into</p>
+      <ul>
+        <li>Sessions (stateful) vs JWT (stateless) — which and <em>why</em>?</li>
+        <li>Access token vs refresh token — lifetimes, storage, and rotation.</li>
+        <li>If JWTs are stateless, <strong>how do you revoke one</strong> before it expires?</li>
+        <li>Where do you store tokens in a browser — cookie vs localStorage — given XSS and CSRF?</li>
+        <li>HS256 vs RS256; where does OAuth2 / OpenID Connect / "Login with Google" fit?</li>
+      </ul>
+    </div>
+    <p style="margin-top:18px">This is one of the most common <strong>security-flavored system-design rounds</strong> at FAANG and senior/architect interviews because it forces you to reason about the CAP-like tension in auth: <em>stateless scalability</em> versus <em>instant revocation</em>. Every real product solves it — Google, GitHub, Netflix, Auth0, Okta, AWS Cognito — and there is no single "right" answer, only well-justified trade-offs. The interviewer is watching whether you (a) know how a JWT is actually verified, (b) understand the token lifecycle end-to-end, and (c) can defend your choices against attack scenarios.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The festival wristband that every stall trusts</h2>
+    <p>Imagine you've just arrived at a big three-day music festival. At the front gate they check your ID and your ticket <em>very</em> carefully — passport, name, date of birth, the works. Once they're happy, they snap a <strong>wristband</strong> on you and wave you in. From then on, every food stall, every stage, every bar just <em>glances</em> at your wristband and lets you through. Nobody at the taco truck calls the ticketing office to ask "is Sarah really allowed in?" — the wristband itself carries a special printed pattern that only the festival could have made, and the stall trusts it on sight.</p>
+    <p>That is exactly what happens when you log into Gmail or Instagram. The very first step — typing your password — is the front-gate check. It's slow and careful. What you get back is <strong>a tiny signed slip of paper (the token)</strong> that says "this is Sarah, and she's allowed in." Every time your phone opens a new screen or refreshes your feed, it quietly shows this slip. The app's servers can check the signature in a split second, without ever bothering the password database again. That is why apps feel so instant after you log in.</p>
+    <p>The clever twist is <strong>two wristbands, not one</strong>. The short one is like a paper day-pass that expires every fifteen minutes — if a pickpocket steals it, they can only misuse it for a few minutes. The longer one is kept safe in a locked drawer (your phone's secure storage) and its only job is to quietly ask for a fresh day-pass when the old one runs out. That's why WhatsApp keeps you logged in for months but is still safe.</p>
+    <p>The tricky bit? Once a wristband is on your wrist, the stalls don't call home to check — so if you want to <strong>kick someone out early</strong>, you have to keep a small blacklist somewhere. That is the whole hard problem, in one sentence.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Register / login</strong> with email + password; support social login (OAuth2/OIDC — "Login with Google").</li>
+      <li><strong>Authenticated API calls</strong> — every downstream microservice must verify identity cheaply.</li>
+      <li><strong>Stay logged in</strong> across requests and app restarts without re-entering the password.</li>
+      <li><strong>Logout</strong>, "log out of all devices," and forced revocation on password change / suspected theft.</li>
+      <li><strong>MFA</strong> hook and account-lockout on brute force.</li>
+    </ul>
+
+    <h3>Non-functional requirements (the hard part)</h3>
+    <ul>
+      <li><strong>Low latency &amp; horizontal scale</strong> — auth is on the critical path of <em>every</em> request; it cannot be a DB bottleneck.</li>
+      <li><strong>Security</strong> — protect against credential theft, token replay, XSS, CSRF, and brute force.</li>
+      <li><strong>Statelessness where possible</strong> — services should verify a token without a network hop per request.</li>
+      <li><strong>Fast revocation</strong> — a compromised session must die in seconds, not "whenever the token expires."</li>
+    </ul>
+
+    <h3>The numbers to quote</h3>
+    <div class="statgrid">
+      <div class="stat"><div class="n">100M</div><div class="l">registered users</div></div>
+      <div class="stat"><div class="n">~5–10M</div><div class="l">daily logins</div></div>
+      <div class="stat"><div class="n">100k+/s</div><div class="l">token verifications</div></div>
+      <div class="stat"><div class="n">5–15 min</div><div class="l">access token TTL</div></div>
+      <div class="stat"><div class="n">7–30 d</div><div class="l">refresh token TTL</div></div>
+      <div class="stat"><div class="n">&lt;1 ms</div><div class="l">stateless verify (no DB)</div></div>
+    </div>
+    <table>
+      <tr><th>Quantity</th><th>Estimate</th><th>Design implication</th></tr>
+      <tr><td>Logins/day</td><td>~5–10M (5–10% DAU login)</td><td>Only the <em>login</em> and <em>refresh</em> paths hit the auth DB — cheap compared to per-request checks.</td></tr>
+      <tr><td>Authenticated req/s</td><td>100k+ (peak)</td><td>Verifying a JWT signature is CPU-only (~microseconds) → no DB, no shared session store on the hot path.</td></tr>
+      <tr><td>Access token TTL</td><td>5–15 min</td><td>Short TTL bounds the blast radius of a stolen access token without a revocation list.</td></tr>
+      <tr><td>Refresh token TTL</td><td>7–30 days (sliding)</td><td>Long-lived but <strong>stored server-side &amp; rotated</strong> so it can be revoked instantly.</td></tr>
+      <tr><td>Session/refresh store</td><td>~10M active rows</td><td>Fits comfortably in Redis/DynamoDB; keyed by <code>jti</code> or session id.</td></tr>
+    </table>
+    <p><strong>The framing sentence to volunteer:</strong> "Access tokens are <em>stateless and short-lived</em> so verification scales to 100k+ req/s with zero DB hits; refresh tokens are <em>stateful and long-lived</em> so we retain a revocation lever. That split is the entire design."</p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ The login &amp; token flow</span>
+    <h2>What actually happens when a user logs in</h2>
+    <p>At login the user posts credentials to the <strong>Auth Service</strong>, which verifies the password hash, then mints a pair: a <strong>short-lived access token (JWT)</strong> the client attaches to every API call, and a <strong>long-lived refresh token</strong> persisted server-side. API requests carry the access token in the <code>Authorization: Bearer</code> header; each microservice (or the API gateway) verifies the <em>signature</em> locally against the auth service's public key — no database, no network hop. When the access token expires, the client silently exchanges the refresh token for a new pair (<strong>rotation</strong>). Logout deletes the refresh token server-side.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 860 500" role="img" aria-label="JWT login and token refresh flow">
+        <defs>
+          <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,3 L0,6 z" fill="#7aa2f7"/>
+          </marker>
+          <marker id="arrA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L8,3 L0,6 z" fill="#f7a072"/>
+          </marker>
+        </defs>
+        <style>
+          .lbl{fill:#e7ecf3;font:600 13px -apple-system,Segoe UI,sans-serif;}
+          .sub{fill:#9aa7bd;font:400 11px -apple-system,Segoe UI,sans-serif;}
+          .flow{stroke:#7aa2f7;stroke-width:2;fill:none;marker-end:url(#arr);}
+          .aflow{stroke:#f7a072;stroke-width:2;fill:none;stroke-dasharray:6 5;marker-end:url(#arrA);}
+        </style>
+
+        <!-- client -->
+        <rect x="24" y="210" width="130" height="70" rx="12" fill="#1b2940" stroke="#4361ee"/>
+        <text x="89" y="238" text-anchor="middle" class="lbl">Client</text>
+        <text x="89" y="256" text-anchor="middle" class="sub">web / mobile</text>
+        <text x="89" y="270" text-anchor="middle" class="sub">holds tokens</text>
+
+        <!-- gateway -->
+        <rect x="215" y="210" width="140" height="70" rx="12" fill="#1b2940" stroke="#4361ee"/>
+        <text x="285" y="234" text-anchor="middle" class="lbl">API Gateway</text>
+        <text x="285" y="251" text-anchor="middle" class="sub">verifies JWT sig</text>
+        <text x="285" y="265" text-anchor="middle" class="sub">(public key, local)</text>
+
+        <!-- auth service -->
+        <rect x="420" y="70" width="160" height="80" rx="12" fill="#241b40" stroke="#7048e8"/>
+        <text x="500" y="98" text-anchor="middle" class="lbl">Auth Service</text>
+        <text x="500" y="116" text-anchor="middle" class="sub">verify password</text>
+        <text x="500" y="130" text-anchor="middle" class="sub">mint / rotate tokens</text>
+
+        <!-- resource svcs -->
+        <rect x="420" y="210" width="160" height="70" rx="12" fill="#1b2940" stroke="#2dc653"/>
+        <text x="500" y="238" text-anchor="middle" class="lbl">Microservices</text>
+        <text x="500" y="256" text-anchor="middle" class="sub">trust verified claims</text>
+        <text x="500" y="270" text-anchor="middle" class="sub">(no auth DB call)</text>
+
+        <!-- user DB -->
+        <rect x="650" y="70" width="180" height="70" rx="12" fill="#1b2940" stroke="#7048e8"/>
+        <text x="740" y="98" text-anchor="middle" class="lbl">User Store</text>
+        <text x="740" y="116" text-anchor="middle" class="sub">email + bcrypt/argon2</text>
+        <text x="740" y="130" text-anchor="middle" class="sub">hash, profile</text>
+
+        <!-- refresh store -->
+        <rect x="650" y="360" width="180" height="80" rx="12" fill="#3a2410" stroke="#f4a259"/>
+        <text x="740" y="388" text-anchor="middle" class="lbl">Refresh / Session Store</text>
+        <text x="740" y="406" text-anchor="middle" class="sub">Redis / DynamoDB</text>
+        <text x="740" y="420" text-anchor="middle" class="sub">jti → user, revoked?</text>
+
+        <!-- idp -->
+        <rect x="215" y="360" width="200" height="70" rx="12" fill="#0f2a2f" stroke="#00b4d8"/>
+        <text x="315" y="388" text-anchor="middle" class="lbl">OAuth2 / OIDC IdP</text>
+        <text x="315" y="406" text-anchor="middle" class="sub">Google · Okta · Cognito</text>
+        <text x="315" y="420" text-anchor="middle" class="sub">"Login with…"</text>
+
+        <!-- flows -->
+        <path class="flow" d="M154,232 L212,232"/>
+        <text x="120" y="205" class="sub">1. login / API call</text>
+        <path class="flow" d="M355,224 C390,200 395,160 418,132"/>
+        <text x="360" y="180" class="sub">2. verify pw</text>
+        <path class="flow" d="M355,250 L418,250"/>
+        <text x="360" y="300" class="sub">3. request + JWT</text>
+        <path class="flow" d="M580,110 L648,108"/>
+        <path class="flow" d="M285,280 C285,320 250,340 260,358"/>
+
+        <!-- async / token issue -->
+        <path class="aflow" d="M500,150 C500,270 620,340 648,388"/>
+        <text x="540" y="330" class="sub">issue/rotate refresh</text>
+        <path class="aflow" d="M212,250 C150,300 150,360 213,388"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7aa2f7"></span> synchronous request path</span>
+        <span><span class="dot" style="background:#f7a072"></span> token issue / refresh / revoke</span>
+      </div>
+    </div>
+
+    <ol class="steps">
+      <li><strong>Login:</strong> client POSTs email+password to the Auth Service, which verifies the argon2/bcrypt hash in the user store (optionally MFA).</li>
+      <li><strong>Mint tokens:</strong> Auth Service returns a signed <strong>access JWT</strong> (5–15 min) + a <strong>refresh token</strong> whose <code>jti</code> is stored server-side (Redis/DynamoDB).</li>
+      <li><strong>Authenticated calls:</strong> client sends <code>Authorization: Bearer &lt;jwt&gt;</code>; the gateway/service verifies the signature with the public key and reads claims — <em>no DB lookup</em>.</li>
+      <li><strong>Refresh:</strong> on 401/expiry, client calls <code>/token/refresh</code>; the Auth Service validates the refresh token in the store, <strong>rotates</strong> it, and issues a new pair.</li>
+      <li><strong>Logout / revoke:</strong> delete (or mark revoked) the refresh token's <code>jti</code> in the store; "logout everywhere" deletes all of the user's refresh tokens.</li>
+      <li><strong>Social login:</strong> for "Login with Google," the Auth Service runs the OAuth2 Authorization Code + PKCE flow with the IdP, then mints <em>its own</em> tokens.</li>
+    </ol>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. What a JWT actually is</h3>
+    <p>A JWT is three Base64URL segments joined by dots: <code>header.payload.signature</code>. The <strong>header</strong> names the algorithm (e.g. <code>{"alg":"RS256","typ":"JWT"}</code>). The <strong>payload</strong> holds <em>claims</em> — registered ones like <code>iss</code> (issuer), <code>sub</code> (subject/user id), <code>aud</code> (audience), <code>exp</code> (expiry), <code>iat</code> (issued-at), <code>jti</code> (token id), plus custom claims like roles/scopes. The <strong>signature</strong> is computed over <code>base64(header) + "." + base64(payload)</code> with a key. Crucially, the payload is <em>signed, not encrypted</em> — anyone can read it, so <strong>never put secrets in a JWT</strong>. Verification means recomputing/validating the signature and checking <code>exp</code>/<code>aud</code>/<code>iss</code>; if it passes, the claims are trustworthy without a database.</p>
+
+    <h3>2. Sessions (stateful) vs JWT (stateless) — the core decision</h3>
+    <p>The classic alternative is a <strong>server-side session</strong>: on login you store a session record and hand the client an opaque <em>session id</em> cookie; every request looks the session up in Redis. This gives <strong>instant revocation</strong> (delete the row) but adds a store lookup to every request. A <strong>JWT</strong> flips it: the token is self-describing so any service verifies it locally — perfect for microservices and horizontal scale — but you <em>lose easy revocation</em> because there's no server record to delete. The mature answer is <strong>the hybrid you see everywhere</strong>: stateless <em>access</em> JWTs for the hot path + a stateful <em>refresh</em> token store for the revocation lever.</p>
+
+    <h3>3. Access token vs refresh token</h3>
+    <p>The <strong>access token</strong> is short-lived (5–15 min), sent on every request, and deliberately <em>not</em> checked against a database — its short TTL is what bounds damage if stolen. The <strong>refresh token</strong> is long-lived (days–weeks), sent only to the <code>/refresh</code> endpoint, and <em>is</em> tracked server-side so it can be revoked. When the access token expires the client quietly swaps the refresh token for a fresh pair, so the user never notices.</p>
+
+    <h3>4. Refresh token rotation &amp; reuse detection</h3>
+    <p>Best practice (Auth0/OAuth BCP): <strong>every refresh issues a brand-new refresh token and invalidates the old one</strong> — rotation. The server tracks a <em>token family</em>. If an <em>already-used</em> refresh token is ever replayed, that means someone stole it, so the server <strong>invalidates the entire family</strong>, forcing re-authentication. This turns a stolen refresh token from a persistent backdoor into a one-shot that trips an alarm.</p>
+
+    <h3>5. The revocation problem (the #1 follow-up)</h3>
+    <p>"If JWTs are stateless, how do you log someone out immediately?" You can't un-issue a signed token, so you use one of: <strong>(a) short access-token TTL</strong> so it self-expires in minutes; <strong>(b) a denylist</strong> — cache the <code>jti</code> of revoked tokens in Redis until their <code>exp</code>, and have the gateway check it (reintroduces a small stateful lookup, but only for the denylist); or <strong>(c) revoke at the refresh layer</strong> — kill the refresh token so no new access tokens can be minted, and let the current one die within minutes. Most systems combine (a) + (c), adding (b) only for high-security "kill it now" needs.</p>
+
+    <h3>6. Where to store tokens in the browser</h3>
+    <p><code>localStorage</code> is convenient but readable by any JavaScript, so an <strong>XSS</strong> flaw leaks the token. An <strong>httpOnly, Secure, SameSite cookie</strong> is invisible to JS (defeats XSS token theft) but is auto-sent by the browser, which opens <strong>CSRF</strong> — mitigated with <code>SameSite=Strict/Lax</code> plus anti-CSRF tokens. The common architect answer: <strong>refresh token in an httpOnly cookie; access token in memory</strong> (not persisted), refetched via refresh on reload.</p>
+
+    <h3>7. HS256 vs RS256, and where OAuth/OIDC fits</h3>
+    <p><strong>HS256</strong> uses one shared secret to sign and verify — fine when the same service does both, but every verifier needs the secret (bad for many microservices). <strong>RS256</strong> (asymmetric) signs with a private key and lets anyone verify with the <em>public</em> key — so the Auth Service holds the private key and every microservice verifies independently. That's why real fleets use RS256 (or ES256) and publish keys via a <strong>JWKS</strong> endpoint. <strong>OAuth2</strong> is the delegation framework ("let this app act for me"); <strong>OpenID Connect</strong> layers identity on top and defines the <em>ID token</em> (itself a JWT). "Login with Google" is OIDC Authorization Code + PKCE: you redirect to Google, get a code, exchange it for tokens, verify Google's ID token, then mint your own.</p>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA &amp; crypto behind it</span>
+    <h2>Data structures, algorithms &amp; primitives</h2>
+    <p>Auth is less about fancy data structures and more about the right <em>cryptographic</em> primitives — but there are concrete complexity trade-offs an interviewer will probe.</p>
+    <table>
+      <tr><th>Primitive / structure</th><th>Where it's used</th><th>Cost / property</th></tr>
+      <tr><td><strong>Password hashing (bcrypt / argon2 / scrypt)</strong></td><td>Store password hashes; verify at login.</td><td>Deliberately <em>slow</em> &amp; salted (O(2^cost)) to resist brute force / rainbow tables.</td></tr>
+      <tr><td><strong>HMAC-SHA256 (HS256)</strong></td><td>Symmetric JWT signing.</td><td>O(n) over token bytes; single shared secret.</td></tr>
+      <tr><td><strong>RSA / ECDSA (RS256 / ES256)</strong></td><td>Asymmetric JWT signing; verify with public key.</td><td>Sign O(private-key op); verify cheap &amp; distributable via JWKS.</td></tr>
+      <tr><td><strong>Base64URL</strong></td><td>Encode header/payload/signature into a URL-safe string.</td><td>O(n), reversible, <em>not</em> encryption.</td></tr>
+      <tr><td><strong>Hash map / KV (Redis, DynamoDB)</strong></td><td>Refresh-token &amp; session store; <code>jti</code> denylist.</td><td>O(1) lookup/insert; TTL eviction aligned to <code>exp</code>.</td></tr>
+      <tr><td><strong>Bloom filter (optional)</strong></td><td>Fast "is this token maybe revoked?" pre-check before hitting the denylist.</td><td>O(k) probabilistic; no false negatives — never misses a real revocation.</td></tr>
+      <tr><td><strong>CSPRNG</strong></td><td>Generate opaque refresh tokens, <code>jti</code>, PKCE verifiers, CSRF tokens.</td><td>High-entropy randomness — unguessable.</td></tr>
+    </table>
+    <p><strong>Why a denylist + Bloom filter combo is elegant:</strong> most tokens are <em>not</em> revoked, so you want the common case to cost nothing. A Bloom filter answers "definitely not revoked" in O(k) with zero I/O; only on a "maybe" do you consult Redis. Because Bloom filters have no false negatives, a revoked token can never slip through — exactly the safety property you want here.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+    <table>
+      <tr><th>Component</th><th>AWS service</th><th>Why</th></tr>
+      <tr><td>Managed auth / IdP</td><td><strong>Amazon Cognito</strong></td><td>Turnkey user pools, hosted login, social/OIDC federation, and it issues JWTs (access/ID/refresh) out of the box.</td></tr>
+      <tr><td>Token verification at the edge</td><td><strong>API Gateway</strong> (JWT / Cognito authorizer) or <strong>ALB</strong> + OIDC</td><td>Verifies the JWT signature before the request reaches your code — no per-service auth logic.</td></tr>
+      <tr><td>Custom auth logic</td><td><strong>Lambda authorizer</strong> / <strong>ECS/EKS</strong></td><td>Run rotation, reuse detection, and denylist checks; Lambda authorizer caches results.</td></tr>
+      <tr><td>Refresh / session &amp; denylist store</td><td><strong>DynamoDB</strong> (TTL) or <strong>ElastiCache (Redis)</strong></td><td>O(1) lookups with automatic TTL eviction aligned to token expiry.</td></tr>
+      <tr><td>Signing keys</td><td><strong>AWS KMS</strong> / <strong>Secrets Manager</strong></td><td>Hold the RS256 private key in KMS (sign via KMS, never export it); rotate keys safely.</td></tr>
+      <tr><td>User store</td><td><strong>Cognito</strong> or <strong>RDS/DynamoDB</strong></td><td>Credentials + profile; password hashes never leave it.</td></tr>
+      <tr><td>Edge / TLS</td><td><strong>CloudFront + WAF</strong></td><td>HTTPS everywhere, rate-limit and block credential-stuffing at the edge.</td></tr>
+    </table>
+    <p><strong>Deployment shape:</strong> the cleanest AWS answer is "let Cognito be the IdP, put a Cognito/JWT authorizer on API Gateway so every request is verified before it reaches a service, keep signing keys in KMS, and use DynamoDB-with-TTL for the refresh-token/denylist store." If you're rolling your own auth service, the same shape holds — API Gateway verifies RS256 JWTs against a JWKS endpoint, and a Lambda authorizer consults the DynamoDB denylist only when needed.</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+    <p>The two things worth showing: <strong>minting a signed JWT + refresh token at login</strong>, and <strong>verifying/refreshing with rotation &amp; reuse detection</strong>. This is idiomatic ASP.NET Core with <code>System.IdentityModel.Tokens.Jwt</code>.</p>
+
+    <h3>Issuing the token pair at login</h3>
+    <pre><span class="cmt">// On successful password check, mint a short-lived access JWT + a stored refresh token.</span>
+<span class="kw">using</span> System.IdentityModel.Tokens.Jwt;
+<span class="kw">using</span> Microsoft.IdentityModel.Tokens;
+
+<span class="kw">public class</span> <span class="typ">TokenService</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">SigningCredentials</span> _creds;  <span class="cmt">// RS256 private key (from KMS/Secrets)</span>
+    <span class="kw">private readonly</span> <span class="typ">IRefreshStore</span> _store;       <span class="cmt">// Redis / DynamoDB</span>
+
+    <span class="kw">public</span> <span class="typ">AuthResult</span> <span class="fn">IssueTokens</span>(<span class="typ">User</span> user)
+    {
+        <span class="kw">var</span> jti = <span class="typ">Guid</span>.<span class="fn">NewGuid</span>().<span class="fn">ToString</span>(<span class="str">"N"</span>);
+        <span class="kw">var</span> claims = <span class="kw">new</span>[]
+        {
+            <span class="kw">new</span> <span class="typ">Claim</span>(<span class="str">"sub"</span>, user.Id),           <span class="cmt">// who the user is</span>
+            <span class="kw">new</span> <span class="typ">Claim</span>(<span class="str">"role"</span>, user.Role),        <span class="cmt">// custom claim → authz</span>
+            <span class="kw">new</span> <span class="typ">Claim</span>(<span class="str">"jti"</span>, jti)
+        };
+
+        <span class="kw">var</span> access = <span class="kw">new</span> <span class="typ">JwtSecurityToken</span>(
+            issuer:   <span class="str">"https://auth.myapp.com"</span>,
+            audience: <span class="str">"myapp-api"</span>,
+            claims:   claims,
+            expires:  <span class="typ">DateTime</span>.UtcNow.<span class="fn">AddMinutes</span>(<span class="str">15</span>),  <span class="cmt">// SHORT TTL — bounds theft</span>
+            signingCredentials: _creds);                <span class="cmt">// RS256 → verifiers use public key</span>
+
+        <span class="cmt">// Refresh token is opaque + high-entropy, and its jti is stored server-side.</span>
+        <span class="kw">var</span> refresh = <span class="typ">RandomHelper</span>.<span class="fn">SecureToken</span>(<span class="str">32</span>);
+        _store.<span class="fn">Save</span>(refresh, user.Id, <span class="typ">TimeSpan</span>.<span class="fn">FromDays</span>(<span class="str">30</span>));  <span class="cmt">// revocable</span>
+
+        <span class="kw">return new</span> <span class="typ">AuthResult</span>(
+            <span class="kw">new</span> <span class="typ">JwtSecurityTokenHandler</span>().<span class="fn">WriteToken</span>(access), refresh);
+    }
+}</pre>
+
+    <h3>Refresh with rotation + reuse detection</h3>
+    <pre><span class="cmt">// Exchange a refresh token for a NEW pair. If a used/unknown token appears,</span>
+<span class="cmt">// treat it as theft and nuke the whole family.</span>
+<span class="kw">public</span> <span class="typ">AuthResult</span> <span class="fn">Refresh</span>(<span class="typ">string</span> presented)
+{
+    <span class="kw">var</span> record = _store.<span class="fn">Get</span>(presented);
+
+    <span class="kw">if</span> (record == <span class="kw">null</span> || record.Used)          <span class="cmt">// unknown OR already-rotated</span>
+    {
+        <span class="kw">if</span> (record?.UserId != <span class="kw">null</span>)
+            _store.<span class="fn">RevokeAllForUser</span>(record.UserId); <span class="cmt">// reuse detected → kill family</span>
+        <span class="kw">throw new</span> <span class="typ">SecurityTokenException</span>(<span class="str">"Refresh token reuse detected"</span>);
+    }
+
+    _store.<span class="fn">MarkUsed</span>(presented);               <span class="cmt">// old token can never be used again</span>
+    <span class="kw">var</span> user = _users.<span class="fn">Get</span>(record.UserId);
+    <span class="kw">return</span> <span class="fn">IssueTokens</span>(user);              <span class="cmt">// brand-new access + refresh (rotation)</span>
+}</pre>
+
+    <h3>Stateless verification middleware (the hot path)</h3>
+    <pre><span class="cmt">// Every microservice validates the signature locally — no DB, no auth-service call.</span>
+builder.Services.<span class="fn">AddAuthentication</span>().<span class="fn">AddJwtBearer</span>(o =>
+{
+    o.TokenValidationParameters = <span class="kw">new</span> <span class="typ">TokenValidationParameters</span>
+    {
+        ValidIssuer   = <span class="str">"https://auth.myapp.com"</span>,
+        ValidAudience = <span class="str">"myapp-api"</span>,
+        IssuerSigningKeyResolver = <span class="typ">Jwks</span>.<span class="fn">Resolve</span>,  <span class="cmt">// public keys from JWKS</span>
+        ValidateLifetime = <span class="kw">true</span>,                    <span class="cmt">// enforce exp</span>
+        ClockSkew = <span class="typ">TimeSpan</span>.<span class="fn">FromSeconds</span>(<span class="str">30</span>)         <span class="cmt">// tolerate minor clock drift</span>
+    };
+});</pre>
+    <p>Other stacks do the same: <code>jsonwebtoken</code>/Passport in Node, Spring Security in Java, <code>PyJWT</code>/Authlib in Python. The primitives (RS256, JWKS, rotation) are identical across languages.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+    <p><strong>Statelessness vs revocation — the central tension.</strong> Pure JWT scales beautifully but can't be revoked before expiry; pure sessions revoke instantly but add a store lookup to every request. The hybrid (short access JWT + stateful refresh) captures most of both, and you should state it as a <em>deliberate</em> choice, not a default.</p>
+    <p><strong>Token size &amp; over-stuffing.</strong> Every request carries the JWT, so cramming roles/permissions bloats headers and can't be updated until the token expires. Keep claims minimal; fetch volatile authorization data separately if needed.</p>
+    <p><strong>Clock skew &amp; key rotation.</strong> <code>exp</code> checks fail across drifting clocks — allow ~30–60s skew. Rotate signing keys via JWKS with overlapping validity so in-flight tokens still verify during a rollover.</p>
+    <p><strong>The "alg=none" and algorithm-confusion attacks.</strong> Historically, libraries could be tricked into accepting <code>alg:none</code> or verifying an RS256 token with the public key as an HS256 secret. Always <strong>pin the expected algorithm</strong> server-side and reject anything else.</p>
+
+    <div class="qa"><p class="q">Q: If JWTs are stateless, how do you log a user out instantly?</p><p class="a">You can't un-sign a token, so combine short access-token TTL (self-expires in minutes) with revoking the refresh token (no new access tokens can be minted). For hard "kill now," add a Redis <code>jti</code> denylist checked at the gateway until the token's <code>exp</code>.</p></div>
+    <div class="qa"><p class="q">Q: Why not just use long-lived access tokens and skip refresh tokens?</p><p class="a">A long-lived stateless token that's stolen is valid until it expires with no way to revoke it. Short access + rotating refresh bounds the blast radius <em>and</em> keeps a revocation lever, at the cost of a periodic refresh call.</p></div>
+    <div class="qa"><p class="q">Q: Cookie or localStorage for the token?</p><p class="a">httpOnly+Secure+SameSite cookie for the refresh token (immune to XSS reads, CSRF-mitigated by SameSite), access token in memory. localStorage is simplest but any XSS leaks it.</p></div>
+    <div class="qa"><p class="q">Q: HS256 or RS256?</p><p class="a">RS256 for microservices: the auth service signs with a private key; every service verifies with the public key via JWKS, so the secret never spreads. HS256 only when a single service both signs and verifies.</p></div>
+    <div class="qa"><p class="q">Q: How does "Login with Google" fit?</p><p class="a">OIDC Authorization Code + PKCE: redirect to Google, receive a code, exchange it server-side for Google's ID token, verify it, then mint <em>your own</em> access/refresh tokens so the rest of your system is IdP-agnostic.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <div class="pitch"><strong>30-second pitch:</strong> "I'd use a hybrid token model. Login verifies an argon2 password hash and mints two tokens: a short-lived (5–15 min) <em>access JWT</em> signed with RS256, verified locally by every service via JWKS with zero DB hits — that's what scales to 100k+ req/s — and a long-lived <em>refresh token</em> stored server-side in Redis/DynamoDB. When the access token expires, the client rotates the refresh token for a new pair, with reuse detection killing the whole token family on replay. Revocation works by deleting the refresh token plus, for hard logout, a short-lived <code>jti</code> denylist. Social login is OIDC + PKCE where I federate to Google but still mint my own tokens."</div>
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>Access token <strong>5–15 min</strong>; refresh token <strong>7–30 days</strong> (sliding, rotated).</li>
+      <li><strong>&lt;1 ms</strong> stateless signature verify vs a DB/session lookup on every request.</li>
+      <li>Payload is <strong>signed, not encrypted</strong> — never store secrets in a JWT.</li>
+      <li><strong>RS256</strong> (asymmetric) for multi-service verification via a <strong>JWKS</strong> endpoint.</li>
+    </ul>
+    <h3>5 talking points that win the round</h3>
+    <ul>
+      <li>Name the tension out loud: <strong>stateless scale vs instant revocation</strong>, then present the hybrid.</li>
+      <li><strong>Short access + stateful refresh</strong> is the whole design — say why each half exists.</li>
+      <li><strong>Rotation + reuse detection</strong> turns a stolen refresh token into a tripwire.</li>
+      <li><strong>httpOnly cookie + access-in-memory</strong> — reason about XSS vs CSRF explicitly.</li>
+      <li><strong>RS256 + JWKS</strong> so the signing secret never spreads across microservices.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://auth0.com/blog/refresh-tokens-what-are-they-and-when-to-use-them/">Auth0 — Refresh Tokens: What Are They and When to Use Them</a> — rotation, automatic reuse detection, token families, localStorage vs cookie trade-offs, SPA/PKCE guidance.</li>
+      <li><a href="https://developer.okta.com/blog/2019/02/14/modern-token-authentication-in-node-with-express">Okta Developer — Modern Token Authentication</a> — JWT structure (header/payload/signature), registered claims, HS256 vs RS256, stateless verification, OAuth2 token endpoint.</li>
+      <li><a href="https://datatracker.ietf.org/doc/html/rfc7519">RFC 7519 — JSON Web Token (JWT)</a> — the spec: claim definitions and validation rules.</li>
+      <li><a href="https://datatracker.ietf.org/doc/html/rfc9700">OAuth 2.0 Security Best Current Practice (RFC 9700)</a> — refresh token rotation, sender-constraining, and current recommendations.</li>
+      <li><a href="https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html">OWASP — JWT Security Cheat Sheet</a> — alg-confusion / <code>alg:none</code> attacks and hardening.</li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

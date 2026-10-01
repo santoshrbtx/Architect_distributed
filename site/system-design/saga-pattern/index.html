@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Saga Pattern — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #ffd166;
+    --laymen-bg: #fffbe6;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.65; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero { background: linear-gradient(135deg, #7048e8 0%, #4361ee 50%, #2dc653 100%); color: #fff; border-radius: var(--radius); padding: 44px 38px; box-shadow: var(--shadow); margin-bottom: 24px; }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc { position: sticky; top: 12px; z-index: 5; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 26px; box-shadow: var(--shadow); display: flex; gap: 6px; flex-wrap: wrap; }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px; box-shadow: var(--shadow); }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);  background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge { display: inline-block; font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff; }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: #c99500; }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  h4 { margin: 16px 0 6px; font-size: 1rem; color: var(--arch); }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+  .callout { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--arch); border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+  .callout.warn { border-left-color: var(--scenario); background: var(--scenario-bg); }
+  .callout.good { border-left-color: var(--accent); background: #e6f9ec; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+  @media (max-width:720px){ .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Microservices Data Consistency</div>
+    <h1>The Saga Pattern</h1>
+    <p>The recommended alternative to distributed 2PC transactions across microservices — a sequence of local transactions coordinated by events or an orchestrator, with compensations instead of rollbacks. From Chris Richardson's <em>Microservices Patterns</em> and Sam Newman's <em>Building Microservices</em>.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#why">📋 Why not 2PC</a>
+    <a href="#concepts">🧩 Core Concepts</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#isolation">🚧 Isolation</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 Code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>Why sagas exist</h2>
+    <p>A customer clicks "Place Order" on Amazon. Behind that one click, four services must all agree: <strong>Order Service</strong> creates the order, <strong>Payment Service</strong> charges the card, <strong>Inventory Service</strong> reserves stock, and <strong>Shipping Service</strong> schedules a courier. Each service owns its own database (the <em>Database-per-Service</em> pattern). If step three fails — the warehouse is out of stock — you cannot leave the customer's card charged. You need a way to <strong>either complete all four steps, or undo the ones already done</strong>.</p>
+    <p>In the monolith days you would wrap the whole thing in <code>BEGIN TRANSACTION … COMMIT</code>. In microservices that's off the table: each service has a different database, and even when they don't, <strong>two-phase commit (2PC) doesn't work well across services</strong> — it couples them, holds locks across network hops, and one hung participant blocks everyone. Chris Richardson's <em>Microservices Patterns</em> and Sam Newman's <em>Building Microservices</em> both name the same alternative: <strong>the Saga pattern</strong>.</p>
+    <p>A saga is a sequence of <em>local</em> transactions. Each service commits its own change and emits a message. The next service reacts. If any step fails, the saga runs <em>compensating transactions</em> — new local transactions that semantically undo the earlier ones. Amazon uses this pattern for orders. Uber uses it for rides. Netflix uses it for subscription lifecycles. Every SaaS billing system does something like it. This page explains it deeply enough that you can whiteboard it in an interview and implement it on a real team.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In plain English</span>
+    <h2>The story, told without any jargon</h2>
+    <p>Imagine <strong>booking a foreign holiday</strong>. You want a hotel room in Paris, a plane ticket to get there, and a rental car when you arrive. Three separate companies, three separate systems. None of them talks to the others.</p>
+    <p>The <strong>old way</strong> (a distributed transaction) is to say: "everyone, hold your bookings — I'll confirm once I've heard back from all of you. If anyone can't do it, we all cancel." In the real world this is silly — you can't ask an airline to <em>freeze</em> a seat while you wait to hear back from a hotel. Airlines don't work that way, and neither do most software services.</p>
+    <p>The <strong>saga way</strong> is what a human actually does: <strong>book them one at a time, in order.</strong> Book the hotel. If confirmed, book the flight. If confirmed, book the car. If the car company says "sorry, out of cars", you don't undo them with a magic reversal — instead, you <strong>cancel the flight and cancel the hotel by phoning them back</strong>. That "phone call to cancel" is what the pattern calls a <strong>compensating transaction</strong>. It doesn't <em>rewind</em> the booking — it just <em>makes a new booking that means "please undo the last one"</em>.</p>
+    <p>There are two ways to run the sequence. Either <strong>each service knows what to do next</strong> ("when the hotel confirms, the flight service should book automatically") — that's <em>choreography</em>. Or you can have a <strong>single conductor</strong> — a travel agent — who calls each company one by one and decides when to stop or compensate. That's <em>orchestration</em>. Both work; the trade-off is coupling versus centralisation.</p>
+    <p>The catch: while the booking is in flight, <strong>the world is in an in-between state</strong>. Your credit card <em>has</em> been charged for the hotel while you're waiting for the flight. If someone else looks at your card in that instant, they see a charge that might still be undone. Traditional database transactions hide this ("isolation"); sagas don't. So you have to <em>design around it</em> — for example, mark the hotel booking as "pending" until every step succeeds. That's the whole idea. <strong>Book one thing at a time; if something breaks, phone back and cancel; be honest that the world is briefly in-progress.</strong></p>
+  </section>
+
+  <section id="why" class="card reqs">
+    <span class="badge">📋 Why 2PC isn't an option</span>
+    <h2>What the saga replaces, and what it gives up</h2>
+    <p>A distributed transaction (usually two-phase commit) is elegant on paper: a coordinator asks all participants "can you commit?", waits for a unanimous yes, then tells them "commit". Everyone commits atomically. Locks are held across the network. Beautiful — until a participant crashes with a prepared transaction still open, and now every other participant is blocked, holding locks, until an operator intervenes. This is why the microservices community rejects it:</p>
+    <table>
+      <thead><tr><th>Concern</th><th>2PC</th><th>Saga</th></tr></thead>
+      <tbody>
+        <tr><td>Coordination</td><td>Synchronous, blocking</td><td>Asynchronous, message-driven</td></tr>
+        <tr><td>Locking</td><td>Cross-service locks held during prepare</td><td>No cross-service locks; each service commits locally</td></tr>
+        <tr><td>Coupling</td><td>Tight — every service must implement XA / TransactionManager protocol</td><td>Loose — services exchange domain events / commands</td></tr>
+        <tr><td>Failure tolerance</td><td>A crashed prepared participant blocks everyone</td><td>Failed step triggers compensations; no blocking</td></tr>
+        <tr><td>ACID</td><td>Full — A, C, I, D across services</td><td>ACD only. Isolation is <strong>not</strong> guaranteed. Consistency is eventual.</td></tr>
+        <tr><td>Rollback</td><td>Automatic (undo log)</td><td>Manual — developer writes compensating transactions</td></tr>
+        <tr><td>Complexity</td><td>Simple mental model, complex operations</td><td>Complex mental model, simple operations</td></tr>
+        <tr><td>Latency</td><td>Latency of slowest participant × 2 (prepare + commit)</td><td>Latency of critical path only</td></tr>
+        <tr><td>Cloud-nativeness</td><td>Poor — RDBMS + XA required</td><td>Excellent — event-driven, works with any store</td></tr>
+      </tbody>
+    </table>
+    <p>The trade the saga makes, in one line: <strong>you trade automatic rollback and isolation for loose coupling, availability, and cloud-scale.</strong> This is essentially never worth doing for a single service (use ACID). It is almost always worth doing across services.</p>
+  </section>
+
+  <section id="concepts" class="card">
+    <h2>🧩 Core concepts you must be able to name</h2>
+    <p>These are the vocabulary items an interviewer will assume you know. Master them and you sound senior.</p>
+    <table>
+      <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Local transaction</strong></td><td>A normal ACID transaction inside <em>one</em> service. The atom of a saga.</td></tr>
+        <tr><td><strong>Compensating transaction</strong></td><td>A new local transaction that <em>semantically undoes</em> a previously committed one. e.g. <em>ChargeCard</em> → <em>RefundCard</em>. Not a rollback; a business-level reversal.</td></tr>
+        <tr><td><strong>Compensable transaction</strong></td><td>A step for which a compensation is <em>possible</em> (and defined).</td></tr>
+        <tr><td><strong>Retryable transaction</strong></td><td>A step that follows the pivot; must be <em>idempotent</em> and will be retried until it succeeds.</td></tr>
+        <tr><td><strong>Pivot transaction</strong></td><td>The <em>point of no return</em>. Once it commits, compensations of earlier steps stop being business-valid. Everything after the pivot must be retried until it eventually succeeds.</td></tr>
+        <tr><td><strong>Choreography</strong></td><td>Coordination style where services publish events; peers react. No central controller.</td></tr>
+        <tr><td><strong>Orchestration</strong></td><td>Coordination style where a central <em>orchestrator</em> commands each participant and decides the flow. Typically implemented as a state machine.</td></tr>
+        <tr><td><strong>Saga log</strong></td><td>A durable record of what steps the saga has executed. Lets a crashed orchestrator resume.</td></tr>
+        <tr><td><strong>Correlation ID</strong></td><td>An ID stamped on every message in a saga so replies can be matched to the right saga instance.</td></tr>
+        <tr><td><strong>ACD (not ACID)</strong></td><td>What sagas provide: <em>Atomicity</em> via compensations, <em>Consistency</em> eventually, <em>Durability</em> via local commits + reliable messaging. <strong>Isolation is dropped</strong>.</td></tr>
+        <tr><td><strong>Outbox pattern</strong></td><td>Atomically writing the DB update <em>and</em> the outgoing message to the same DB transaction, then publishing later. This is how you avoid "committed the row but never sent the event".</td></tr>
+        <tr><td><strong>Idempotent handler</strong></td><td>Consumer stores a de-dup key so a retried message doesn't apply twice. Non-negotiable.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ Architecture — the two flavours</span>
+    <h2>Choreography vs Orchestration, side by side</h2>
+    <p>Both approaches drive the <em>same</em> saga; the difference is where the flow logic lives. In a real system you may mix them: choreography for simple flows, orchestration for the ones that need audit and error recovery.</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 940 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="s-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+          <marker id="s-cmd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f4a259"/>
+          </marker>
+        </defs>
+
+        <!-- Choreography column -->
+        <rect x="20" y="20" width="440" height="420" rx="14" fill="#1a2340" stroke="#2a3652"/>
+        <text x="240" y="46" text-anchor="middle" fill="#7fa2ff" font-weight="700" font-size="14">CHOREOGRAPHY · services listen to events</text>
+
+        <rect x="50" y="70" width="150" height="50" rx="10" fill="#4361ee"/>
+        <text x="125" y="100" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Order Service</text>
+        <rect x="280" y="70" width="150" height="50" rx="10" fill="#4361ee"/>
+        <text x="355" y="100" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Customer Service</text>
+        <rect x="50" y="200" width="150" height="50" rx="10" fill="#4361ee"/>
+        <text x="125" y="230" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Payment Service</text>
+        <rect x="280" y="200" width="150" height="50" rx="10" fill="#4361ee"/>
+        <text x="355" y="230" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Inventory Service</text>
+        <rect x="165" y="330" width="150" height="50" rx="10" fill="#4361ee"/>
+        <text x="240" y="360" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Shipping Service</text>
+
+        <!-- Event bus -->
+        <rect x="50" y="140" width="380" height="40" rx="8" fill="#0f1a30" stroke="#f4a259"/>
+        <text x="240" y="165" text-anchor="middle" fill="#f4a259" font-weight="700" font-size="12">Message Broker (Kafka / SNS)</text>
+
+        <line x1="125" y1="120" x2="125" y2="140" stroke="#7fa2ff" stroke-width="2" marker-end="url(#s-arr)"/>
+        <line x1="180" y1="180" x2="355" y2="200" stroke="#7fa2ff" stroke-width="2" marker-end="url(#s-arr)"/>
+        <line x1="300" y1="180" x2="125" y2="200" stroke="#7fa2ff" stroke-width="2" marker-end="url(#s-arr)"/>
+        <line x1="240" y1="250" x2="240" y2="330" stroke="#7fa2ff" stroke-width="2" marker-end="url(#s-arr)"/>
+
+        <text x="240" y="410" text-anchor="middle" fill="#c6d0e0" font-size="11">Each service publishes events, others react. No central controller.</text>
+        <text x="240" y="428" text-anchor="middle" fill="#7f8aa0" font-size="10">Simple flows only. Adding steps means changing everyone.</text>
+
+        <!-- Orchestration column -->
+        <rect x="480" y="20" width="440" height="420" rx="14" fill="#1a2340" stroke="#2a3652"/>
+        <text x="700" y="46" text-anchor="middle" fill="#7fa2ff" font-weight="700" font-size="14">ORCHESTRATION · one conductor</text>
+
+        <rect x="600" y="70" width="200" height="60" rx="10" fill="#7048e8"/>
+        <text x="700" y="94" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Order Saga Orchestrator</text>
+        <text x="700" y="112" text-anchor="middle" fill="#fff" font-size="10">state machine · saga log</text>
+
+        <rect x="510" y="200" width="130" height="50" rx="10" fill="#4361ee"/>
+        <text x="575" y="230" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Customer Svc</text>
+        <rect x="650" y="200" width="130" height="50" rx="10" fill="#4361ee"/>
+        <text x="715" y="230" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Payment Svc</text>
+        <rect x="790" y="200" width="120" height="50" rx="10" fill="#4361ee"/>
+        <text x="850" y="230" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Inventory</text>
+        <rect x="600" y="330" width="200" height="50" rx="10" fill="#4361ee"/>
+        <text x="700" y="360" text-anchor="middle" fill="#fff" font-weight="700" font-size="12">Shipping Service</text>
+
+        <line x1="640" y1="130" x2="575" y2="200" stroke="#f4a259" stroke-width="2" marker-end="url(#s-cmd)"/>
+        <line x1="700" y1="130" x2="715" y2="200" stroke="#f4a259" stroke-width="2" marker-end="url(#s-cmd)"/>
+        <line x1="760" y1="130" x2="850" y2="200" stroke="#f4a259" stroke-width="2" marker-end="url(#s-cmd)"/>
+        <line x1="700" y1="250" x2="700" y2="330" stroke="#f4a259" stroke-width="2" marker-end="url(#s-cmd)"/>
+
+        <text x="700" y="410" text-anchor="middle" fill="#c6d0e0" font-size="11">Orchestrator issues commands, receives replies, decides next step.</text>
+        <text x="700" y="428" text-anchor="middle" fill="#7f8aa0" font-size="10">Complex flows · clear audit · single point of design (and failure).</text>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#7fa2ff"></span> Domain event</span>
+        <span><span class="dot" style="background:#f4a259"></span> Command / reply</span>
+        <span><span class="dot" style="background:#7048e8"></span> Orchestrator</span>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="callout good">
+        <strong>Choreography wins when</strong>
+        <ul>
+          <li>The flow is short (2–3 services).</li>
+          <li>Steps are naturally driven by domain events.</li>
+          <li>You want no central single point of failure.</li>
+          <li>Services already publish rich domain events for other reasons.</li>
+        </ul>
+      </div>
+      <div class="callout good">
+        <strong>Orchestration wins when</strong>
+        <ul>
+          <li>The flow has 4+ services, branches, or retries.</li>
+          <li>You need a clear audit trail of the saga state.</li>
+          <li>You need to add new steps without touching every service.</li>
+          <li>Failure recovery / debugging must be centralised.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout warn">
+      <strong>The failure modes to name:</strong> choreography suffers from <em>cyclic dependencies</em> (Service A listens for B's events, B for A's) and <em>hidden workflow</em> (no single place shows the full sequence). Orchestration introduces a <em>single point of failure</em> (the orchestrator must be highly-available) and <em>God-service</em> risk (business logic leaks into the orchestrator). Interviewers reward you for volunteering these before being asked.
+    </div>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch an "Order" saga run — and then fail and compensate</h2>
+    <p>The animation plays a Create-Order saga (orchestration flavour). It succeeds through four services, then plays a second run where inventory fails and every prior step compensates in reverse.</p>
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="a-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#7fa2ff"/>
+          </marker>
+        </defs>
+        <!-- Orchestrator -->
+        <rect id="orch" x="330" y="30" width="240" height="60" rx="10" fill="#7048e8" data-anim/>
+        <text x="450" y="55" text-anchor="middle" fill="#fff" font-weight="700" font-size="13">Order Saga Orchestrator</text>
+        <text x="450" y="72" text-anchor="middle" fill="#fff" font-size="10">state machine</text>
+
+        <!-- Services -->
+        <g>
+          <rect id="s-order"  x="30"  y="180" width="180" height="60" rx="10" fill="#2a3652" stroke="#4361ee" data-anim/>
+          <text x="120" y="205" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">Order Service</text>
+          <text id="s-order-status" x="120" y="225" text-anchor="middle" fill="#7f8aa0" font-size="10">idle</text>
+
+          <rect id="s-pay"    x="240" y="180" width="180" height="60" rx="10" fill="#2a3652" stroke="#4361ee" data-anim/>
+          <text x="330" y="205" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">Payment Service</text>
+          <text id="s-pay-status" x="330" y="225" text-anchor="middle" fill="#7f8aa0" font-size="10">idle</text>
+
+          <rect id="s-inv"    x="450" y="180" width="180" height="60" rx="10" fill="#2a3652" stroke="#4361ee" data-anim/>
+          <text x="540" y="205" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">Inventory Service</text>
+          <text id="s-inv-status" x="540" y="225" text-anchor="middle" fill="#7f8aa0" font-size="10">idle</text>
+
+          <rect id="s-ship"   x="660" y="180" width="210" height="60" rx="10" fill="#2a3652" stroke="#4361ee" data-anim/>
+          <text x="765" y="205" text-anchor="middle" fill="#c6d0e0" font-weight="700" font-size="13">Shipping Service</text>
+          <text id="s-ship-status" x="765" y="225" text-anchor="middle" fill="#7f8aa0" font-size="10">idle</text>
+        </g>
+
+        <!-- lines from orch to services -->
+        <line x1="400" y1="90" x2="120" y2="180" stroke="#7f8aa0" stroke-width="1.5" stroke-dasharray="4,4"/>
+        <line x1="430" y1="90" x2="330" y2="180" stroke="#7f8aa0" stroke-width="1.5" stroke-dasharray="4,4"/>
+        <line x1="470" y1="90" x2="540" y2="180" stroke="#7f8aa0" stroke-width="1.5" stroke-dasharray="4,4"/>
+        <line x1="500" y1="90" x2="765" y2="180" stroke="#7f8aa0" stroke-width="1.5" stroke-dasharray="4,4"/>
+
+        <!-- Log -->
+        <rect x="20" y="290" width="860" height="180" rx="10" fill="#0f1a30" stroke="#2a3652"/>
+        <text x="35" y="315" fill="#7fa2ff" font-weight="700" font-size="12">SAGA LOG</text>
+        <text id="log1" x="35" y="345" fill="#c6d0e0" font-size="12" font-family="Consolas, monospace" data-anim class="a-hidden">▸</text>
+        <text id="log2" x="35" y="370" fill="#c6d0e0" font-size="12" font-family="Consolas, monospace" data-anim class="a-hidden">▸</text>
+        <text id="log3" x="35" y="395" fill="#c6d0e0" font-size="12" font-family="Consolas, monospace" data-anim class="a-hidden">▸</text>
+        <text id="log4" x="35" y="420" fill="#c6d0e0" font-size="12" font-family="Consolas, monospace" data-anim class="a-hidden">▸</text>
+        <text id="log5" x="35" y="445" fill="#c6d0e0" font-size="12" font-family="Consolas, monospace" data-anim class="a-hidden">▸</text>
+      </svg>
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next" class="secondary">Step →</button>
+        <button data-act="prev" class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+    <script>
+    (function(){
+      const root = document.getElementById('anim1'); if(!root) return;
+      const $=(s)=>root.querySelector(s);
+      const $$=(s)=>root.querySelectorAll(s);
+      const label = $('.anim-step-label');
+      const cap   = $('.anim-step-caption');
+      const btnPlay = root.querySelector('[data-act="play"]');
+      const btnNext = root.querySelector('[data-act="next"]');
+      const btnPrev = root.querySelector('[data-act="prev"]');
+      const btnReset= root.querySelector('[data-act="reset"]');
+      function status(id, text, color){ const t = $('#'+id+'-status'); t.textContent = text; t.setAttribute('fill', color||'#7f8aa0'); const s=$('#'+id); s.setAttribute('stroke', color==='#f7567c'?'#f7567c':(color==='#2dc653'?'#2dc653':'#4361ee')); }
+      function log(i, text, color){ const el=$('#log'+i); el.classList.remove('a-hidden'); el.textContent = text; el.setAttribute('fill', color||'#c6d0e0'); }
+      function glow(id){ $('#'+id).classList.add('a-glow'); }
+
+      const CFG = {
+        intro: 'Order saga: 4 services succeed, then a second run fails at Inventory and every prior step compensates.',
+        interval: 1500,
+        reset: (r) => {
+          r.querySelectorAll('[data-anim]').forEach(el => el.classList.remove('a-glow'));
+          ['log1','log2','log3','log4','log5'].forEach(id => $('#'+id).classList.add('a-hidden'));
+          ['s-order','s-pay','s-inv','s-ship'].forEach(id => {
+            const s=$('#'+id); s.setAttribute('stroke','#4361ee'); const t=$('#'+id+'-status'); t.textContent='idle'; t.setAttribute('fill','#7f8aa0');
+          });
+        },
+        steps: [
+          { caption: 'Orchestrator starts saga. Assigns correlation-id and writes to saga log.',
+            apply:(r)=>{ glow('orch'); log(1,'▸ START saga=abc-123','#7fa2ff'); } },
+          { caption: 'Command: CreateOrder → Order Service. Order committed PENDING.',
+            apply:(r)=>{ glow('s-order'); status('s-order','PENDING committed','#2dc653'); log(2,'▸ CreateOrder OK · order=42 PENDING','#2dc653'); } },
+          { caption: 'Command: ChargeCard → Payment Service. Card charged locally.',
+            apply:(r)=>{ glow('s-pay'); status('s-pay','charged','#2dc653'); log(3,'▸ ChargeCard OK · $299','#2dc653'); } },
+          { caption: 'Command: ReserveStock → Inventory Service. Stock reserved (this is the PIVOT — no going back after this succeeds).',
+            apply:(r)=>{ glow('s-inv'); status('s-inv','reserved (pivot)','#f4a259'); log(4,'▸ ReserveStock OK · PIVOT','#f4a259'); } },
+          { caption: 'Command: ScheduleShipment → Shipping Service. Retryable transaction — retried until it succeeds.',
+            apply:(r)=>{ glow('s-ship'); status('s-ship','scheduled','#2dc653'); log(5,'▸ ScheduleShipment OK · APPROVED','#2dc653'); } },
+          { caption: 'Now a second saga runs — CreateOrder OK, ChargeCard OK, but ReserveStock FAILS.',
+            apply:(r)=>{ ['s-order','s-pay','s-inv','s-ship'].forEach(id => { const s=$('#'+id); s.setAttribute('stroke','#4361ee'); const t=$('#'+id+'-status'); t.textContent='idle'; t.setAttribute('fill','#7f8aa0'); }); ['log1','log2','log3','log4','log5'].forEach(id => $('#'+id).classList.add('a-hidden')); glow('orch'); log(1,'▸ START saga=def-456','#7fa2ff'); status('s-order','committed','#2dc653'); log(2,'▸ CreateOrder OK','#2dc653'); status('s-pay','charged','#2dc653'); log(3,'▸ ChargeCard OK','#2dc653'); } },
+          { caption: 'Inventory replies "out of stock". Saga enters COMPENSATING state.',
+            apply:(r)=>{ status('s-inv','OUT OF STOCK','#f7567c'); log(4,'✗ ReserveStock FAILED — begin compensations','#f7567c'); } },
+          { caption: 'Compensation 1: RefundCard → Payment Service. New local transaction that reverses the charge.',
+            apply:(r)=>{ glow('s-pay'); status('s-pay','refunded','#f4a259'); log(5,'↶ RefundCard OK · compensation','#f4a259'); } },
+          { caption: 'Compensation 2: CancelOrder → Order Service. Order flipped to REJECTED. Saga ends failed but consistent.',
+            apply:(r)=>{ glow('s-order'); status('s-order','REJECTED','#f4a259'); log(5,'↶ CancelOrder OK · saga REJECTED (consistent)','#f4a259'); } }
+        ]
+      };
+      let idx=-1, playing=false, timer=null;
+      function goto(i){ if(i<0||i>=CFG.steps.length) return; CFG.reset(root); for(let k=0;k<=i;k++) CFG.steps[k].apply(root); idx=i; label.textContent=`Step ${i+1}/${CFG.steps.length}`; cap.textContent=CFG.steps[i].caption; }
+      function reset(){ idx=-1; playing=false; if(timer){clearTimeout(timer); timer=null;} CFG.reset(root); label.textContent='Ready'; cap.textContent=CFG.intro; btnPlay.textContent='▶ Play'; }
+      function play(){ if(playing){ playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play'; return; } if(idx>=CFG.steps.length-1) reset(); playing=true; btnPlay.textContent='⏸ Pause'; function tick(){ if(!playing) return; if(idx+1<CFG.steps.length) goto(idx+1); if(idx<CFG.steps.length-1) timer=setTimeout(tick,CFG.interval); else{playing=false; btnPlay.textContent='▶ Replay';} } timer=setTimeout(tick,400); }
+      btnPlay.addEventListener('click', play);
+      btnReset.addEventListener('click', reset);
+      btnNext && btnNext.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx+1); });
+      btnPrev && btnPrev.addEventListener('click', () => { if(playing){playing=false; if(timer)clearTimeout(timer); btnPlay.textContent='▶ Play';} goto(idx-1); });
+      reset();
+    })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Deep-dive — the details Chris Richardson &amp; Sam Newman emphasise</h2>
+
+    <h3>Local transactions plus reliable messaging</h3>
+    <p>Every saga step is a normal ACID transaction inside <em>one</em> service. The tricky bit is <strong>atomically committing the data change AND sending the next message</strong>. If you write to the DB and then the process dies before publishing, the saga stalls. If you publish first and then the DB write fails, you have a phantom event. The community answer, cited in both books, is the <strong>Transactional Outbox</strong> pattern: write the event to an <code>outbox</code> table in the same DB transaction as the business update, and have a separate polling process (or <strong>Debezium</strong>-style change-data-capture) publish outbox rows to the broker. Same for the reverse direction — the <strong>Inbox</strong> pattern deduplicates incoming messages by message-id.</p>
+
+    <h3>Compensating transactions must be designed, not derived</h3>
+    <p>There is no automatic compensation. A refund isn't a "reverse of the charge" — it's a <em>new</em> charge with an opposite sign, with different business rules (partial refund? fee? refund window?). Every step of a saga must ship with its designed compensation. Steps that <em>cannot</em> be compensated (email sent, missile launched) become the <strong>pivot</strong> — the point past which the saga must complete forward, not backward.</p>
+
+    <h3>Retryable vs Compensable vs Pivot — the three step classes</h3>
+    <p>Chris Richardson breaks each step into one of three classes:</p>
+    <ul>
+      <li><strong>Compensable</strong> — a step for which a compensating transaction is defined. Anything before the pivot.</li>
+      <li><strong>Pivot</strong> — the go / no-go boundary. If it succeeds, the saga will complete forward, no matter how many retries it takes on later steps.</li>
+      <li><strong>Retryable</strong> — a step <em>after</em> the pivot that is idempotent and will be retried until it eventually succeeds. It cannot fail permanently.</li>
+    </ul>
+    <p>Identifying the pivot is the design decision that shapes everything. In "Place Order", the pivot is often <em>ReserveStock</em> — after stock is reserved you must ship it, refund becomes accounting-only.</p>
+
+    <h3>Orchestrator as a state machine</h3>
+    <p>The orchestrator is best modelled as an explicit state machine — <code>PENDING → PAYMENT_APPROVED → STOCK_RESERVED → SHIPPED → APPROVED</code>, with error transitions <code>PAYMENT_FAILED</code>, <code>STOCK_FAILED</code>, and each error mapping to the specific compensations to run. Frameworks like <strong>Eventuate Tram Sagas</strong>, <strong>Axon</strong>, <strong>MassTransit Saga State Machines</strong>, <strong>Temporal.io</strong>, and cloud-native <strong>AWS Step Functions</strong> exist for exactly this. Rolling your own is a rite of passage the community strongly recommends against beyond toy examples.</p>
+
+    <h3>The saga log &amp; correlation ID</h3>
+    <p>Every saga instance writes to a durable <strong>saga log</strong> (in Postgres, DynamoDB, or a dedicated store) at each step boundary, so a crashed orchestrator can resume. Every message carries a <strong>correlation ID</strong> (typically the saga instance ID) that participants echo in replies. This is what makes debugging tractable: you can grep the correlation ID across every service's logs and reconstruct the whole story.</p>
+
+    <h3>Client response strategies</h3>
+    <p>A <code>POST /orders</code> starts a saga that may take seconds to finish. You have three options for responding to the client:</p>
+    <ol>
+      <li><strong>Block until done</strong> — simple, but ties HTTP request lifetime to saga latency. Fine for &lt;1 s sagas.</li>
+      <li><strong>Return an ID; client polls</strong> — <code>POST /orders</code> returns <code>202 Accepted { id }</code>; client GETs <code>/orders/{id}</code>. This is the most common pattern.</li>
+      <li><strong>Return an ID; server pushes</strong> — websocket, SSE, or a webhook fires when the saga completes. Best UX; more infrastructure.</li>
+    </ol>
+
+    <h3>Testing a saga</h3>
+    <p>Unit-test each step in isolation. Integration-test the orchestrator against contract-mocked participants. End-to-end test the happy path plus <em>every</em> compensation path in a real environment. Chaos-test by injecting failures at each step and verifying the system lands in a consistent state. If you skip the compensation tests you will ship a broken system — this is the biggest production hazard.</p>
+  </section>
+
+  <section id="isolation" class="card">
+    <h2>🚧 Isolation — the "I" the saga drops, and how to defend</h2>
+    <p>ACID's <em>Isolation</em> means concurrent transactions look sequential. Sagas can't guarantee this — while a saga is in flight, other sagas can see and modify the same data. Chris Richardson lists three specific anomalies and six countermeasures that every saga-shipping architect must know.</p>
+
+    <h3>The three anomalies</h3>
+    <table>
+      <thead><tr><th>Anomaly</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Lost updates</strong></td><td>Two sagas write the same data; the second overwrites the first's write, unaware.</td></tr>
+        <tr><td><strong>Dirty reads</strong></td><td>A saga reads data that another saga has changed and might still compensate (i.e., "unroll"). The read is of a value that will vanish.</td></tr>
+        <tr><td><strong>Fuzzy / non-repeatable reads</strong></td><td>Two reads within the same saga see different values because another saga wrote in between.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The six countermeasures</h3>
+    <table>
+      <thead><tr><th>Countermeasure</th><th>How</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Semantic lock</strong></td><td>Mark the affected row as "pending / in a saga" (e.g. <code>order.state = PENDING</code>). Other operations see the flag and either wait or short-circuit. Released when the saga finishes or compensates.</td></tr>
+        <tr><td><strong>Commutative updates</strong></td><td>Design updates so ordering doesn't matter — e.g. <code>balance += 10</code> instead of <code>balance = 110</code>. Sagas can run in any interleaving and still converge.</td></tr>
+        <tr><td><strong>Pessimistic view</strong></td><td>Reorder the saga so <em>updates</em> happen in retryable (post-pivot) steps, not compensable ones. Prevents dirty reads.</td></tr>
+        <tr><td><strong>Reread value</strong></td><td>Before applying an update, re-read the row and confirm it hasn't changed. If it has, abort and restart the saga (optimistic concurrency).</td></tr>
+        <tr><td><strong>Version file</strong></td><td>Keep an ordered log of operations on a record. Apply them in the correct sequence to prevent conflicts.</td></tr>
+        <tr><td><strong>By-value (risk-based)</strong></td><td>Choose a mechanism dynamically per risk. Low-value orders → saga; multi-million-dollar transfer → distributed transaction after all.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout">The most common in practice is <strong>semantic lock</strong> (an explicit <code>PENDING</code> state) combined with <strong>reread</strong> for optimistic concurrency. Together they cover 90% of real-world saga hazards.</div>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms in a saga</h2>
+    <table>
+      <thead><tr><th>Concept</th><th>Structure / algorithm</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td>Orchestrator</td><td><strong>Finite state machine</strong></td><td>Explicit states + transitions; each transition emits commands.</td></tr>
+        <tr><td>Saga log</td><td><strong>Append-only ordered log</strong></td><td>Durable record of every step boundary; used to resume after crash.</td></tr>
+        <tr><td>Correlation</td><td><strong>UUID / composite key</strong></td><td>Threaded through every message to identify the saga instance.</td></tr>
+        <tr><td>Idempotent handlers</td><td><strong>Hash set of message-ids</strong> (Inbox)</td><td>O(1) duplicate detection; guarantees at-most-once effect under at-least-once delivery.</td></tr>
+        <tr><td>Outbox / CDC</td><td><strong>Ring buffer / commit log</strong></td><td>Atomic write of DB update + outgoing event; polled or streamed to broker.</td></tr>
+        <tr><td>Retry with backoff</td><td><strong>Exponential backoff + jitter</strong></td><td>For retryable (post-pivot) steps; avoids thundering-herd.</td></tr>
+        <tr><td>Compensations</td><td><strong>Reverse-order stack</strong></td><td>Compensations run in LIFO order of the compensable steps that actually completed.</td></tr>
+        <tr><td>Isolation defense</td><td><strong>Semantic lock</strong> (row-level flag) + <strong>optimistic-concurrency version</strong></td><td>Countermeasure to dirty read / lost update.</td></tr>
+      </tbody>
+    </table>
+    <table>
+      <thead><tr><th>Operation</th><th>Complexity</th></tr></thead>
+      <tbody>
+        <tr><td>Saga step execution</td><td>O(1) per step (per service)</td></tr>
+        <tr><td>Compensation on failure</td><td>O(steps_completed) — LIFO reverse execution</td></tr>
+        <tr><td>Idempotency check (Inbox)</td><td>O(1)</td></tr>
+        <tr><td>Orchestrator crash recovery</td><td>O(log-length-since-checkpoint)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping a saga onto AWS</h2>
+    <table>
+      <thead><tr><th>Component</th><th>AWS service</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Orchestrator (state machine)</td><td><strong>AWS Step Functions</strong></td><td>Native saga-as-state-machine; visual workflow; built-in retries and catch/compensate blocks. Best-in-class for orchestration.</td></tr>
+        <tr><td>Alternative orchestrator</td><td><strong>Temporal.io on ECS</strong>, <strong>MassTransit</strong> on .NET</td><td>When you want code-based sagas with more expressive workflow logic.</td></tr>
+        <tr><td>Message bus (choreography)</td><td><strong>SNS + SQS</strong>, <strong>EventBridge</strong>, <strong>MSK (Kafka)</strong>, <strong>Kinesis</strong></td><td>SNS + SQS = simple pub/sub; EventBridge = declarative routing; MSK = ordered log for high throughput.</td></tr>
+        <tr><td>Saga log</td><td><strong>DynamoDB</strong> table keyed by saga-id; <strong>Aurora</strong> with an <code>outbox</code> table</td><td>DynamoDB scales cheaply; Aurora if you already have Postgres.</td></tr>
+        <tr><td>Outbox pattern</td><td>DynamoDB Streams → Lambda → SNS; or Debezium + MSK</td><td>Atomic write-and-publish without XA.</td></tr>
+        <tr><td>Idempotency store</td><td><strong>DynamoDB</strong> item per message-id with TTL</td><td>O(1) dedup, auto-expire old keys.</td></tr>
+        <tr><td>Service compute</td><td><strong>Lambda</strong>, <strong>ECS Fargate</strong>, <strong>EKS</strong></td><td>Any of the three; Step Functions can invoke Lambda synchronously or via Task tokens for long-running work.</td></tr>
+        <tr><td>Observability</td><td><strong>X-Ray</strong>, <strong>CloudWatch Logs Insights</strong>, <strong>OpenTelemetry</strong></td><td>Correlation-id propagated as trace-id; grep across services.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout good"><strong>Simplest AWS-native saga:</strong> Step Functions state machine → tasks are Lambdas → each Lambda is a participant → Step Functions handles retries, timeouts, and calls compensating Lambdas on Catch blocks. This gets you 80% of what a "proper" saga framework provides with almost no infrastructure to run.</div>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 Code — a C# orchestrator saga sketch (MassTransit-style)</h2>
+    <p>Here is a minimal, realistic C# orchestrator using explicit state, correlation-id, and compensations. This is close to what a MassTransit or Temporal.io implementation would look like in production.</p>
+<pre><span class="cmt">// The saga's state — persisted after each step via the saga log.</span>
+<span class="kw">public class</span> <span class="typ">OrderSagaState</span>
+{
+    <span class="kw">public</span> <span class="typ">Guid</span> CorrelationId { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="typ">string</span> State { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="str">"PENDING"</span>;
+    <span class="kw">public</span> <span class="typ">int</span>  OrderId { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="typ">decimal</span> AmountCharged { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public</span> <span class="typ">bool</span> StockReserved { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+
+<span class="cmt">// The orchestrator — one method per state transition, one compensating handler each.</span>
+<span class="kw">public class</span> <span class="typ">OrderSaga</span>(<span class="typ">ISagaRepository</span>&lt;<span class="typ">OrderSagaState</span>&gt; repo, <span class="typ">IBus</span> bus, <span class="typ">ILogger</span>&lt;<span class="typ">OrderSaga</span>&gt; log)
+{
+    <span class="cmt">// ----- Happy path -----</span>
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">Handle</span>(<span class="typ">CreateOrderCommand</span> cmd, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">var</span> saga = <span class="kw">new</span> <span class="typ">OrderSagaState</span> { CorrelationId = Guid.<span class="fn">NewGuid</span>() };
+        <span class="kw">await</span> repo.<span class="fn">SaveAsync</span>(saga, ct);                          <span class="cmt">// step 0 — saga log</span>
+        <span class="kw">await</span> bus.<span class="fn">SendAsync</span>(<span class="kw">new</span> <span class="typ">CreateOrderRequested</span>(saga.CorrelationId, cmd), ct);
+    }
+
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">On</span>(<span class="typ">OrderCreated</span> ev, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">var</span> saga = <span class="kw">await</span> repo.<span class="fn">LoadAsync</span>(ev.CorrelationId, ct);
+        saga.OrderId = ev.OrderId; saga.State = <span class="str">"ORDER_CREATED"</span>;
+        <span class="kw">await</span> repo.<span class="fn">SaveAsync</span>(saga, ct);
+        <span class="kw">await</span> bus.<span class="fn">SendAsync</span>(<span class="kw">new</span> <span class="typ">ChargeCardRequested</span>(saga.CorrelationId, ev.OrderId, ev.Total), ct);
+    }
+
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">On</span>(<span class="typ">CardCharged</span> ev, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">var</span> saga = <span class="kw">await</span> repo.<span class="fn">LoadAsync</span>(ev.CorrelationId, ct);
+        saga.AmountCharged = ev.Amount; saga.State = <span class="str">"PAYMENT_APPROVED"</span>;
+        <span class="kw">await</span> repo.<span class="fn">SaveAsync</span>(saga, ct);
+        <span class="kw">await</span> bus.<span class="fn">SendAsync</span>(<span class="kw">new</span> <span class="typ">ReserveStockRequested</span>(saga.CorrelationId, saga.OrderId), ct);
+    }
+
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">On</span>(<span class="typ">StockReserved</span> ev, <span class="typ">CancellationToken</span> ct)   <span class="cmt">// PIVOT</span>
+    {
+        <span class="kw">var</span> saga = <span class="kw">await</span> repo.<span class="fn">LoadAsync</span>(ev.CorrelationId, ct);
+        saga.StockReserved = <span class="kw">true</span>; saga.State = <span class="str">"STOCK_RESERVED"</span>;   <span class="cmt">// no more compensations after this</span>
+        <span class="kw">await</span> repo.<span class="fn">SaveAsync</span>(saga, ct);
+        <span class="kw">await</span> bus.<span class="fn">SendAsync</span>(<span class="kw">new</span> <span class="typ">ScheduleShipmentRequested</span>(saga.CorrelationId, saga.OrderId), ct);
+    }
+
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">On</span>(<span class="typ">ShipmentScheduled</span> ev, <span class="typ">CancellationToken</span> ct)  <span class="cmt">// retryable — will retry forever</span>
+    {
+        <span class="kw">var</span> saga = <span class="kw">await</span> repo.<span class="fn">LoadAsync</span>(ev.CorrelationId, ct);
+        saga.State = <span class="str">"APPROVED"</span>;
+        <span class="kw">await</span> repo.<span class="fn">SaveAsync</span>(saga, ct);
+    }
+
+    <span class="cmt">// ----- Failure path — compensations run in LIFO order -----</span>
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">On</span>(<span class="typ">StockReservationFailed</span> ev, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">var</span> saga = <span class="kw">await</span> repo.<span class="fn">LoadAsync</span>(ev.CorrelationId, ct);
+        saga.State = <span class="str">"COMPENSATING"</span>; <span class="kw">await</span> repo.<span class="fn">SaveAsync</span>(saga, ct);
+        <span class="cmt">// compensate the charge first, then cancel the order</span>
+        <span class="kw">await</span> bus.<span class="fn">SendAsync</span>(<span class="kw">new</span> <span class="typ">RefundCardRequested</span>(saga.CorrelationId, saga.AmountCharged), ct);
+    }
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">On</span>(<span class="typ">CardRefunded</span> ev, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">var</span> saga = <span class="kw">await</span> repo.<span class="fn">LoadAsync</span>(ev.CorrelationId, ct);
+        <span class="kw">await</span> bus.<span class="fn">SendAsync</span>(<span class="kw">new</span> <span class="typ">CancelOrderRequested</span>(saga.CorrelationId, saga.OrderId), ct);
+    }
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">On</span>(<span class="typ">OrderCancelled</span> ev, <span class="typ">CancellationToken</span> ct)
+    {
+        <span class="kw">var</span> saga = <span class="kw">await</span> repo.<span class="fn">LoadAsync</span>(ev.CorrelationId, ct);
+        saga.State = <span class="str">"REJECTED"</span>; <span class="kw">await</span> repo.<span class="fn">SaveAsync</span>(saga, ct);   <span class="cmt">// consistent, failed</span>
+    }
+}
+</pre>
+    <p>Notice: <strong>every state transition is a persisted saga-log entry</strong>, every message carries the correlation-id, and each compensation is an explicit new command. There is no distributed transaction anywhere. Any service can crash and be restarted; the orchestrator will resume from the saga log.</p>
+
+    <h4>Choreography variant — three services, no orchestrator</h4>
+<pre><span class="cmt">// Order Service — publishes an event when an order is created</span>
+<span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">Handle</span>(<span class="typ">CreateOrderCommand</span> cmd) {
+    <span class="kw">using var</span> tx = db.<span class="fn">BeginTransaction</span>();
+    <span class="kw">var</span> order = db.Orders.<span class="fn">Add</span>(<span class="kw">new</span> <span class="typ">Order</span> { State = <span class="str">"PENDING"</span>, Total = cmd.Total });
+    db.Outbox.<span class="fn">Add</span>(<span class="kw">new</span> <span class="typ">OutboxEvent</span>(<span class="str">"OrderCreated"</span>, <span class="kw">new</span> { order.Id, order.Total })); <span class="cmt">// same tx</span>
+    <span class="kw">await</span> tx.<span class="fn">CommitAsync</span>();
+}
+<span class="cmt">// Payment Service — subscribes to OrderCreated</span>
+<span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">On</span>(<span class="typ">OrderCreated</span> ev) {
+    <span class="kw">if</span> (inbox.<span class="fn">SeenBefore</span>(ev.MessageId)) <span class="kw">return</span>;                    <span class="cmt">// idempotency</span>
+    <span class="kw">var</span> ok = <span class="kw">await</span> gateway.<span class="fn">ChargeAsync</span>(ev.OrderId, ev.Total);
+    <span class="kw">using var</span> tx = db.<span class="fn">BeginTransaction</span>();
+    db.Outbox.<span class="fn">Add</span>(<span class="kw">new</span> <span class="typ">OutboxEvent</span>(ok ? <span class="str">"CardCharged"</span> : <span class="str">"CardChargeFailed"</span>, <span class="kw">new</span> { ev.OrderId }));
+    <span class="kw">await</span> tx.<span class="fn">CommitAsync</span>();
+}
+</pre>
+    <p>Choreography feels lighter but the flow is only visible if you trace it across three log streams — the reason orchestration wins as complexity grows.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs &amp; likely interview follow-ups</h2>
+
+    <h3>When to use — and when NOT to</h3>
+    <ul>
+      <li><strong>Use</strong> when a business operation spans two or more services with independent databases, and you cannot use 2PC.</li>
+      <li><strong>Don't use</strong> when everything is inside one service (just use a DB transaction), or when compensations are impossible/dangerous (real-world side-effects — physical shipment, external payment) — those need <em>pivots</em> and manual escalation.</li>
+      <li><strong>Don't use</strong> when the business genuinely needs strong isolation (financial ledgers with regulatory constraints) — consider a real distributed transaction or a single write-authoritative service.</li>
+    </ul>
+
+    <h3>What breaks in production</h3>
+    <ul>
+      <li><strong>Missing idempotency</strong>: at-least-once delivery causes double-charges. Every handler must store a seen-message-id.</li>
+      <li><strong>Unwritten compensations</strong>: teams ship the happy path and skip the failure paths. Guarantee: production will find them.</li>
+      <li><strong>Cross-service transactions creep back</strong>: someone adds a sync HTTP call from Order → Payment "just to check". This is 2PC in disguise.</li>
+      <li><strong>Orchestrator becomes God-service</strong>: business rules for every domain leak into the orchestrator. Keep it as a state machine, not a business layer.</li>
+      <li><strong>Long-running sagas</strong>: some business operations take days (fraud review). Use a workflow engine (Temporal, Step Functions) — do not build durable timers yourself.</li>
+    </ul>
+
+    <h3>Likely interview questions</h3>
+    <div class="qa"><p class="q">Q: How does a saga guarantee "at-least-once" delivery doesn't cause double compensation?</p><p class="a">Every handler is idempotent — stores a message-id in an Inbox table and short-circuits on replay. Compensations are themselves idempotent for the same reason.</p></div>
+    <div class="qa"><p class="q">Q: What is a pivot transaction and why does it matter?</p><p class="a">The pivot is the go/no-go step. Before it, failures compensate. After it, failures retry. Identifying it defines the shape of the saga — everything before must be compensable; everything after must be idempotent and always-eventually-succeed.</p></div>
+    <div class="qa"><p class="q">Q: Choreography or orchestration — which do you pick?</p><p class="a">Choreography for 2–3-service flows dominated by domain events. Orchestration for 4+ services, branching logic, complex compensations, or when observability of the whole flow matters. Real systems mix both.</p></div>
+    <div class="qa"><p class="q">Q: Sagas lose Isolation. How do you handle it?</p><p class="a">Semantic locks (an explicit PENDING state), commutative updates (deltas, not absolutes), optimistic concurrency (reread + version), and pessimistic ordering (do updates after the pivot). Chris Richardson lists six countermeasures — mention two or three by name.</p></div>
+    <div class="qa"><p class="q">Q: How do you ensure the event is published exactly when the DB write commits?</p><p class="a">Transactional Outbox: write the event to an <code>outbox</code> table in the same DB transaction as the business row, then a poller or Debezium ships the outbox to the broker. There is no XA and no phantom events.</p></div>
+    <div class="qa"><p class="q">Q: What happens if the orchestrator crashes mid-saga?</p><p class="a">Nothing — the saga log is durable. On restart, the orchestrator reads the last state, re-sends the pending command (idempotent), and continues.</p></div>
+    <div class="qa"><p class="q">Q: How do you test a saga?</p><p class="a">Unit-test each step; contract-test between services; integration-test happy + every compensation path; chaos-test by injecting failures at every step. Skipping the compensation tests is the #1 production hazard.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+    <p class="pitch"><strong>30-second pitch:</strong> "A saga is the recommended alternative to distributed 2PC in a microservices architecture. It breaks a business transaction into a sequence of <em>local</em> transactions, each committed inside its own service, coordinated by <em>events</em> (choreography) or by an <em>orchestrator</em> (a state machine). If a step fails, the saga runs <em>compensating transactions</em> — new local transactions that semantically undo the earlier ones — in reverse order back to the point of failure. Sagas give you A, C, and D of ACID but drop I (isolation), so you handle concurrency with <em>semantic locks</em>, <em>commutative updates</em>, <em>optimistic concurrency</em>, or <em>pivot ordering</em>. Reliable messaging is provided by the <em>Transactional Outbox</em> pattern; idempotency by an <em>Inbox</em> table. The two go-to books are Chris Richardson's <em>Microservices Patterns</em> and Sam Newman's <em>Building Microservices</em>. On AWS, use Step Functions for orchestrators and SNS+SQS or EventBridge for choreography."</p>
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li><strong>"2PC is not an option in microservices — sagas replace it, at the cost of automatic rollback and isolation."</strong></li>
+      <li><strong>"The pivot is the design decision that shapes the whole saga."</strong> Everything before is compensable, everything after is idempotent-retryable.</li>
+      <li><strong>"Isolation is lost — recover it with semantic locks and optimistic concurrency."</strong> Naming Richardson's countermeasures = senior signal.</li>
+      <li><strong>"Reliable messaging via the Transactional Outbox."</strong> Idempotency via the Inbox. Non-negotiable.</li>
+      <li><strong>"Orchestrator as a state machine, not a business layer."</strong> Use Step Functions / Temporal, not ad-hoc code.</li>
+    </ul>
+    <h3>Numbers &amp; principles to quote</h3>
+    <ul>
+      <li>Two coordination flavours: <strong>Choreography</strong> (peer events) and <strong>Orchestration</strong> (central state machine).</li>
+      <li>Three step classes: <strong>Compensable</strong>, <strong>Pivot</strong>, <strong>Retryable</strong>.</li>
+      <li>Three isolation anomalies: <strong>lost updates</strong>, <strong>dirty reads</strong>, <strong>fuzzy reads</strong>.</li>
+      <li>Six countermeasures: <strong>semantic lock, commutative updates, pessimistic view, reread, version file, by-value</strong>.</li>
+      <li>Guarantees provided: <strong>ACD</strong> (no I). Consistency is <em>eventual</em>.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://microservices.io/patterns/data/saga.html">Saga pattern — Chris Richardson, microservices.io</a> (primary — the pattern's canonical description)</li>
+      <li><a href="https://learn.microsoft.com/en-us/azure/architecture/patterns/saga">Saga design pattern — Azure Architecture Center</a> (choreography vs orchestration comparison, isolation anomalies &amp; countermeasures)</li>
+      <li>Chris Richardson, <em>Microservices Patterns</em> — Manning (Chapter 4 in particular covers ACD, countermeasures, pivots)</li>
+      <li>Sam Newman, <em>Building Microservices, 2nd Ed.</em> — O'Reilly (chapters on sagas and distributed transactions)</li>
+      <li><a href="https://microservices.io/patterns/data/transactional-outbox.html">Transactional Outbox — microservices.io</a></li>
+      <li><a href="https://microservices.io/patterns/data/idempotent-consumer.html">Idempotent Consumer — microservices.io</a></li>
+      <li><a href="https://eventuate.io/">Eventuate Tram Sagas framework</a></li>
+      <li><a href="https://docs.aws.amazon.com/step-functions/latest/dg/welcome.html">AWS Step Functions — orchestrator-as-a-service</a></li>
+      <li><a href="https://temporal.io/">Temporal.io — code-first workflow / saga engine</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>

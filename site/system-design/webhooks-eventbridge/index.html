@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Webhooks &amp; AWS EventBridge — System Design</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --card: #ffffff;
+    --ink: #1b2230;
+    --muted: #5b6677;
+    --line: #e6eaf0;
+    --scenario: #f7567c;
+    --scenario-bg: #fff0f4;
+    --reqs: #f4a259;
+    --reqs-bg: #fff7ed;
+    --arch: #4361ee;
+    --arch-bg: #eef2ff;
+    --anim: #00b4d8;
+    --anim-bg: #eef9fc;
+    --dsa: #7048e8;
+    --dsa-bg: #f3effe;
+    --aws: #ff9900;
+    --aws-bg: #fff6e6;
+    --laymen: #2dc653;
+    --laymen-bg: #eaf7ee;
+    --code-bg: #1e2430;
+    --code-ink: #e7ecf3;
+    --accent: #2dc653;
+    --shadow: 0 6px 24px rgba(27,34,48,.08);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.65;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #4361ee 0%, #7048e8 55%, #f7567c 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 44px 38px;
+    box-shadow: var(--shadow);
+    margin-bottom: 24px;
+  }
+  header.hero .kicker { text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; font-weight: 700; opacity: .85; margin-bottom: 10px; }
+  header.hero h1 { margin: 0 0 10px; font-size: 2.2rem; letter-spacing: -.5px; }
+  header.hero p { margin: 0; font-size: 1.15rem; opacity: .94; }
+  nav.toc {
+    position: sticky; top: 12px; z-index: 5;
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 26px;
+    box-shadow: var(--shadow);
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  nav.toc a { text-decoration: none; color: var(--muted); font-size: .85rem; padding: 6px 11px; border-radius: 999px; transition: .15s; white-space: nowrap; }
+  nav.toc a:hover { background: var(--bg); color: var(--ink); }
+  section.card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  section.scenario { border-left: 6px solid var(--scenario); background: var(--scenario-bg); }
+  section.laymen   { border-left: 6px solid var(--laymen);   background: var(--laymen-bg); }
+  section.reqs     { border-left: 6px solid var(--reqs);     background: var(--reqs-bg); }
+  section.arch     { border-left: 6px solid var(--arch);     background: var(--arch-bg); }
+  section.anim-sec { border-left: 6px solid var(--anim);     background: var(--anim-bg); }
+  section.dsa      { border-left: 6px solid var(--dsa);      background: var(--dsa-bg); }
+  section.aws      { border-left: 6px solid var(--aws);      background: var(--aws-bg); }
+  .badge {
+    display: inline-block; font-size: .76rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em;
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px; color: #fff;
+  }
+  .scenario .badge { background: var(--scenario); }
+  .laymen .badge   { background: var(--laymen); }
+  .reqs .badge     { background: var(--reqs); }
+  .arch .badge     { background: var(--arch); }
+  .anim-sec .badge { background: var(--anim); }
+  .dsa .badge      { background: var(--dsa); }
+  .aws .badge      { background: var(--aws); }
+  h2 { margin: 0 0 14px; font-size: 1.5rem; letter-spacing: -.3px; }
+  h3 { margin: 22px 0 8px; font-size: 1.12rem; }
+  p, li { color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .94rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: rgba(67,97,238,.08); font-weight: 700; }
+  code:not(pre code) { background: #eef1f6; padding: 2px 6px; border-radius: 6px; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .9em; }
+  pre { background: var(--code-bg); color: var(--code-ink); padding: 18px 20px; border-radius: 12px; overflow-x: auto; font-family: "SF Mono", Consolas, Menlo, monospace; font-size: .88rem; line-height: 1.55; }
+  pre .cmt { color: #7f8aa0; font-style: italic; }
+  pre .kw  { color: #ff9e64; }
+  pre .str { color: #9ece6a; }
+  pre .fn  { color: #7aa2f7; }
+  pre .typ { color: #2ac3de; }
+  .diagram { background: #0f1420; border-radius: 14px; padding: 22px; margin: 18px 0; overflow-x: auto; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .viz { background: #0f1420; border-radius: 12px; padding: 18px; font-family: "SF Mono", Consolas, monospace; color: #c6d0e0; overflow-x: auto; margin: 14px 0; white-space: pre; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: .85rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { position: relative; padding: 10px 0 10px 46px; margin: 0; border-bottom: 1px dashed var(--line); }
+  .steps li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 10px; width: 30px; height: 30px; border-radius: 50%; background: var(--arch); color: #fff; font-weight: 700; display: grid; place-items: center; font-size: .9rem; }
+  .qa { border-left: 3px solid var(--arch); padding: 4px 0 4px 16px; margin: 16px 0; }
+  .qa .q { font-weight: 700; }
+  .qa .a { color: var(--muted); }
+  section.faq { border-left: 6px solid #00b4d8; background: #eef9fc; }
+  section.faq .badge { background: #00b4d8; }
+  .faq-item { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .faq-item .q { font-weight: 700; display: flex; gap: 8px; align-items: baseline; }
+  .faq-item .q::before { content: "Q"; color: #00b4d8; font-weight: 800; }
+  .faq-item .a { margin: 6px 0 0; }
+  .faq-item .a::before { content: "A "; color: var(--accent); font-weight: 800; }
+  .faq-item .meta { color: var(--muted); font-size: .78rem; margin-top: 8px; }
+  .cheat { background: linear-gradient(135deg, #2dc653 0%, #208b3a 100%); color: #fff; border-radius: var(--radius); padding: 26px 32px; box-shadow: var(--shadow); margin-bottom: 22px; }
+  .cheat h2 { color: #fff; }
+  .cheat ul { margin: 0; padding-left: 20px; }
+  .cheat .pitch { background: rgba(255,255,255,.15); border-radius: 12px; padding: 14px 18px; margin: 0 0 16px; font-size: 1.05rem; }
+  .sources { font-size: .9rem; }
+  .sources a { color: var(--arch); }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 30px; }
+
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+  .compare > div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .compare .h { font-weight: 800; font-size: 1.02rem; margin-bottom: 8px; }
+  .compare .h.wh { color: var(--scenario); }
+  .compare .h.eb { color: var(--aws); }
+  @media (max-width: 720px) { .compare { grid-template-columns: 1fr; } }
+
+  .anim-frame { background: #0f1420; border-radius: 14px; padding: 22px 22px 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); margin: 14px 0; }
+  .anim-frame svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .anim-frame svg .a-el, .anim-frame svg [data-anim] {
+    transition: transform .85s cubic-bezier(.4,0,.2,1), opacity .5s ease, fill .3s ease, stroke .3s ease, filter .3s ease;
+    transform-box: fill-box;
+  }
+  .anim-frame svg .a-hidden { opacity: 0; }
+  .anim-frame svg .a-glow   { filter: drop-shadow(0 0 8px currentColor) brightness(1.2); }
+  .anim-frame svg .a-dim    { opacity: .35; }
+  .anim-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 4px 22px; margin-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+  .anim-controls button { background: #4361ee; color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; font: 700 .88rem/1 inherit; cursor: pointer; transition: filter .15s, transform .1s; }
+  .anim-controls button:hover { filter: brightness(1.15); }
+  .anim-controls button:active { transform: scale(.96); }
+  .anim-controls button.secondary { background: #2a3652; }
+  .anim-step-label { color: #7fa2ff; font-weight: 700; font-size: .82rem; letter-spacing: .04em; text-transform: uppercase; min-width: 88px; }
+  .anim-step-caption { color: #c6d0e0; font-size: .95rem; flex: 1 1 260px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">System Design · Interview Prep</div>
+    <h1>Webhooks &amp; AWS EventBridge</h1>
+    <p>Two ways to move an event from "something just happened over here" to "now do X over there" — one is an open-web HTTP contract, the other is a managed AWS event bus. Same shape, different blast radius.</p>
+  </header>
+
+  <nav class="toc">
+    <a href="#scenario">🎯 Scenario</a>
+    <a href="#laymen">🧑‍🎓 Laymen</a>
+    <a href="#reqs">📋 Requirements</a>
+    <a href="#arch">🏗️ Architecture</a>
+    <a href="#animation">🎬 Animation</a>
+    <a href="#deep">🔍 Deep-dive</a>
+    <a href="#compare">🆚 Combined view</a>
+    <a href="#dsa">🧮 DSA</a>
+    <a href="#aws">☁️ AWS</a>
+    <a href="#code">💻 C# code</a>
+    <a href="#tradeoffs">⚖️ Trade-offs</a>
+    <a href="#cheat">🗣️ Cheat sheet</a>
+    <a href="#faq">❓ FAQ</a>
+    <a href="#sources">📚 Sources</a>
+  </nav>
+
+  <section id="scenario" class="card scenario">
+    <span class="badge">🎯 Real-world scenario</span>
+    <h2>What we're building &amp; where it's used</h2>
+
+    <p>Every non-trivial modern product has to solve the same problem: <strong>something happened in system A, and system B needs to react to it</strong>. A customer's card charged in Stripe → your dashboard updates. A build finished in GitHub Actions → Slack pings the channel. An order status changed in your warehouse → 3 downstream systems (billing, notifications, analytics) all need to know within seconds. Polling APIs every few seconds is wasteful, slow, and doesn't scale, so we need <strong>push-based, event-driven</strong> plumbing.</p>
+
+    <p>Two dominant designs solve this. A <strong>webhook</strong> is the open-web version: the producer signs an HTTPS <code>POST</code> and fires it at a public URL you control — used by Stripe, GitHub, Shopify, Twilio, Slack, PayPal, HubSpot, SendGrid, and virtually every SaaS API. <strong>AWS EventBridge</strong> is the same idea implemented as a managed service <em>inside AWS</em>: a serverless event bus where producers <code>PutEvents</code>, rules pattern-match on JSON, and matched events fan out to up to 5 targets per rule (Lambda, SQS, Step Functions, another AWS account, or even a webhook via API Destinations). Same conceptual shape — event → route → deliver → retry — but one is public-HTTP and the other is AWS IAM-secured.</p>
+
+    <p>Interviewers love this pair because it forces you to talk about <em>at-least-once delivery, signing, idempotency, retries with backoff, dead-letter queues, ordering guarantees</em> and the classic dual-write problem. If you can compare the two crisply, you demonstrate you understand event-driven architecture in general, not just one vendor's implementation.</p>
+  </section>
+
+  <section id="laymen" class="card laymen">
+    <span class="badge">🧑‍🎓 In laymen terms</span>
+    <h2>The whole thing, explained without any tech words</h2>
+
+    <p>Imagine you order a pizza online. You <em>could</em> stand at the window every 30 seconds and shout "Is it here yet? Is it here yet?" — that's what a computer program does when it "polls" a website. Annoying, wasteful, and if the pizza shows up a second after you last checked, you don't know for a whole 30 seconds. <strong>A better idea is that the delivery driver rings your doorbell when the pizza actually arrives.</strong> That doorbell ring is a webhook.</p>
+
+    <p>A <strong>webhook</strong> is just a "please ring my doorbell when X happens" arrangement between two companies. When you shop online, the shop tells the payment company (say, Stripe): "here's my doorbell address — <code>myshop.com/paid</code> — please ring it the instant a customer's card goes through." Then the shop can put you on their thank-you page and email your receipt immediately. Nobody had to keep asking. This is how <strong>Uber</strong> knows the driver arrived, how <strong>WhatsApp</strong> shows your friend's typing dots, how <strong>Slack</strong> pops up a notification the moment someone messages you, and how <strong>GitHub</strong> tells your build system "hey, someone just pushed code."</p>
+
+    <p>Now imagine you're a huge apartment building with <em>hundreds</em> of tenants — the pizza guy, the mailman, the plumber, the neighbour returning a bowl — all wanting to ring different apartments. You'd get chaos if every visitor had to know every apartment number. Instead, the building has <strong>a front desk</strong>. Every visitor drops off their delivery there, tells the receptionist what it is, and the receptionist looks at a little book and forwards it to the right tenants. That front desk is what <strong>AWS EventBridge</strong> is inside Amazon's cloud — a smart receptionist for events. One thing happens, and it can automatically be forwarded to 5 different tenants at once, without the sender needing to know any of them.</p>
+
+    <p>The hard parts, in plain words: sometimes the doorbell rings and you're in the shower — <strong>the visitor keeps ringing back</strong> until you answer, which means you might hear the same news twice ("your pizza's here" x3), so you have to remember what you already knew. Sometimes the pizza arrives before the drink even though they left the shop in the opposite order — <strong>things arrive out of order</strong>. And someone could pretend to be the pizza guy, so you need a <strong>secret handshake</strong> to know it's really them. That's basically every hard problem in this whole page, in three sentences.</p>
+
+    <p>A tiny example to walk through: you buy a $12 book. Your card gets charged. Stripe fires a "payment succeeded for order #A47" doorbell at the bookshop's server. The bookshop confirms the handshake, writes "order A47 = paid" in its notebook, then sends you the confirmation email. If the doorbell rings twice for the same order (Stripe wasn't sure the first ring got through), the shop looks at its notebook, sees "A47 already paid", and quietly ignores the duplicate. That's the whole thing.</p>
+  </section>
+
+  <section id="reqs" class="card reqs">
+    <span class="badge">📋 Requirements &amp; scale</span>
+    <h2>Requirements and back-of-the-envelope math</h2>
+
+    <h3>Functional requirements</h3>
+    <ul>
+      <li><strong>Producer emits an event</strong> when something interesting happens (state change, transaction, external trigger).</li>
+      <li><strong>Router matches</strong> events to zero or more interested consumers using a pattern/filter (event type, source, JSON body attributes).</li>
+      <li><strong>Delivery</strong> pushes the event to consumer(s) with retries on failure.</li>
+      <li><strong>Authenticity</strong> — consumer must verify the event really came from the producer (HMAC signature, or IAM).</li>
+      <li><strong>Observability</strong> — the sender can see delivery attempts, status, and manually replay failed ones.</li>
+    </ul>
+
+    <h3>Non-functional requirements</h3>
+    <ul>
+      <li><strong>At-least-once delivery</strong> — never drop an event, even if the consumer is briefly down. Consumer must handle duplicates.</li>
+      <li><strong>Low delivery latency</strong> — sub-second p50 in-region for EventBridge; a few seconds for public webhooks.</li>
+      <li><strong>Durable retry with backoff</strong> — exponential, capped, then dead-letter.</li>
+      <li><strong>Security</strong> — signed payloads, HTTPS-only, replay-attack protection.</li>
+      <li><strong>Fan-out</strong> — one event → N consumers without the producer knowing them.</li>
+    </ul>
+
+    <h3>Capacity numbers to volunteer</h3>
+    <table>
+      <thead><tr><th>Metric</th><th>Webhook (public HTTP)</th><th>AWS EventBridge</th></tr></thead>
+      <tbody>
+        <tr><td>Throughput</td><td>Stripe: ~1000s/sec across account; per-endpoint depends on your server</td><td><code>PutEvents</code>: up to <strong>10,000/sec</strong> per region (us-east-1, us-west-2, eu-west-1); invocations up to <strong>18,750/sec</strong></td></tr>
+        <tr><td>Payload size</td><td>Provider-specific (Stripe/GitHub ≈ ≤ 512 KB body)</td><td><strong>256 KB</strong> per event entry</td></tr>
+        <tr><td>Consumer response timeout</td><td>~1–10s (Stripe: "quickly", most providers 3–10s)</td><td>Target-specific (Lambda 15 min, HTTP endpoint 5s)</td></tr>
+        <tr><td>Retry window</td><td>Stripe: <strong>3 days</strong> (exponential); GitHub: 8h; Shopify: 48h</td><td>Default <strong>24 hours</strong>, up to <strong>185 attempts</strong>, exponential backoff</td></tr>
+        <tr><td>Manual replay</td><td>Stripe: 15d via dashboard, 30d via CLI</td><td><strong>Archive + Replay</strong> — configurable retention (days to indefinite)</td></tr>
+        <tr><td>Fan-out</td><td>1 event → 1 endpoint (register endpoint per consumer, max 16 endpoints/account in Stripe)</td><td>1 event → <strong>up to 5 targets per rule</strong>, and up to <strong>300 rules/bus</strong> = 1500-way fan-out</td></tr>
+        <tr><td>Ordering</td><td>Not guaranteed</td><td>Not guaranteed (use FIFO SQS target if needed)</td></tr>
+        <tr><td>Delivery guarantee</td><td>At-least-once</td><td>At-least-once</td></tr>
+      </tbody>
+    </table>
+
+    <p>A useful mental anchor: at 10,000 events/sec × 250 bytes each = <strong>2.5 MB/sec</strong> ingress, ~9 GB/hour. If you fan out to 5 targets each, that's 50,000 downstream invocations/sec — enough to fill 100 concurrent Lambdas at 500/sec each. In webhook land, the same 10 k/sec producer would need 10,000 consumer servers if each takes 1 second per POST — which is why <strong>the golden rule is "consumer returns 200 in &lt; 200 ms, enqueues, processes async."</strong></p>
+  </section>
+
+  <section id="arch" class="card arch">
+    <span class="badge">🏗️ High-level architecture</span>
+    <h2>How the pieces fit together</h2>
+
+    <p>Both systems share a five-stage pipeline: <strong>Emit → Enrich/Sign → Route → Deliver → Confirm/Retry</strong>. The stages are almost identical; the difference is who runs which stage and how it authenticates.</p>
+
+    <h3>Webhook flow (open-web)</h3>
+    <p>The producer's application writes the event to its own <strong>outbox table</strong> in the same DB transaction as the state change (this defeats the dual-write bug). A <strong>relay worker</strong> polls that outbox (or reads a CDC stream), looks up the subscribers registered for that event type, serialises a JSON body, computes <code>HMAC-SHA256(body, endpoint_secret)</code>, and fires an HTTPS POST at the consumer's URL. The consumer verifies the signature, drops the payload onto its own internal queue, and returns <code>200 OK</code> in under a second. If it doesn't respond in time or returns 5xx, the relay schedules an exponential-backoff retry (t+1min, t+5min, t+30min, ..., up to hours or days). After the final failure the event goes to a <strong>dead-letter store</strong> and is surfaced in a "failed deliveries" UI where an operator can replay.</p>
+
+    <h3>EventBridge flow (AWS-internal)</h3>
+    <p>An AWS service (or your own app calling <code>PutEvents</code>) drops an event onto an <strong>event bus</strong>. EventBridge evaluates the JSON <strong>event pattern</strong> on every rule attached to that bus; a rule may match on <code>source</code>, <code>detail-type</code>, and content filters inside <code>detail</code> (prefix, suffix, numeric ranges, existence, IP-CIDR, wildcards). Every matching rule fans the event out to <strong>up to 5 targets</strong> — Lambda, SQS, SNS, Step Functions, Kinesis, another event bus (cross-account/cross-region), or an <strong>API Destination</strong> (a signed HTTPS webhook, so EventBridge itself can play producer). Failed target invocations are retried for up to 24 h with exponential backoff (up to 185 attempts), then routed to a per-target SQS <strong>dead-letter queue</strong> with a rich error envelope (rule ARN, error code, exhausted-retry reason).</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/>
+          </marker>
+          <marker id="arrO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#ff9900"/>
+          </marker>
+          <marker id="arrP" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#f7567c"/>
+          </marker>
+        </defs>
+
+        <!-- Webhook lane (top) -->
+        <text x="12" y="24" fill="#f7567c" font-size="12" font-weight="800">WEBHOOK (open-web HTTPS)</text>
+        <rect x="10" y="34" width="880" height="180" fill="rgba(247,86,124,.06)" stroke="rgba(247,86,124,.25)" rx="14"/>
+
+        <g>
+          <rect x="30" y="80" width="140" height="70" rx="10" fill="#f7567c"/>
+          <text x="100" y="108" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Producer app</text>
+          <text x="100" y="128" text-anchor="middle" fill="#fff" font-size="11">(Stripe, GitHub, you)</text>
+        </g>
+        <g>
+          <rect x="210" y="80" width="140" height="70" rx="10" fill="#fff" stroke="#f7567c" stroke-width="2"/>
+          <text x="280" y="105" text-anchor="middle" fill="#1b2230" font-size="13" font-weight="700">Outbox</text>
+          <text x="280" y="122" text-anchor="middle" fill="#5b6677" font-size="11">DB table +</text>
+          <text x="280" y="137" text-anchor="middle" fill="#5b6677" font-size="11">relay worker</text>
+        </g>
+        <g>
+          <rect x="390" y="80" width="140" height="70" rx="10" fill="#fff" stroke="#f7567c" stroke-width="2"/>
+          <text x="460" y="105" text-anchor="middle" fill="#1b2230" font-size="13" font-weight="700">Sign + POST</text>
+          <text x="460" y="122" text-anchor="middle" fill="#5b6677" font-size="11">HMAC-SHA256</text>
+          <text x="460" y="137" text-anchor="middle" fill="#5b6677" font-size="11">Stripe-Signature</text>
+        </g>
+        <g>
+          <rect x="570" y="80" width="140" height="70" rx="10" fill="#fff" stroke="#f7567c" stroke-width="2"/>
+          <text x="640" y="105" text-anchor="middle" fill="#1b2230" font-size="13" font-weight="700">Consumer /hook</text>
+          <text x="640" y="122" text-anchor="middle" fill="#5b6677" font-size="11">verify → 200 OK</text>
+          <text x="640" y="137" text-anchor="middle" fill="#5b6677" font-size="11">enqueue</text>
+        </g>
+        <g>
+          <rect x="750" y="80" width="130" height="70" rx="10" fill="#fff" stroke="#f7567c" stroke-width="2"/>
+          <text x="815" y="112" text-anchor="middle" fill="#1b2230" font-size="13" font-weight="700">Worker</text>
+          <text x="815" y="130" text-anchor="middle" fill="#5b6677" font-size="11">process async</text>
+        </g>
+        <line x1="170" y1="115" x2="210" y2="115" stroke="#f7567c" stroke-width="2" marker-end="url(#arrP)"/>
+        <line x1="350" y1="115" x2="390" y2="115" stroke="#f7567c" stroke-width="2" marker-end="url(#arrP)"/>
+        <line x1="530" y1="115" x2="570" y2="115" stroke="#f7567c" stroke-width="2" marker-end="url(#arrP)"/>
+        <line x1="710" y1="115" x2="750" y2="115" stroke="#f7567c" stroke-width="2" marker-end="url(#arrP)"/>
+
+        <g>
+          <rect x="390" y="170" width="140" height="36" rx="8" fill="#fff" stroke="#f7567c" stroke-dasharray="4,3"/>
+          <text x="460" y="192" text-anchor="middle" fill="#f7567c" font-size="11" font-weight="700">Retry + DLQ (24h+)</text>
+        </g>
+
+        <!-- EventBridge lane (bottom) -->
+        <text x="12" y="252" fill="#ff9900" font-size="12" font-weight="800">AWS EVENTBRIDGE (managed bus)</text>
+        <rect x="10" y="262" width="880" height="188" fill="rgba(255,153,0,.06)" stroke="rgba(255,153,0,.28)" rx="14"/>
+
+        <g>
+          <rect x="30" y="310" width="140" height="70" rx="10" fill="#ff9900"/>
+          <text x="100" y="338" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">Producer</text>
+          <text x="100" y="358" text-anchor="middle" fill="#fff" font-size="11">PutEvents (IAM)</text>
+        </g>
+        <g>
+          <rect x="210" y="310" width="180" height="70" rx="10" fill="#fff" stroke="#ff9900" stroke-width="2"/>
+          <text x="300" y="336" text-anchor="middle" fill="#1b2230" font-size="13" font-weight="700">Event bus</text>
+          <text x="300" y="354" text-anchor="middle" fill="#5b6677" font-size="11">JSON envelope</text>
+          <text x="300" y="370" text-anchor="middle" fill="#5b6677" font-size="11">source · detail-type · detail</text>
+        </g>
+        <g>
+          <rect x="420" y="290" width="150" height="40" rx="8" fill="#fff" stroke="#ff9900" stroke-width="2"/>
+          <text x="495" y="315" text-anchor="middle" fill="#1b2230" font-size="12" font-weight="700">Rule A · pattern match</text>
+        </g>
+        <g>
+          <rect x="420" y="340" width="150" height="40" rx="8" fill="#fff" stroke="#ff9900" stroke-width="2"/>
+          <text x="495" y="365" text-anchor="middle" fill="#1b2230" font-size="12" font-weight="700">Rule B · pattern match</text>
+        </g>
+        <line x1="390" y1="345" x2="420" y2="310" stroke="#ff9900" stroke-width="2" marker-end="url(#arrO)"/>
+        <line x1="390" y1="345" x2="420" y2="360" stroke="#ff9900" stroke-width="2" marker-end="url(#arrO)"/>
+        <line x1="170" y1="345" x2="210" y2="345" stroke="#ff9900" stroke-width="2" marker-end="url(#arrO)"/>
+
+        <g>
+          <rect x="600" y="272" width="130" height="30" rx="7" fill="#fff" stroke="#ff9900"/>
+          <text x="665" y="292" text-anchor="middle" fill="#1b2230" font-size="11" font-weight="700">Lambda</text>
+        </g>
+        <g>
+          <rect x="600" y="308" width="130" height="30" rx="7" fill="#fff" stroke="#ff9900"/>
+          <text x="665" y="328" text-anchor="middle" fill="#1b2230" font-size="11" font-weight="700">SQS queue</text>
+        </g>
+        <g>
+          <rect x="600" y="344" width="130" height="30" rx="7" fill="#fff" stroke="#ff9900"/>
+          <text x="665" y="364" text-anchor="middle" fill="#1b2230" font-size="11" font-weight="700">Step Functions</text>
+        </g>
+        <g>
+          <rect x="600" y="380" width="130" height="30" rx="7" fill="#fff" stroke="#ff9900"/>
+          <text x="665" y="400" text-anchor="middle" fill="#1b2230" font-size="11" font-weight="700">API Destination (webhook)</text>
+        </g>
+        <line x1="570" y1="310" x2="600" y2="287" stroke="#ff9900" stroke-width="2" marker-end="url(#arrO)"/>
+        <line x1="570" y1="310" x2="600" y2="323" stroke="#ff9900" stroke-width="2" marker-end="url(#arrO)"/>
+        <line x1="570" y1="360" x2="600" y2="359" stroke="#ff9900" stroke-width="2" marker-end="url(#arrO)"/>
+        <line x1="570" y1="360" x2="600" y2="395" stroke="#ff9900" stroke-width="2" marker-end="url(#arrO)"/>
+
+        <g>
+          <rect x="760" y="326" width="120" height="40" rx="8" fill="#fff" stroke="#ff9900" stroke-dasharray="4,3"/>
+          <text x="820" y="351" text-anchor="middle" fill="#ff9900" font-size="11" font-weight="700">SQS DLQ</text>
+        </g>
+        <line x1="730" y1="345" x2="760" y2="345" stroke="#ff9900" stroke-width="1.5" stroke-dasharray="3,3"/>
+      </svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#f7567c"></span>Webhook flow (public HTTPS + HMAC)</span>
+        <span><span class="dot" style="background:#ff9900"></span>EventBridge flow (in-AWS + IAM)</span>
+        <span><span class="dot" style="background:#fff;border:1px solid #ccc"></span>Retry / DLQ path</span>
+      </div>
+    </div>
+
+    <p>Look at the two lanes side by side and notice the shape is identical: <em>producer → durable buffer → pattern match / lookup → deliver → confirm or retry to DLQ</em>. Webhooks bolt each of those stages together with your own outbox, your own relay, your own signing, your own retry scheduler; EventBridge just gives you all of them managed with a single <code>PutEvents</code> call.</p>
+  </section>
+
+  <section id="animation" class="card anim-sec">
+    <span class="badge">🎬 Animation</span>
+    <h2>Watch the core mechanic run, step by step</h2>
+    <p>This animation walks one event through <strong>both</strong> systems in parallel: the top lane is a Stripe-style webhook and the bottom lane is EventBridge. You'll see the moment they behave identically (fan-out, retry) and the moment they diverge (signing vs IAM).</p>
+
+    <div class="anim-frame" id="anim1">
+      <svg viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
+        <defs>
+          <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c6d0e0"/>
+          </marker>
+        </defs>
+
+        <!-- Webhook lane -->
+        <text x="20" y="28" fill="#f7567c" font-size="12" font-weight="800">WEBHOOK</text>
+        <rect id="wh-producer" x="30" y="60" width="100" height="60" rx="10" fill="#f7567c" class="a-el" data-anim/>
+        <text x="80" y="94" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Stripe</text>
+
+        <rect id="wh-outbox" x="180" y="60" width="100" height="60" rx="10" fill="#0f1420" stroke="#f7567c" stroke-width="2" class="a-el" data-anim/>
+        <text x="230" y="88" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Outbox</text>
+        <text x="230" y="105" text-anchor="middle" fill="#c6d0e0" font-size="10">+ relay</text>
+
+        <rect id="wh-sign" x="330" y="60" width="100" height="60" rx="10" fill="#0f1420" stroke="#f7567c" stroke-width="2" class="a-el" data-anim/>
+        <text x="380" y="88" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">HMAC sign</text>
+        <text x="380" y="105" text-anchor="middle" fill="#c6d0e0" font-size="10">+ POST</text>
+
+        <rect id="wh-consumer" x="480" y="60" width="100" height="60" rx="10" fill="#0f1420" stroke="#f7567c" stroke-width="2" class="a-el" data-anim/>
+        <text x="530" y="88" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">/hook</text>
+        <text x="530" y="105" text-anchor="middle" fill="#c6d0e0" font-size="10">verify → 200</text>
+
+        <rect id="wh-worker" x="630" y="60" width="100" height="60" rx="10" fill="#0f1420" stroke="#f7567c" stroke-width="2" class="a-el" data-anim/>
+        <text x="680" y="88" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Worker</text>
+        <text x="680" y="105" text-anchor="middle" fill="#c6d0e0" font-size="10">idempotent</text>
+
+        <rect id="wh-dlq" x="780" y="60" width="90" height="60" rx="10" fill="#0f1420" stroke="#f7567c" stroke-width="2" stroke-dasharray="4,3" class="a-el a-dim" data-anim/>
+        <text x="825" y="88" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">DLQ</text>
+        <text x="825" y="105" text-anchor="middle" fill="#c6d0e0" font-size="10">(replay)</text>
+
+        <line x1="130" y1="90" x2="180" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="280" y1="90" x2="330" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="430" y1="90" x2="480" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="580" y1="90" x2="630" y2="90" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+        <!-- Traveling event on webhook lane -->
+        <g id="wh-msg" class="a-el a-hidden" data-anim>
+          <rect x="70" y="140" width="80" height="26" rx="6" fill="#f7567c"/>
+          <text x="110" y="158" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">charge.paid</text>
+        </g>
+
+        <!-- Divider -->
+        <line x1="30" y1="230" x2="870" y2="230" stroke="#2a3652" stroke-dasharray="6,4"/>
+
+        <!-- EventBridge lane -->
+        <text x="20" y="266" fill="#ff9900" font-size="12" font-weight="800">EVENTBRIDGE</text>
+        <rect id="eb-producer" x="30" y="290" width="100" height="60" rx="10" fill="#ff9900" class="a-el" data-anim/>
+        <text x="80" y="318" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Order svc</text>
+        <text x="80" y="334" text-anchor="middle" fill="#fff" font-size="10">PutEvents</text>
+
+        <rect id="eb-bus" x="180" y="290" width="120" height="60" rx="10" fill="#0f1420" stroke="#ff9900" stroke-width="2" class="a-el" data-anim/>
+        <text x="240" y="318" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Event bus</text>
+        <text x="240" y="335" text-anchor="middle" fill="#c6d0e0" font-size="10">"orders"</text>
+
+        <rect id="eb-ruleA" x="340" y="270" width="130" height="34" rx="7" fill="#0f1420" stroke="#ff9900" stroke-width="2" class="a-el" data-anim/>
+        <text x="405" y="292" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Rule: detail-type=Paid</text>
+
+        <rect id="eb-ruleB" x="340" y="336" width="130" height="34" rx="7" fill="#0f1420" stroke="#ff9900" stroke-width="2" class="a-el" data-anim/>
+        <text x="405" y="358" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Rule: source=orders</text>
+
+        <rect id="eb-t1" x="510" y="256" width="120" height="30" rx="7" fill="#0f1420" stroke="#ff9900" stroke-width="2" class="a-el" data-anim/>
+        <text x="570" y="276" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Lambda: email</text>
+
+        <rect id="eb-t2" x="510" y="292" width="120" height="30" rx="7" fill="#0f1420" stroke="#ff9900" stroke-width="2" class="a-el" data-anim/>
+        <text x="570" y="312" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">SQS: analytics</text>
+
+        <rect id="eb-t3" x="510" y="328" width="120" height="30" rx="7" fill="#0f1420" stroke="#ff9900" stroke-width="2" class="a-el" data-anim/>
+        <text x="570" y="348" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Step Fn: fulfil</text>
+
+        <rect id="eb-t4" x="510" y="364" width="120" height="30" rx="7" fill="#0f1420" stroke="#ff9900" stroke-width="2" class="a-el" data-anim/>
+        <text x="570" y="384" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">API dest → webhook</text>
+
+        <rect id="eb-dlq" x="680" y="308" width="90" height="60" rx="10" fill="#0f1420" stroke="#ff9900" stroke-width="2" stroke-dasharray="4,3" class="a-el a-dim" data-anim/>
+        <text x="725" y="336" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">SQS DLQ</text>
+        <text x="725" y="352" text-anchor="middle" fill="#c6d0e0" font-size="10">(24h)</text>
+
+        <line x1="130" y1="320" x2="180" y2="320" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="300" y1="320" x2="340" y2="290" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="300" y1="320" x2="340" y2="352" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="470" y1="287" x2="510" y2="270" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="470" y1="287" x2="510" y2="303" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="470" y1="353" x2="510" y2="340" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="470" y1="353" x2="510" y2="376" stroke="#c6d0e0" stroke-width="1.5" marker-end="url(#arr2)"/>
+
+        <g id="eb-msg" class="a-el a-hidden" data-anim>
+          <rect x="70" y="410" width="90" height="26" rx="6" fill="#ff9900"/>
+          <text x="115" y="428" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">OrderPaid</text>
+        </g>
+      </svg>
+
+      <div class="anim-controls">
+        <button data-act="play">▶ Play</button>
+        <button data-act="next"  class="secondary">Step →</button>
+        <button data-act="prev"  class="secondary">← Back</button>
+        <button data-act="reset" class="secondary">↺ Reset</button>
+        <span class="anim-step-label">Ready</span>
+        <span class="anim-step-caption">Press ▶ Play to start</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const root = document.getElementById('anim1');
+        if (!root) return;
+        const $  = (sel) => root.querySelector(sel);
+        const $$ = (sel) => root.querySelectorAll(sel);
+        const label = $('.anim-step-label');
+        const cap   = $('.anim-step-caption');
+        const btnPlay = root.querySelector('[data-act="play"]');
+        const btnNext = root.querySelector('[data-act="next"]');
+        const btnPrev = root.querySelector('[data-act="prev"]');
+        const btnReset= root.querySelector('[data-act="reset"]');
+
+        const CFG = {
+          intro: 'Watch a "payment succeeded" event travel both systems in parallel.',
+          interval: 1900,
+          reset: (r) => {
+            r.querySelectorAll('[data-anim]').forEach(el => {
+              el.classList.remove('a-glow');
+              el.removeAttribute('transform');
+            });
+            $('#wh-msg').classList.add('a-hidden');
+            $('#eb-msg').classList.add('a-hidden');
+            $('#wh-dlq').classList.add('a-dim');
+            $('#eb-dlq').classList.add('a-dim');
+          },
+          steps: [
+            { caption: 'Producer emits an event. Stripe records "charge.paid"; the order service calls PutEvents with detail-type=Paid.',
+              apply: (r, $) => {
+                $('#wh-producer').classList.add('a-glow');
+                $('#eb-producer').classList.add('a-glow');
+                $('#wh-msg').classList.remove('a-hidden');
+                $('#eb-msg').classList.remove('a-hidden');
+              }},
+            { caption: 'Event lands in durable storage. Webhook side: transactional outbox row. EventBridge side: the "orders" event bus.',
+              apply: (r, $) => {
+                $('#wh-msg').setAttribute('transform', 'translate(110,-70)');
+                $('#eb-msg').setAttribute('transform', 'translate(90,-100)');
+                $('#wh-outbox').classList.add('a-glow');
+                $('#eb-bus').classList.add('a-glow');
+              }},
+            { caption: 'Router looks up matching subscribers. Webhook: query which endpoints subscribed. EventBridge: evaluate every rule pattern.',
+              apply: (r, $) => {
+                $('#wh-msg').setAttribute('transform', 'translate(260,-70)');
+                $('#eb-msg').setAttribute('transform', 'translate(220,-100)');
+                $('#wh-sign').classList.add('a-glow');
+                $('#eb-ruleA').classList.add('a-glow');
+                $('#eb-ruleB').classList.add('a-glow');
+              }},
+            { caption: 'Auth stamp added. Webhook signs the body with HMAC-SHA256; EventBridge relies on IAM roles on each target — no per-message signature needed.',
+              apply: (r, $) => {
+                $('#wh-sign').classList.add('a-glow');
+              }},
+            { caption: 'Fan-out. Webhooks fire one POST per endpoint; EventBridge invokes up to 5 targets per rule in parallel (Lambda, SQS, Step Fn, and an outbound API destination).',
+              apply: (r, $) => {
+                $('#wh-msg').setAttribute('transform', 'translate(410,-70)');
+                $('#eb-msg').setAttribute('transform', 'translate(390,-100)');
+                $('#eb-t1').classList.add('a-glow');
+                $('#eb-t2').classList.add('a-glow');
+                $('#eb-t3').classList.add('a-glow');
+                $('#eb-t4').classList.add('a-glow');
+              }},
+            { caption: 'Consumer accepts. Webhook /hook verifies signature and returns 200 within a second; each EventBridge target succeeds and reports back.',
+              apply: (r, $) => {
+                $('#wh-msg').setAttribute('transform', 'translate(560,-70)');
+                $('#wh-consumer').classList.add('a-glow');
+              }},
+            { caption: 'Async processing. Both sides enqueue the payload and do the heavy work off the hot path — that\'s why the sender never blocks on your workflow.',
+              apply: (r, $) => {
+                $('#wh-msg').setAttribute('transform', 'translate(710,-70)');
+                $('#wh-worker').classList.add('a-glow');
+              }},
+            { caption: 'A target fails. Both systems retry with exponential backoff (Stripe up to 3 days, EventBridge up to 24 h / 185 attempts).',
+              apply: (r, $) => {
+                $('#eb-t3').setAttribute('transform', 'scale(1.05)');
+                $('#eb-t3').classList.add('a-glow');
+              }},
+            { caption: 'Retries exhausted → dead-letter. The event lands in the DLQ with error metadata so an operator can investigate and replay.',
+              apply: (r, $) => {
+                $('#wh-dlq').classList.remove('a-dim');
+                $('#wh-dlq').classList.add('a-glow');
+                $('#eb-dlq').classList.remove('a-dim');
+                $('#eb-dlq').classList.add('a-glow');
+              }}
+          ]
+        };
+
+        let idx = -1, playing = false, timer = null;
+        function goto(i) {
+          if (i < 0 || i >= CFG.steps.length) return;
+          CFG.reset(root);
+          for (let k = 0; k <= i; k++) CFG.steps[k].apply(root, $, $$);
+          idx = i;
+          label.textContent = `Step ${i + 1}/${CFG.steps.length}`;
+          cap.textContent = CFG.steps[i].caption;
+        }
+        function reset() {
+          idx = -1; playing = false;
+          if (timer) { clearTimeout(timer); timer = null; }
+          CFG.reset(root);
+          label.textContent = 'Ready';
+          cap.textContent = CFG.intro;
+          btnPlay.textContent = '▶ Play';
+        }
+        function play() {
+          if (playing) {
+            playing = false;
+            if (timer) clearTimeout(timer);
+            btnPlay.textContent = '▶ Play';
+            return;
+          }
+          if (idx >= CFG.steps.length - 1) reset();
+          playing = true; btnPlay.textContent = '⏸ Pause';
+          function tick() {
+            if (!playing) return;
+            if (idx + 1 < CFG.steps.length) goto(idx + 1);
+            if (idx < CFG.steps.length - 1) timer = setTimeout(tick, CFG.interval);
+            else { playing = false; btnPlay.textContent = '▶ Replay'; }
+          }
+          timer = setTimeout(tick, 400);
+        }
+        btnPlay.addEventListener('click', play);
+        btnReset.addEventListener('click', reset);
+        btnNext && btnNext.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx + 1);
+        });
+        btnPrev && btnPrev.addEventListener('click', () => {
+          if (playing) { playing = false; if (timer) clearTimeout(timer); btnPlay.textContent = '▶ Play'; }
+          goto(idx - 1);
+        });
+        reset();
+      })();
+    </script>
+  </section>
+
+  <section id="deep" class="card">
+    <h2>🔍 Component deep-dive</h2>
+
+    <h3>1. Event envelope</h3>
+    <p>Both systems standardise on a JSON envelope with three parts: <strong>metadata</strong> (id, timestamp, type), <strong>source</strong> (who emitted it), and <strong>detail/data</strong> (the domain payload). EventBridge names them exactly: <code>id</code>, <code>time</code>, <code>source</code>, <code>detail-type</code>, <code>detail</code>. Stripe uses <code>id</code>, <code>created</code>, <code>type</code>, <code>data.object</code>. GitHub uses <code>X-GitHub-Event</code> + body. The <strong>event id is load-bearing</strong>: it's what consumers use to deduplicate replays.</p>
+
+    <h3>2. Durable buffer &amp; the dual-write problem</h3>
+    <p>Neither system lets you skip the "the event must survive if the producer crashes" step. Webhook producers solve this with the <strong>transactional outbox pattern</strong> — write the domain change and the "to-be-delivered event" row in one DB transaction, then a separate relay worker drains the outbox and fires the HTTP POST. EventBridge takes the durability off your plate: once <code>PutEvents</code> returns 200, AWS owns the event's fate. Under the hood the bus is backed by replicated storage per partition (unpublished internal detail, but the API contract is "if you got 200, it's durable"). This is the single biggest operational win of EventBridge over rolling your own webhooks.</p>
+
+    <h3>3. Routing / matching</h3>
+    <p>Webhook systems typically use a simple <strong>subscriptions table</strong>: <code>(event_type, endpoint_url, secret)</code>. When an event fires, look up matching rows, POST to each. EventBridge uses richer <strong>content-based filtering</strong>: a rule contains a JSON event pattern that can match by exact value, prefix, suffix, wildcard, numeric range, IP CIDR, existence — all evaluated in-memory against the event's JSON. Pattern size is capped at 2048 chars; you can have 300 rules per bus with up to 30 of them containing wildcards.</p>
+
+    <h3>4. Signing &amp; authentication</h3>
+    <p>Webhooks live on the open internet, so the consumer must prove the caller is the real producer. The universal answer is <strong>HMAC-SHA256 over the raw body plus a timestamp</strong>, using a shared secret per endpoint. Stripe puts it in <code>Stripe-Signature: t=&lt;unix&gt;,v1=&lt;hex&gt;</code>. The consumer recomputes and compares in constant time. The timestamp defends against replay — reject if <code>|now − t| &gt; 5 min</code>. EventBridge doesn't need any of this <em>inside</em> AWS: the producer's identity is authenticated by IAM SigV4 signing of the <code>PutEvents</code> call, and each target grants EventBridge permission via a resource policy. When EventBridge fires <em>outbound</em> to an API Destination it becomes the webhook producer and does the signing itself (via Connections with Basic / OAuth / API Key / Bearer credentials stored in Secrets Manager).</p>
+
+    <h3>5. Retries, backoff, DLQ</h3>
+    <p>Both systems retry on 5xx / timeouts and eventually give up. Stripe retries for 3 days on live mode with exponential backoff. EventBridge retries for <strong>24 hours by default, with exponential backoff up to 185 attempts</strong>; you can set <code>MaximumEventAgeInSeconds</code> (60–86400) and <code>MaximumRetryAttempts</code> (0–185) per target. When retries are exhausted (or on non-retryable errors like <code>NO_PERMISSIONS</code>, <code>NO_RESOURCE</code>) the event is routed to the target's <strong>SQS DLQ</strong> with <code>RULE_ARN</code>, <code>ERROR_CODE</code>, <code>EXHAUSTED_RETRY_CONDITION</code>, and <code>RETRY_ATTEMPTS</code> in message attributes. Replay is a manual operation from the DLQ, or from EventBridge's built-in <strong>Archive + Replay</strong> (store all matching events for N days, then <code>StartReplay</code> to re-fire them at a rule).</p>
+
+    <h3>6. Idempotency at the consumer</h3>
+    <p>Because delivery is at-least-once, every consumer MUST be idempotent. The pattern is: on receipt, look up the event id in a <strong>seen-events store</strong> (Redis SET with TTL, or a DynamoDB item with the id as PK), and if it's already there, return 200 without re-processing. This is the number-one interview trap — candidates who forget this get grilled on "what happens if the same event is delivered twice while your first invocation is mid-flight?" The answer is: dedupe by event id, and use conditional writes so the second delivery loses the race.</p>
+
+    <h3>7. Ordering</h3>
+    <p>Neither system guarantees ordering. Stripe explicitly says events may arrive out of order (e.g. <code>invoice.paid</code> can arrive before <code>invoice.created</code>). EventBridge has the same contract; if you need ordering, use an SQS FIFO queue as your target and derive a group id from a business key (customer id, order id). Alternatively, embed a monotonically-increasing sequence number in your payload and let the consumer discard stale events by comparing against the last-seen sequence for that entity.</p>
+  </section>
+
+  <section id="compare" class="card">
+    <h2>🆚 Combined view — same architecture, different chassis</h2>
+    <p>The reason to talk about both in one page is that they solve the exact same problem, just in different environments. If you understand the shape, you can pick the right chassis for the job. Here's the mapping stage by stage:</p>
+
+    <table>
+      <thead><tr><th>Concern</th><th>Webhook</th><th>EventBridge</th></tr></thead>
+      <tbody>
+        <tr><td>Transport</td><td>HTTPS POST on the public internet</td><td>AWS backbone; producer calls <code>PutEvents</code> via SDK</td></tr>
+        <tr><td>Auth</td><td>HMAC-SHA256 signature + timestamp; shared secret per endpoint</td><td>IAM SigV4 on producer; resource policies on targets</td></tr>
+        <tr><td>Durability before delivery</td><td>You build a transactional outbox + relay</td><td>Managed — accepted event is durable once <code>PutEvents</code> returns 200</td></tr>
+        <tr><td>Routing</td><td>Subscribers table lookup (<code>event_type</code> → endpoints)</td><td>JSON pattern rules with prefix/suffix/wildcard/numeric/exists filters</td></tr>
+        <tr><td>Fan-out</td><td>N HTTP POSTs, one per subscriber</td><td>Up to 5 targets per rule × 300 rules per bus</td></tr>
+        <tr><td>Retry policy</td><td>Per-provider (Stripe 3 d, GitHub 8 h, Shopify 48 h) with exponential backoff</td><td>Configurable: 60 s – 24 h age, 0 – 185 attempts, exponential backoff</td></tr>
+        <tr><td>Dead-letter</td><td>Your own failed-delivery table or queue</td><td>SQS DLQ per target with rich error envelope</td></tr>
+        <tr><td>Manual replay</td><td>Your own UI or provider dashboard (Stripe 15 d)</td><td><strong>Archive + Replay</strong> — configurable retention, filtered replay</td></tr>
+        <tr><td>Ordering</td><td>Not guaranteed</td><td>Not guaranteed — use FIFO SQS target if needed</td></tr>
+        <tr><td>Delivery guarantee</td><td>At-least-once</td><td>At-least-once</td></tr>
+        <tr><td>Observability</td><td>You build logs + a delivery dashboard</td><td>CloudWatch metrics (<code>MatchedEvents</code>, <code>Invocations</code>, <code>FailedInvocations</code>, <code>InvocationsSentToDLQ</code>)</td></tr>
+        <tr><td>Cross-account / cross-region</td><td>Just point the URL there</td><td>First-class: cross-account bus targets, global endpoints</td></tr>
+        <tr><td>Cost model</td><td>Your infra + bandwidth</td><td>~$1 per million events (custom bus); free for AWS-source events</td></tr>
+        <tr><td>Best when</td><td>Consumer is <em>outside</em> AWS (customer app, third-party SaaS, another company's system)</td><td>Consumer is <em>inside</em> AWS and you want managed durability + fan-out</td></tr>
+      </tbody>
+    </table>
+
+    <p>Put simply: <strong>if your consumer is in another company, you're building a webhook</strong>; <strong>if it's in your own AWS account, use EventBridge</strong>. The most powerful production setups combine both — EventBridge routes events internally, and one of the targets is an <strong>API Destination</strong> that lets EventBridge itself fire the webhook out to customers, with Connections handling the auth. That way you get the managed durability and pattern-matching of EventBridge plus the "reach the outside world" of webhooks in one pipeline.</p>
+
+    <div class="compare">
+      <div>
+        <div class="h wh">Webhook mental model</div>
+        <p>"I own both the producer and the delivery mechanism. I'm going to POST HTTPS with a signed body across the internet, retry when it fails, and give the customer a portal to see failed deliveries."</p>
+      </div>
+      <div>
+        <div class="h eb">EventBridge mental model</div>
+        <p>"I emit an event to a bus and let AWS route it. I don't know or care which team's Lambda picks it up. New consumers just add a rule — I never change my code."</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="dsa" class="card dsa">
+    <span class="badge">🧮 The DSA behind it</span>
+    <h2>Data structures &amp; algorithms</h2>
+
+    <p>Under the covers, this is a very DSA-heavy space. The interviewer often probes: <em>"how does EventBridge match 300 rules against every event without becoming O(n) slow?"</em> Here are the key ones.</p>
+
+    <table>
+      <thead><tr><th>Where</th><th>Structure / algorithm</th><th>Complexity</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Event id dedupe (consumer)</td><td>Hash set / DynamoDB conditional PutItem</td><td>O(1) avg</td><td>Look up "have I seen this id in last N days?"</td></tr>
+        <tr><td>Outbox drain (producer)</td><td>Indexed queue table (id, status, next_retry_at)</td><td>O(log n) index scan</td><td>Pull ready-to-send rows; skip in-flight</td></tr>
+        <tr><td>Retry scheduling</td><td>Min-heap / priority queue keyed on <code>next_retry_at</code></td><td>O(log n) push/pop</td><td>Always pick the earliest due retry</td></tr>
+        <tr><td>Exponential backoff</td><td><code>min(cap, base × 2^n) + jitter</code></td><td>O(1)</td><td>Spreads retry storm; jitter prevents lockstep</td></tr>
+        <tr><td>Rule matching (EventBridge)</td><td>Trie over JSON paths + predicate tree</td><td>~O(rules × pattern depth), amortised sub-linear via prefix sharing</td><td>Matches each event against all rules cheaply by grouping shared prefixes</td></tr>
+        <tr><td>Signature verification</td><td>HMAC-SHA256 + constant-time compare</td><td>O(body size)</td><td>Prevents timing-attack leaks of the secret</td></tr>
+        <tr><td>Rate limiting outbound</td><td>Token bucket per endpoint</td><td>O(1)</td><td>Don't DDOS a slow consumer during a spike</td></tr>
+        <tr><td>Ordering (when needed)</td><td>Per-partition sequence number + LWW compare</td><td>O(1)</td><td>Discard stale events on the consumer</td></tr>
+        <tr><td>Circuit breaker on failing endpoint</td><td>Sliding-window failure counter</td><td>O(1)</td><td>Stop hammering a dead consumer; save retry budget</td></tr>
+      </tbody>
+    </table>
+
+    <p>The most interesting one is <strong>rule matching</strong>. Naively evaluating 300 patterns × 5 fields each on every one of 10 000 events/sec is 15 million comparisons/sec — do-able but wasteful. EventBridge (and open-source alternatives like AWS's own <em>Ruler</em> library) uses a <strong>tokenised prefix trie</strong> where common prefixes (e.g. <code>source = "aws.s3"</code>) are evaluated once and shared across all rules that mention them. That reduces the expected work from O(rules × depth) to closer to O(depth) plus the number of rules that actually matched.</p>
+  </section>
+
+  <section id="aws" class="card aws">
+    <span class="badge">☁️ AWS implementation</span>
+    <h2>Mapping the design to AWS</h2>
+
+    <p>Two deployments — one where you build a webhook system, one where you use EventBridge — and one recommended hybrid.</p>
+
+    <h3>Deployment A: You build a webhook system on AWS</h3>
+    <table>
+      <thead><tr><th>Component</th><th>AWS service</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Producer application</td><td>ECS Fargate / Lambda / EKS</td><td>Where your business logic lives</td></tr>
+        <tr><td>Outbox table</td><td>DynamoDB or Aurora with a stream</td><td>Transactional write with domain data; stream drives the relay</td></tr>
+        <tr><td>Relay worker</td><td>Lambda triggered by DynamoDB Streams / Kinesis</td><td>Serverless, scales with the stream</td></tr>
+        <tr><td>Subscribers registry</td><td>DynamoDB (<code>event_type</code> PK, <code>endpoint_id</code> SK)</td><td>O(1) lookup of endpoints per event type</td></tr>
+        <tr><td>Signing secrets</td><td>Secrets Manager (per-endpoint)</td><td>Rotatable, encrypted at rest</td></tr>
+        <tr><td>Retry scheduler</td><td>SQS delay queues or EventBridge Scheduler</td><td>Delay message visibility for exponential backoff</td></tr>
+        <tr><td>Dead-letter</td><td>SQS + S3 for long-term archive</td><td>Standard DLQ pattern</td></tr>
+        <tr><td>Customer replay UI</td><td>API Gateway + Cognito + a React dashboard</td><td>Where customers see failed deliveries and click Resend</td></tr>
+        <tr><td>Observability</td><td>CloudWatch Metrics + Logs + Contributor Insights</td><td>Per-endpoint success/failure/latency</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Deployment B: Use EventBridge instead</h3>
+    <table>
+      <thead><tr><th>Component</th><th>AWS service</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Event bus</td><td>Custom EventBridge bus</td><td>The router; up to 10 k <code>PutEvents</code>/sec in us-east-1</td></tr>
+        <tr><td>Rules</td><td>EventBridge rules with JSON patterns</td><td>Filter events; up to 300/bus</td></tr>
+        <tr><td>Targets</td><td>Lambda, SQS, SNS, Step Functions, Kinesis, another bus, API Destination</td><td>Up to 5 per rule; each has its own retry + DLQ config</td></tr>
+        <tr><td>Cross-account fan-out</td><td>Target = event bus in another account</td><td>Producers and consumers can live in different accounts</td></tr>
+        <tr><td>External webhook out</td><td>API Destination + Connection (Secrets Manager)</td><td>EventBridge signs and fires the outbound webhook itself</td></tr>
+        <tr><td>Retry policy</td><td>Per-target: 60 s–24 h age, 0–185 attempts</td><td>Configurable exponential backoff</td></tr>
+        <tr><td>Dead-letter</td><td>SQS DLQ per target</td><td>Rich error envelope with rule ARN, error code, retry count</td></tr>
+        <tr><td>Replay</td><td>Archive + <code>StartReplay</code></td><td>Time-window replay of previously-received events</td></tr>
+        <tr><td>Schemas</td><td>EventBridge Schema Registry</td><td>Discover, version, and codegen from event shapes</td></tr>
+        <tr><td>Ingestion from SaaS</td><td>Partner Event Sources (Stripe, Auth0, Datadog, ...)</td><td>Vendor pushes events straight into your bus</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Deployment C: The hybrid pattern (recommended for anything customer-facing)</h3>
+    <p>Producers everywhere in your platform <code>PutEvents</code> to a central EventBridge bus. Internal consumers subscribe via rules → Lambda / SQS / Step Functions. Any event that needs to <strong>reach external customers</strong> gets a rule with an <strong>API Destination</strong> target whose Connection reads that customer's endpoint URL + signing secret from Secrets Manager. This gives you EventBridge's managed durability + observability internally, and webhook reach externally, without having to build a relay worker. <strong>This is the modern AWS answer</strong> to "we need to send webhooks to our customers".</p>
+  </section>
+
+  <section id="code" class="card">
+    <h2>💻 C# implementation</h2>
+
+    <p>Three short, idiomatic pieces of C#. First, a <strong>Stripe-style HMAC verifier</strong> that a webhook consumer needs. Second, a minimal <strong>PutEvents</strong> call to EventBridge from ASP.NET. Third, the exact <strong>idempotency guard</strong> pattern using DynamoDB conditional writes that stops duplicate deliveries from double-processing.</p>
+
+    <h3>1. Verify an inbound webhook signature (Stripe-style)</h3>
+<pre><span class="cmt">// Called from your ASP.NET Core webhook endpoint. Rejects if:
+//   - Signature header missing / malformed
+//   - Timestamp older than 5 min (replay defence)
+//   - HMAC doesn't match (constant-time compare)</span>
+<span class="kw">using</span> System.Security.Cryptography;
+<span class="kw">using</span> System.Text;
+
+<span class="kw">public static class</span> <span class="typ">WebhookVerifier</span>
+{
+    <span class="kw">private static readonly</span> <span class="typ">TimeSpan</span> Tolerance = <span class="typ">TimeSpan</span>.FromMinutes(<span class="str">5</span>);
+
+    <span class="kw">public static bool</span> <span class="fn">Verify</span>(<span class="kw">string</span> rawBody, <span class="kw">string</span> header, <span class="kw">string</span> secret)
+    {
+        <span class="cmt">// header is: "t=1710000000,v1=&lt;hex&gt;"</span>
+        <span class="kw">var</span> parts = header.Split(<span class="str">','</span>)
+            .Select(p =&gt; p.Split(<span class="str">'='</span>, <span class="str">2</span>))
+            .Where(kv =&gt; kv.Length == <span class="str">2</span>)
+            .ToDictionary(kv =&gt; kv[<span class="str">0</span>].Trim(), kv =&gt; kv[<span class="str">1</span>].Trim());
+
+        <span class="kw">if</span> (!parts.TryGetValue(<span class="str">"t"</span>, <span class="kw">out var</span> tStr) || !parts.TryGetValue(<span class="str">"v1"</span>, <span class="kw">out var</span> v1))
+            <span class="kw">return false</span>;
+        <span class="kw">if</span> (!<span class="kw">long</span>.TryParse(tStr, <span class="kw">out var</span> ts)) <span class="kw">return false</span>;
+
+        <span class="kw">var</span> when = <span class="typ">DateTimeOffset</span>.FromUnixTimeSeconds(ts);
+        <span class="kw">if</span> ((<span class="typ">DateTimeOffset</span>.UtcNow - when).Duration() &gt; Tolerance)
+            <span class="kw">return false</span>; <span class="cmt">// stale / replay</span>
+
+        <span class="kw">var</span> signedPayload = <span class="str">$"{ts}.{rawBody}"</span>;
+        <span class="kw">using var</span> hmac = <span class="kw">new</span> <span class="typ">HMACSHA256</span>(<span class="typ">Encoding</span>.UTF8.GetBytes(secret));
+        <span class="kw">var</span> expected = <span class="typ">Convert</span>.ToHexString(hmac.ComputeHash(<span class="typ">Encoding</span>.UTF8.GetBytes(signedPayload))).ToLowerInvariant();
+
+        <span class="cmt">// Constant-time compare so an attacker can't time-leak the secret.</span>
+        <span class="kw">return</span> <span class="typ">CryptographicOperations</span>.FixedTimeEquals(
+            <span class="typ">Encoding</span>.ASCII.GetBytes(expected),
+            <span class="typ">Encoding</span>.ASCII.GetBytes(v1));
+    }
+}
+</pre>
+
+    <h3>2. Publish an event to EventBridge from ASP.NET</h3>
+<pre><span class="kw">using</span> Amazon.EventBridge;
+<span class="kw">using</span> Amazon.EventBridge.Model;
+<span class="kw">using</span> System.Text.Json;
+
+<span class="kw">public sealed class</span> <span class="typ">OrderEventPublisher</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IAmazonEventBridge</span> _eb;
+    <span class="kw">public</span> <span class="fn">OrderEventPublisher</span>(<span class="typ">IAmazonEventBridge</span> eb) =&gt; _eb = eb;
+
+    <span class="kw">public async</span> <span class="typ">Task</span> <span class="fn">PublishPaidAsync</span>(<span class="kw">string</span> orderId, <span class="kw">decimal</span> amount, <span class="kw">string</span> currency)
+    {
+        <span class="kw">var</span> resp = <span class="kw">await</span> _eb.PutEventsAsync(<span class="kw">new</span> <span class="typ">PutEventsRequest</span>
+        {
+            Entries = [<span class="kw">new</span> <span class="typ">PutEventsRequestEntry</span>
+            {
+                EventBusName = <span class="str">"orders"</span>,
+                Source       = <span class="str">"orders.service"</span>,
+                DetailType   = <span class="str">"OrderPaid"</span>,
+                Detail       = <span class="typ">JsonSerializer</span>.Serialize(<span class="kw">new</span> { orderId, amount, currency }),
+                Time         = <span class="typ">DateTime</span>.UtcNow
+            }]
+        });
+        <span class="cmt">// Any failed entry is reported in FailedEntryCount - retry those.</span>
+        <span class="kw">if</span> (resp.FailedEntryCount &gt; <span class="str">0</span>)
+            <span class="kw">throw new</span> <span class="typ">InvalidOperationException</span>(<span class="str">"EventBridge PutEvents partial failure"</span>);
+    }
+}
+</pre>
+
+    <h3>3. Idempotency guard on the consumer (DynamoDB conditional put)</h3>
+<pre><span class="cmt">// Runs at the top of every webhook / target invocation.
+// Returns false the second time the same event id arrives → skip processing.</span>
+<span class="kw">using</span> Amazon.DynamoDBv2;
+<span class="kw">using</span> Amazon.DynamoDBv2.Model;
+
+<span class="kw">public sealed class</span> <span class="typ">IdempotencyStore</span>
+{
+    <span class="kw">private readonly</span> <span class="typ">IAmazonDynamoDB</span> _db;
+    <span class="kw">public</span> <span class="fn">IdempotencyStore</span>(<span class="typ">IAmazonDynamoDB</span> db) =&gt; _db = db;
+
+    <span class="kw">public async</span> <span class="typ">Task</span>&lt;<span class="kw">bool</span>&gt; <span class="fn">TryClaimAsync</span>(<span class="kw">string</span> eventId, <span class="typ">TimeSpan</span> ttl)
+    {
+        <span class="kw">try</span>
+        {
+            <span class="kw">await</span> _db.PutItemAsync(<span class="kw">new</span> <span class="typ">PutItemRequest</span>
+            {
+                TableName = <span class="str">"processed_events"</span>,
+                Item = <span class="kw">new</span>()
+                {
+                    [<span class="str">"event_id"</span>] = <span class="kw">new</span>(eventId),
+                    [<span class="str">"expires_at"</span>] = <span class="kw">new</span> { N = <span class="typ">DateTimeOffset</span>.UtcNow.Add(ttl).ToUnixTimeSeconds().ToString() }
+                },
+                ConditionExpression = <span class="str">"attribute_not_exists(event_id)"</span>
+            });
+            <span class="kw">return true</span>;   <span class="cmt">// first time — go process it</span>
+        }
+        <span class="kw">catch</span> (<span class="typ">ConditionalCheckFailedException</span>)
+        {
+            <span class="kw">return false</span>;  <span class="cmt">// duplicate — skip</span>
+        }
+    }
+}
+</pre>
+
+    <p>Together these three snippets are the whole spine: <strong>verify the sender, publish reliably, dedupe on receipt</strong>. Every real production system layers monitoring, poison-message handling and business logic on top, but the load-bearing correctness is right here.</p>
+  </section>
+
+  <section id="tradeoffs" class="card">
+    <h2>⚖️ Trade-offs, bottlenecks &amp; likely follow-ups</h2>
+
+    <h3>Trade-offs</h3>
+    <p><strong>Push vs pull.</strong> Push (webhook/EventBridge) gives near-real-time delivery and eliminates polling waste, but forces every consumer to run a public endpoint or a listener. Pull (polling APIs, Kafka consumer groups) is simpler for the consumer but wastes cycles when nothing is happening. Rule of thumb: use push when events are irregular and time-sensitive; use pull when they're continuous and the consumer sets its own pace.</p>
+
+    <p><strong>At-least-once vs exactly-once.</strong> Both webhooks and EventBridge are at-least-once — no exceptions. The industry has largely accepted that exactly-once delivery is a lie; instead you get exactly-once <em>processing</em> by making the consumer idempotent. Idempotency-by-id is the only correct answer.</p>
+
+    <p><strong>Ordering vs throughput.</strong> Guaranteeing ordering across a stream requires either a single partition (bottleneck) or per-key partitioning (SQS FIFO groups, Kinesis shard keys). Neither system does this by default because most workloads don't need it.</p>
+
+    <p><strong>Push to customers: DIY webhook infra vs API Destinations.</strong> Rolling your own gives you full control (custom auth schemes, custom retry policies, custom UI). But it's a huge amount of undifferentiated heavy lifting — a whole product's worth of features. API Destinations get you 80% of it for cents per million events.</p>
+
+    <h3>Bottlenecks &amp; failure modes</h3>
+    <ul>
+      <li><strong>Slow consumer</strong> — one tenant's endpoint takes 30 s to respond, retries pile up, connection pool exhausts. Fix: per-endpoint circuit breaker + rate limit; drop to DLQ fast when latency is bad.</li>
+      <li><strong>Thundering herd on outage recovery</strong> — a consumer recovers and gets 24 h of retries in one minute. Fix: jittered backoff + concurrency cap per endpoint.</li>
+      <li><strong>Schema drift</strong> — you add a field, an old consumer breaks. Fix: additive-only changes, versioned event types, Schema Registry.</li>
+      <li><strong>Signature secret leak</strong> — rotate immediately, support dual secrets during rotation, keep a rotation cadence.</li>
+      <li><strong>Poison message</strong> — a payload that crashes every consumer. Fix: retry cap + DLQ + alarm; process from DLQ manually.</li>
+      <li><strong>EventBridge PutEvents throttling</strong> — 10 k/sec cap in us-east-1 (raiseable). Batch entries in one call (up to 10 entries × 256 KB = 2.56 MB per call), or shard across buses.</li>
+      <li><strong>Duplicate at boundary</strong> — the consumer processes the event, dies before returning 200; producer retries. Fix: idempotency guard <em>at the top</em> of the handler, before the side effect.</li>
+    </ul>
+
+    <h3>Likely interviewer follow-ups (with crisp answers)</h3>
+    <div class="qa"><p class="q">Why not just use SNS?</p><p class="a">SNS is a pub/sub topic with a simpler filter language and no rules-with-multiple-targets abstraction, no archive/replay, no schema registry, and no API destinations. EventBridge is a superset for event-driven use cases. SNS wins on raw throughput and price for simple broadcast; EventBridge wins on routing complexity, observability, and cross-account/cross-region.</p></div>
+    <div class="qa"><p class="q">Why is HMAC signing better than a shared bearer token?</p><p class="a">A bearer token proves possession but says nothing about the payload — if it leaks, everything is compromised, and a MITM can tamper with the body. HMAC over the body means an attacker who steals the header can't reuse it for a different payload, and rotating the secret invalidates all replays.</p></div>
+    <div class="qa"><p class="q">How do you handle a consumer that's been down for a day?</p><p class="a">EventBridge retries up to 24 h with exponential backoff; after that the events land in the target's SQS DLQ with error metadata. When the consumer recovers, drain the DLQ into it (via a Lambda pointed at the DLQ). For longer outages, use Archive + Replay — you can replay any event received in the last N days by time range and pattern.</p></div>
+    <div class="qa"><p class="q">Ordering matters for my domain — what do I do?</p><p class="a">Send events to an SQS FIFO queue as the target, with <code>MessageGroupId</code> derived from a business key (e.g. order id). FIFO groups guarantee ordering within a group and parallelism across groups. Alternatively, embed a sequence number and drop stale events on the consumer.</p></div>
+    <div class="qa"><p class="q">How do you prevent replay attacks on a webhook?</p><p class="a">Sign the timestamp along with the body, and reject anything more than ~5 minutes old on the consumer side. Also dedupe by event id in a store with a TTL longer than your retry window.</p></div>
+    <div class="qa"><p class="q">How would you send webhooks to 100 000 different customer endpoints?</p><p class="a">Central EventBridge bus in your account; one rule with an API Destination target per customer, or one shared API Destination and a Lambda that looks up the right endpoint. Store per-customer secrets in Secrets Manager (Connections). This scales because EventBridge handles the durability, retries, and DLQs — you just wire config.</p></div>
+    <div class="qa"><p class="q">What if the same event triggers two rules — do I get duplicate delivery?</p><p class="a">Yes, that's fan-out: two rules × their targets. You either accept it (each consumer is idempotent) or restructure your patterns so rules are mutually exclusive.</p></div>
+  </section>
+
+  <section id="cheat" class="cheat">
+    <h2>🗣️ Interview cheat sheet</h2>
+
+    <p class="pitch">
+      <strong>30-second pitch:</strong> "Webhooks and EventBridge solve the same problem — push an event from producer to consumer with retries and idempotency — but at different altitudes. Webhooks are the open-web version: HTTPS POST, HMAC signature, you own the outbox, relay, and DLQ. EventBridge is a managed AWS event bus with content-based JSON pattern routing, up to 5 targets per rule, 300 rules per bus, 10 k events/sec, 24-hour retries with exponential backoff, and built-in DLQs and replay via archives. Both are at-least-once so consumers must dedupe by event id. The killer combo is EventBridge internally + API Destinations to fire webhooks to external customers — you get managed durability plus external reach."
+    </p>
+
+    <h3>Numbers to quote</h3>
+    <ul>
+      <li>EventBridge <code>PutEvents</code>: up to <strong>10 000/sec</strong> per region, event size <strong>256 KB</strong>.</li>
+      <li>Fan-out: <strong>5 targets/rule × 300 rules/bus</strong>.</li>
+      <li>Retries: default <strong>24 h max age</strong>, up to <strong>185 attempts</strong>, exponential backoff.</li>
+      <li>Stripe retries: <strong>3 days</strong> with exponential backoff on live mode.</li>
+      <li>Consumer must return 2xx <strong>within seconds</strong> — enqueue and process async.</li>
+      <li>Idempotency dedupe TTL should be <strong>≥ retry window</strong> (so ≥ 24 h for EventBridge, ≥ 3 d for Stripe).</li>
+      <li>Replay-attack tolerance: <strong>5 minutes</strong>.</li>
+    </ul>
+
+    <h3>Five talking points that win the round</h3>
+    <ul>
+      <li><strong>At-least-once forces idempotency</strong> — event id + conditional put + TTL. Say it out loud.</li>
+      <li><strong>Signing goes over the body + timestamp</strong>, not just the body — protects against replay.</li>
+      <li><strong>Dual-write problem</strong> — solve it with the transactional outbox (or let EventBridge own durability via <code>PutEvents</code>).</li>
+      <li><strong>Fan-out is a rule-per-consumer</strong> pattern; consumers add rules, producer never changes.</li>
+      <li><strong>DLQ + replay</strong> is not optional — it's how you keep a spike from turning into permanent data loss.</li>
+    </ul>
+  </section>
+
+  <section id="faq" class="card faq">
+    <span class="badge">❓ FAQ — your follow-up questions</span>
+    <h2>Questions asked about this topic</h2>
+    <p style="color:var(--muted)">No follow-up questions yet — ask one about this topic and it'll be logged here with a compact answer.</p>
+  </section>
+
+  <section id="sources" class="card sources">
+    <h2>📚 Sources</h2>
+    <ul>
+      <li><a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-what-is.html">Amazon EventBridge — What is EventBridge? (AWS docs)</a></li>
+      <li><a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-quota.html">Amazon EventBridge quotas &amp; limits (AWS docs)</a></li>
+      <li><a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-rule-dlq.html">Using dead-letter queues to process undelivered events in EventBridge (AWS docs)</a></li>
+      <li><a href="https://docs.stripe.com/webhooks">Stripe — Webhooks overview (signing, retries, idempotency, ordering)</a></li>
+      <li><a href="https://hookdeck.com/webhooks/guides/what-are-webhooks-how-they-work">Hookdeck — What are webhooks and how do they work</a></li>
+    </ul>
+  </section>
+
+  <footer>Generated by the <strong>design-research</strong> skill · researched via web search · open via localhost</footer>
+</div>
+<script src="../../nav.js"></script>
+</body>
+</html>
